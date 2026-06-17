@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     rootDir: .
-    buildCommand: npm ci && npm run prisma:generate && npm run build:api
+    buildCommand: npm ci --include=dev && npm run prisma:generate && npm run build:api
     preDeployCommand: npm run prisma:deploy
     startCommand: npm run start:api
     healthCheckPath: /docs

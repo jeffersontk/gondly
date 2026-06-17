@@ -104,12 +104,28 @@ MERCADO_PAGO_WEBHOOK_SECRET=""
 O Blueprint tambem define:
 
 ```txt
-buildCommand     = npm ci && npm run prisma:generate && npm run build:api
+buildCommand     = npm ci --include=dev && npm run prisma:generate && npm run build:api
 preDeployCommand = npm run prisma:deploy
 startCommand     = npm run start:api
 ```
 
 O backend usa `PORT` quando existir, como exigido pelo Render.
+
+Se criar o Web Service manualmente, prefira deixar `Root Directory` vazio para o Render executar pela raiz do monorepo:
+
+```txt
+Root Directory = vazio
+Build Command  = npm ci --include=dev && npm run prisma:generate && npm run build:api
+Start Command  = npm run start:api
+```
+
+Se voce ja configurou `Root Directory` como `apps/api`, use comandos locais do pacote da API:
+
+```txt
+Root Directory = apps/api
+Build Command  = npm install --include=dev && npm run prisma:generate && npm run build
+Start Command  = npm run start
+```
 
 ## 4. Mercado Pago
 
