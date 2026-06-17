@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -10,17 +10,21 @@ import {
   Check,
   Edit,
   History,
+  ListChecks,
+  Loader2,
   LogOut,
   Package,
   Plus,
+  ReceiptText,
   RefreshCcw,
-  Share2,
+  ScanLine,
   ShoppingCart,
+  Store,
+  TrendingUp,
   Trash2,
 } from "lucide-react";
-import type { SharedRole, Unit } from "@gondly/types";
+import type { Unit } from "@gondly/types";
 import { api } from "../lib/api";
-import { createRealtimeSocket } from "../lib/realtime";
 import { useAuth } from "../lib/auth";
 import {
   AppButton,
@@ -37,7 +41,6 @@ import {
   MarketSelect,
   MemberAvatar,
   MoneyInput,
-  OnlineParticipantsBar,
   MonetizationBadge,
   PriceCard,
   ProductCard,
@@ -50,12 +53,12 @@ import {
   StartPurchasePanel,
   SummaryCard,
   UnitSelect,
+  unitLabels,
 } from "../components";
 import { AdSlot, useAds } from "../lib/ads";
 import type { DashboardReport, Market, MarketList, MarketListItem, PriceComparison, Product, Purchase, PurchaseItem, User } from "../types";
 
 const units = ["un", "kg", "g", "l", "ml", "pacote", "caixa", "outro"] as const;
-const roles = ["editor", "viewer"] as const;
 
 const listSchema = z.object({
   name: z.string().min(2, "Informe um nome"),
@@ -77,26 +80,168 @@ const productSchema = z.object({
   barcode: z.string().optional(),
 });
 
+function parseDecimalInput(value: unknown) {
+  if (typeof value === "number") return value;
+  if (typeof value !== "string") return value;
+
+  const cleaned = value.trim().replace(/\s/g, "").replace(/[R$]/g, "");
+  if (!cleaned) return Number.NaN;
+
+  const lastComma = cleaned.lastIndexOf(",");
+  const lastDot = cleaned.lastIndexOf(".");
+
+  if (lastComma >= 0 && lastDot >= 0) {
+    const decimalSeparator = lastComma > lastDot ? "," : ".";
+    const thousandSeparator = decimalSeparator === "," ? "." : ",";
+    return Number(cleaned.replaceAll(thousandSeparator, "").replace(decimalSeparator, "."));
+  }
+
+  if (lastComma >= 0) {
+    return Number(`${cleaned.slice(0, lastComma).replaceAll(",", "")}.${cleaned.slice(lastComma + 1)}`);
+  }
+
+  if (lastDot >= 0 && cleaned.indexOf(".") !== lastDot) {
+    return Number(`${cleaned.slice(0, lastDot).replaceAll(".", "")}.${cleaned.slice(lastDot + 1)}`);
+  }
+
+  return Number(cleaned);
+}
+
+function decimalValue(value: unknown, fallback = 0) {
+  const parsed = parseDecimalInput(value);
+  return typeof parsed === "number" && Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function optimisticCartItem(values: CartItemForm, id?: string): PurchaseItem {
+  return {
+    id: id ?? `local-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    productId: values.productId ?? null,
+    productName: values.productName,
+    brand: values.brand || null,
+    category: values.category || null,
+    quantity: values.quantity,
+    unit: values.unit,
+    pricePaid: values.pricePaid,
+    unitPriceNormalized: null,
+    normalizedUnitLabel: null,
+    notes: values.notes || null,
+  };
+}
+
+function patchPurchaseItemCache(purchases: Purchase[] | undefined, purchaseId: string, item: PurchaseItem, itemId?: string) {
+  if (!purchases) return purchases;
+
+  return purchases.map((purchase) => {
+    if (purchase.id !== purchaseId) return purchase;
+
+    const items = itemId ? purchase.items.map((entry) => (entry.id === itemId ? item : entry)) : [item, ...purchase.items];
+    return {
+      ...purchase,
+      items,
+      subtotalCalculated: roundMoney(items.reduce((sum, entry) => sum + Number(entry.pricePaid ?? 0), 0)),
+    };
+  });
+}
+
+function reconcilePurchaseCache(purchases: Purchase[] | undefined, nextPurchase: Purchase, completedLocalItemId?: string) {
+  if (!purchases) return purchases;
+  return purchases.map((purchase) => {
+    if (purchase.id !== nextPurchase.id) return purchase;
+
+    const pendingLocalItems = purchase.items.filter((item) => item.id.startsWith("local-") && item.id !== completedLocalItemId);
+    const items = [...pendingLocalItems, ...nextPurchase.items];
+
+    return {
+      ...nextPurchase,
+      items,
+      subtotalCalculated: roundMoney(items.reduce((sum, entry) => sum + Number(entry.pricePaid ?? 0), 0)),
+    };
+  });
+}
+
+function setActivePurchaseCache(purchases: Purchase[] | undefined, nextPurchase: Purchase) {
+  if (!purchases?.length) return [nextPurchase];
+  return [nextPurchase, ...purchases.filter((purchase) => purchase.id !== nextPurchase.id && purchase.status === "in_progress")];
+}
+
+function removeActivePurchaseCache(purchases: Purchase[] | undefined, purchaseId?: string) {
+  if (!purchases) return purchases;
+  return purchases.filter((purchase) => purchase.id !== purchaseId);
+}
+
+function updateListItemCache(list: MarketList | undefined, item: MarketListItem) {
+  if (!list) return list;
+  return { ...list, items: list.items.map((entry) => (entry.id === item.id ? item : entry)) };
+}
+
+function removeListItemCache(list: MarketList | undefined, itemId: string) {
+  if (!list) return list;
+  return { ...list, items: list.items.filter((entry) => entry.id !== itemId) };
+}
+
+function addListItemCache(list: MarketList | undefined, item: MarketListItem) {
+  if (!list) return list;
+  return { ...list, items: [item, ...list.items.filter((entry) => entry.id !== item.id)] };
+}
+
+function updateListsCache(lists: MarketList[] | undefined, nextList: MarketList) {
+  if (!lists) return lists;
+  return lists.map((list) => (list.id === nextList.id ? { ...list, ...nextList } : list));
+}
+
+function addListCache(lists: MarketList[] | undefined, nextList: MarketList) {
+  if (!lists) return lists;
+  return [nextList, ...lists.filter((list) => list.id !== nextList.id)];
+}
+
+function removeListCache(lists: MarketList[] | undefined, listId: string) {
+  if (!lists) return lists;
+  return lists.filter((list) => list.id !== listId);
+}
+
+function upsertById<T extends { id: string }>(items: T[] | undefined, nextItem: T) {
+  if (!items) return items;
+  return [nextItem, ...items.filter((item) => item.id !== nextItem.id)];
+}
+
+function removeById<T extends { id: string }>(items: T[] | undefined, itemId: string) {
+  if (!items) return items;
+  return items.filter((item) => item.id !== itemId);
+}
+
+function useDebouncedValue<T>(value: T, delay = 350) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedValue(value), delay);
+    return () => window.clearTimeout(timeout);
+  }, [delay, value]);
+
+  return debouncedValue;
+}
+
+const decimalNumber = (message: string) => z.preprocess(parseDecimalInput, z.number().min(0, message));
+const positiveDecimalNumber = (message: string) => z.preprocess(parseDecimalInput, z.number().positive(message));
+
 const cartItemSchema = z.object({
   productId: z.string().optional(),
   productName: z.string().min(2, "Informe um produto"),
   brand: z.string().optional(),
   category: z.string().optional(),
-  quantity: z.coerce.number().positive("Quantidade deve ser maior que zero"),
+  quantity: positiveDecimalNumber("Quantidade deve ser maior que zero"),
   unit: z.enum(units),
-  pricePaid: z.coerce.number().min(0, "Preco deve ser maior ou igual a zero"),
+  pricePaid: decimalNumber("Preco deve ser maior ou igual a zero"),
   notes: z.string().optional(),
 });
 
 const finishSchema = z.object({
   marketId: z.string().min(1, "Selecione o mercado"),
-  finalPaidAmount: z.coerce.number().min(0, "Valor invalido"),
+  finalPaidAmount: decimalNumber("Valor invalido"),
   notes: z.string().optional(),
-});
-
-const inviteSchema = z.object({
-  inviteEmail: z.string().email("E-mail invalido").optional().or(z.literal("")),
-  role: z.enum(roles),
 });
 
 type ListForm = z.infer<typeof listSchema>;
@@ -104,19 +249,16 @@ type MarketForm = z.infer<typeof marketSchema>;
 type ProductForm = z.infer<typeof productSchema>;
 type CartItemForm = z.infer<typeof cartItemSchema>;
 type FinishForm = z.infer<typeof finishSchema>;
-type InviteForm = z.infer<typeof inviteSchema>;
 
 export function LoginPage() {
-  const { devLogin, loginWithGoogleToken } = useAuth();
+  const { loginWithGoogleToken } = useAuth();
   const navigate = useNavigate();
-  const buttonRef = useRef<HTMLDivElement | null>(null);
+  const signupButtonRef = useRef<HTMLDivElement | null>(null);
+  const signinButtonRef = useRef<HTMLDivElement | null>(null);
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
-  const form = useForm<{ email: string; name: string }>({
-    defaultValues: { email: "demo@gondly.local", name: "Demo Gondly" },
-  });
 
   useEffect(() => {
-    if (!clientId || !buttonRef.current) return;
+    if (!clientId || (!signupButtonRef.current && !signinButtonRef.current)) return;
     const script = document.createElement("script");
     script.src = "https://accounts.google.com/gsi/client";
     script.async = true;
@@ -129,7 +271,24 @@ export function LoginPage() {
           navigate("/app/home");
         },
       });
-      window.google?.accounts.id.renderButton(buttonRef.current, { theme: "outline", size: "large", width: 320 });
+
+      const renderGoogleButton = (element: HTMLElement | null, text: "signin_with" | "signup_with", width: number) => {
+        if (!element) return;
+        element.innerHTML = "";
+        window.google?.accounts.id.renderButton(element, {
+          type: "standard",
+          theme: "outline",
+          size: "medium",
+          text,
+          shape: "pill",
+          logo_alignment: "left",
+          width,
+          locale: "pt_BR",
+        });
+      };
+
+      renderGoogleButton(signinButtonRef.current, "signin_with", 198);
+      renderGoogleButton(signupButtonRef.current, "signup_with", 260);
     };
     document.head.appendChild(script);
     return () => {
@@ -138,45 +297,189 @@ export function LoginPage() {
   }, [clientId, loginWithGoogleToken, navigate]);
 
   return (
-    <main className="mx-auto grid min-h-screen w-full max-w-sm place-items-center px-5">
-      <div className="w-full">
-        <div className="mb-8 flex flex-col items-center text-center">
-          <img src="/icons/icon.svg" alt="Gondly" className="h-20 w-20 rounded-[22px] shadow-soft" />
-          <h1 className="mt-5 text-4xl font-black text-ink">Gondly</h1>
-          <p className="mt-2 text-sm text-ink/60">Listas, carrinho e preços em um fluxo mobile.</p>
+    <main className="min-h-screen overflow-x-hidden bg-paper text-ink">
+      <section className="relative mx-auto flex min-h-[88svh] w-full max-w-7xl flex-col px-5 pb-10 pt-5 sm:px-8 lg:px-10">
+        <header className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <img src="/icons/icon.svg" alt="Gondly" className="h-12 w-12 rounded-[14px] shadow-soft" />
+            <span className="text-xl font-black tracking-normal text-ink">Gondly</span>
+          </div>
+          {clientId ? (
+            <div ref={signinButtonRef} className="flex min-h-10 w-[198px] items-center justify-end rounded-full bg-white shadow-soft" />
+          ) : (
+            <span className="rounded-full border border-tomato/20 bg-white px-3 py-2 text-xs font-black text-tomato shadow-soft">
+              Login indisponível
+            </span>
+          )}
+        </header>
+
+        <div className="grid flex-1 items-center gap-10 py-8 lg:grid-cols-[minmax(0,0.95fr)_minmax(340px,0.8fr)] lg:py-12">
+          <div className="max-w-2xl">
+            <span className="inline-flex rounded-full bg-mint/12 px-3 py-1.5 text-xs font-black uppercase text-mint">
+              Compras organizadas
+            </span>
+            <h1 className="mt-5 max-w-2xl text-5xl font-black leading-[1.04] tracking-normal text-ink sm:text-6xl">
+              Sua lista, seu carrinho e seus preços no mesmo fluxo.
+            </h1>
+            <p className="mt-5 max-w-xl text-base leading-7 text-ink/65 sm:text-lg">
+              Organize listas de mercado, abra o carrinho rapidamente e acompanhe preços para decidir melhor antes de passar no caixa.
+            </p>
+
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
+              {clientId ? (
+                <div ref={signupButtonRef} className="flex min-h-11 w-[260px] items-center justify-center rounded-full bg-white shadow-soft" />
+              ) : (
+                <div className="flex min-h-11 w-full max-w-[280px] items-center justify-center rounded-full border border-tomato/20 bg-white px-4 text-sm font-semibold text-tomato shadow-soft">
+                  Login Google indisponível
+                </div>
+              )}
+              <p className="max-w-xs text-xs font-semibold text-ink/50">Crie sua conta com Google e sincronize listas, compras e histórico de preços.</p>
+            </div>
+
+            <div className="mt-8 grid max-w-2xl gap-3 sm:grid-cols-3">
+              <LandingMetric icon={<ListChecks className="h-5 w-5" />} title="Lista pronta" description="Crie itens e transforme tudo em carrinho." tone="mint" />
+              <LandingMetric icon={<TrendingUp className="h-5 w-5" />} title="Preço claro" description="Veja histórico e compare mercados." tone="sky" />
+              <LandingMetric icon={<ShoppingCart className="h-5 w-5" />} title="Carrinho pronto" description="Transforme a lista em compra sem recadastrar itens." tone="tomato" />
+            </div>
+          </div>
+
+          <LandingAppPreview />
         </div>
+      </section>
 
-        {clientId ? <div ref={buttonRef} className="flex justify-center" /> : null}
-
-        <form
-          className="mt-4 space-y-3 rounded-[8px] bg-white p-4 shadow-soft"
-          onSubmit={form.handleSubmit(async (values) => {
-            await devLogin(values.email, values.name);
-            navigate("/app/home");
-          })}
-        >
-          <AppInput label="E-mail" type="email" {...form.register("email")} />
-          <AppInput label="Nome" {...form.register("name")} />
-          <AppButton full type="submit">
-            Entrar em desenvolvimento
-          </AppButton>
-        </form>
-      </div>
+      <section className="mx-auto grid w-full max-w-7xl gap-3 px-5 pb-10 sm:px-8 md:grid-cols-4 lg:px-10">
+        <LandingFeature icon={<ReceiptText className="h-5 w-5" />} title="Listas que viram compra" description="Monte a lista e abra o carrinho sem recadastrar tudo." />
+        <LandingFeature icon={<ShoppingCart className="h-5 w-5" />} title="Carrinho rápido" description="Abra uma compra a partir da lista e acompanhe o total." />
+        <LandingFeature icon={<ScanLine className="h-5 w-5" />} title="Histórico de preços" description="Compare mercados e acompanhe variações dos produtos." />
+        <LandingFeature icon={<Store className="h-5 w-5" />} title="Mercados favoritos" description="Guarde locais, tickets e produtos para decidir mais rápido." />
+      </section>
     </main>
+  );
+}
+
+function LandingMetric({ icon, title, description, tone }: { icon: ReactNode; title: string; description: string; tone: "mint" | "sky" | "tomato" }) {
+  const tones = {
+    mint: "bg-mint/12 text-mint border-mint/15",
+    sky: "bg-sky/12 text-sky border-sky/15",
+    tomato: "bg-tomato/12 text-tomato border-tomato/15",
+  };
+
+  return (
+    <div className="rounded-[8px] border border-ink/10 bg-white p-4 shadow-soft">
+      <div className={["grid h-10 w-10 place-items-center rounded-[8px] border", tones[tone]].join(" ")}>{icon}</div>
+      <p className="mt-3 text-sm font-black text-ink">{title}</p>
+      <p className="mt-1 text-xs font-semibold leading-5 text-ink/55">{description}</p>
+    </div>
+  );
+}
+
+function LandingFeature({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
+  return (
+    <article className="rounded-[8px] border border-ink/10 bg-white p-4 shadow-soft">
+      <div className="grid h-10 w-10 place-items-center rounded-[8px] bg-mint/12 text-mint">{icon}</div>
+      <h2 className="mt-4 text-sm font-black text-ink">{title}</h2>
+      <p className="mt-2 text-sm leading-6 text-ink/60">{description}</p>
+    </article>
+  );
+}
+
+function LandingAppPreview() {
+  const items = [
+    { name: "Arroz integral", meta: "2 kg", price: "R$ 18,90", done: true },
+    { name: "Leite", meta: "6 un", price: "R$ 29,94", done: true },
+    { name: "Banana", meta: "1,3 kg", price: "R$ 9,68", done: false },
+  ];
+
+  return (
+    <div className="relative mx-auto min-h-[520px] w-full max-w-[430px]" aria-hidden="true">
+      <div className="absolute left-0 top-12 hidden w-44 rounded-[8px] border border-ink/10 bg-white p-3 shadow-soft sm:block">
+        <div className="flex items-center gap-2">
+          <span className="grid h-8 w-8 place-items-center rounded-[8px] bg-sky/12 text-sky">
+            <BarChart3 className="h-4 w-4" />
+          </span>
+          <div>
+            <p className="text-xs font-semibold text-ink/45">Melhor preço</p>
+            <p className="text-sm font-black text-ink">Mercado Sul</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="absolute bottom-16 right-0 hidden w-48 rounded-[8px] border border-ink/10 bg-white p-3 shadow-soft sm:block">
+        <div className="flex items-center gap-2">
+          <span className="grid h-8 w-8 place-items-center rounded-[8px] bg-tomato/12 text-tomato">
+            <RefreshCcw className="h-4 w-4" />
+          </span>
+          <div>
+            <p className="text-xs font-semibold text-ink/45">Atualizado</p>
+            <p className="text-sm font-black text-ink">Lista pronta</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="relative mx-auto w-[284px] rounded-[34px] border-[10px] border-ink bg-ink shadow-[0_28px_70px_rgba(22,33,31,0.22)]">
+        <div className="absolute left-1/2 top-0 z-10 h-5 w-24 -translate-x-1/2 rounded-b-[16px] bg-ink" />
+        <div className="aspect-[9/17] overflow-hidden rounded-[24px] bg-paper p-4">
+          <div className="flex items-center justify-between pt-4">
+            <div>
+              <p className="text-xs font-semibold text-ink/45">Hoje</p>
+              <p className="text-xl font-black text-ink">Compra ativa</p>
+            </div>
+            <span className="grid h-10 w-10 place-items-center rounded-[8px] bg-mint text-white">
+              <ShoppingCart className="h-5 w-5" />
+            </span>
+          </div>
+
+          <div className="mt-4 rounded-[8px] bg-ink p-4 text-white">
+            <p className="text-xs font-semibold text-white/55">Total estimado</p>
+            <p className="mt-1 text-3xl font-black">R$ 84,30</p>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/15">
+              <div className="h-full w-[68%] rounded-full bg-leaf" />
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-2">
+            {items.map((item) => (
+              <div key={item.name} className="flex items-center gap-3 rounded-[8px] bg-white p-3 shadow-soft">
+                <span className={["grid h-8 w-8 place-items-center rounded-[8px] border", item.done ? "border-mint bg-mint text-white" : "border-ink/10 bg-white text-transparent"].join(" ")}>
+                  <Check className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-black text-ink">{item.name}</span>
+                  <span className="block text-xs font-semibold text-ink/45">{item.meta}</span>
+                </span>
+                <span className="text-xs font-black text-ink">{item.price}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="rounded-[8px] bg-sky/12 p-3 text-sky">
+              <Package className="h-4 w-4" />
+              <p className="mt-2 text-lg font-black">18</p>
+              <p className="text-xs font-semibold">itens</p>
+            </div>
+            <div className="rounded-[8px] bg-tomato/12 p-3 text-tomato">
+              <Store className="h-4 w-4" />
+              <p className="mt-2 text-lg font-black">4</p>
+              <p className="text-xs font-semibold">mercados</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
 export function HomePage() {
   const { user } = useAuth();
-  const { hasNoAds } = useAds();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const dashboard = useQuery({ queryKey: ["dashboard"], queryFn: () => api<DashboardReport>("/reports/dashboard") });
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   const startPurchase = useMutation({
     mutationFn: () => api<Purchase>("/purchases/start", { method: "POST", body: {} }),
-    onSuccess: async (purchase) => {
-      await queryClient.invalidateQueries({ queryKey: ["active-purchases"] });
+    onSuccess: (purchase) => {
+      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => setActivePurchaseCache(current, purchase));
       navigate(`/app/purchase/${purchase.id}`);
     },
   });
@@ -188,11 +491,6 @@ export function HomePage() {
 
   return (
     <ScreenContainer title="Gondly" subtitle={user?.name}>
-      <div className="mb-4 flex items-center justify-between rounded-[8px] bg-white p-3 shadow-soft">
-        <span className="text-sm font-semibold text-ink/65">Monetizacao</span>
-        <MonetizationBadge hasNoAds={hasNoAds} />
-      </div>
-
       <div className="grid grid-cols-2 gap-3">
         <SummaryCard label="Gasto no mes" value={formatBRL(data?.totalSpentMonth ?? 0)} />
         <SummaryCard label="Compras" value={data?.monthPurchasesCount ?? 0} tone="sky" />
@@ -214,7 +512,7 @@ export function HomePage() {
           Continuar compra
         </AppButton>
       ) : (
-        <StartPurchasePanel onStart={() => startPurchase.mutate()} />
+        <StartPurchasePanel onStart={() => startPurchase.mutate()} loading={startPurchase.isPending} />
       )}
 
       <SectionHeader title="Ultima compra" />
@@ -249,7 +547,7 @@ export function ListsPage() {
         {filtered.map((list, index) => (
           <div key={list.id} className="space-y-3">
             <MarketListCard list={list} onClick={() => navigate(`/app/lists/${list.id}`)} />
-            {index === 2 ? <AdSlot /> : null}
+            {(index + 1) % 3 === 0 ? <AdSlot /> : null}
           </div>
         ))}
       </div>
@@ -262,81 +560,57 @@ export function ListDetailPage() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { token } = useAuth();
-  const [inviteOpen, setInviteOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [onlineParticipants, setOnlineParticipants] = useState<Array<{ userId?: string; name?: string }>>([]);
   const list = useQuery({ queryKey: ["list", id], queryFn: () => api<MarketList>(`/lists/${id}`), enabled: Boolean(id) });
-  const inviteForm = useForm<InviteForm>({ resolver: zodResolver(inviteSchema), defaultValues: { role: "editor" } });
   const toggleItem = useMutation({
-    mutationFn: (itemId: string) => api(`/lists/${id}/items/${itemId}/check`, { method: "PATCH", body: {} }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["list", id] }),
+    mutationFn: (itemId: string) => api<MarketListItem>(`/lists/${id}/items/${itemId}/check`, { method: "PATCH", body: {} }),
+    onSuccess: (item) => queryClient.setQueryData<MarketList>(["list", id], (current) => updateListItemCache(current, item)),
   });
   const removeItem = useMutation({
-    mutationFn: (itemId: string) => api(`/lists/${id}/items/${itemId}`, { method: "DELETE" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["list", id] }),
+    mutationFn: (itemId: string) => api<MarketListItem>(`/lists/${id}/items/${itemId}`, { method: "DELETE" }),
+    onSuccess: (_item, itemId) => queryClient.setQueryData<MarketList>(["list", id], (current) => removeListItemCache(current, itemId)),
   });
   const archive = useMutation({
-    mutationFn: () => api(`/lists/${id}/archive`, { method: "POST" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["list", id] }),
+    mutationFn: () => api<MarketList>(`/lists/${id}/archive`, { method: "POST" }),
+    onSuccess: (archived) => {
+      queryClient.setQueryData(["list", id], archived);
+      queryClient.setQueryData<MarketList[]>(["lists"], (current) => updateListsCache(current, archived));
+    },
   });
   const duplicate = useMutation({
     mutationFn: () => api<MarketList>(`/lists/${id}/duplicate`, { method: "POST" }),
-    onSuccess: async (copy) => {
-      await queryClient.invalidateQueries({ queryKey: ["lists"] });
+    onSuccess: (copy) => {
+      queryClient.setQueryData<MarketList[]>(["lists"], (current) => addListCache(current, copy));
       navigate(`/app/lists/${copy.id}`);
     },
   });
   const remove = useMutation({
     mutationFn: () => api(`/lists/${id}`, { method: "DELETE" }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["lists"] });
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: ["list", id] });
+      queryClient.setQueryData<MarketList[]>(["lists"], (current) => removeListCache(current, id));
       navigate("/app/lists");
     },
   });
   const assignItem = useMutation({
-    mutationFn: (itemId: string) => api(`/lists/${id}/items/${itemId}/assign`, { method: "PATCH" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["list", id] }),
+    mutationFn: (itemId: string) => api<MarketListItem>(`/lists/${id}/items/${itemId}/assign`, { method: "PATCH" }),
+    onSuccess: (item) => queryClient.setQueryData<MarketList>(["list", id], (current) => updateListItemCache(current, item)),
   });
   const purchaseListItem = useMutation({
-    mutationFn: (itemId: string) => api(`/lists/${id}/items/${itemId}/purchase`, { method: "PATCH" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["list", id] }),
+    mutationFn: (itemId: string) => api<MarketListItem>(`/lists/${id}/items/${itemId}/purchase`, { method: "PATCH" }),
+    onSuccess: (item) => queryClient.setQueryData<MarketList>(["list", id], (current) => updateListItemCache(current, item)),
   });
   const skipItem = useMutation({
-    mutationFn: (itemId: string) => api(`/lists/${id}/items/${itemId}/skip`, { method: "PATCH" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["list", id] }),
+    mutationFn: (itemId: string) => api<MarketListItem>(`/lists/${id}/items/${itemId}/skip`, { method: "PATCH" }),
+    onSuccess: (item) => queryClient.setQueryData<MarketList>(["list", id], (current) => updateListItemCache(current, item)),
   });
   const start = useMutation({
     mutationFn: () => api<Purchase>("/purchases/start", { method: "POST", body: { sourceListId: id } }),
-    onSuccess: (purchase) => navigate(`/app/purchase/${purchase.id}`),
-  });
-  const invite = useMutation({
-    mutationFn: (values: InviteForm) => api(`/lists/${id}/invites`, { method: "POST", body: values }),
-    onSuccess: () => {
-      inviteForm.reset({ role: "editor" });
-      queryClient.invalidateQueries({ queryKey: ["list", id] });
+    onSuccess: (purchase) => {
+      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => setActivePurchaseCache(current, purchase));
+      navigate(`/app/purchase/${purchase.id}`);
     },
   });
-
-  useEffect(() => {
-    if (!token || !id) return;
-    const socket = createRealtimeSocket(token);
-    const invalidate = () => queryClient.invalidateQueries({ queryKey: ["list", id] });
-
-    socket.emit("joinList", { listId: id }, (response: { data?: { participants?: Array<{ userId?: string; name?: string }> } }) => {
-      setOnlineParticipants(response?.data?.participants ?? []);
-    });
-    socket.on("participantsOnline", setOnlineParticipants);
-    socket.on("listItemUpdated", invalidate);
-    socket.on("itemAssigned", invalidate);
-    socket.on("itemPurchased", invalidate);
-    socket.on("itemSkipped", invalidate);
-
-    return () => {
-      socket.emit("leaveList", { listId: id });
-      socket.disconnect();
-    };
-  }, [id, queryClient, token]);
 
   if (list.isLoading) return <LoadingState />;
   if (list.isError || !list.data) return <ScreenContainer title="Lista"><ErrorState /></ScreenContainer>;
@@ -344,25 +618,23 @@ export function ListDetailPage() {
   const pendingItems = list.data.items.filter((item) => item.status === "pending");
   const activeItems = list.data.items.filter((item) => item.status === "assigned" || item.status === "in_cart");
   const purchasedItems = list.data.items.filter((item) => item.status === "purchased" || item.checked);
+  const skippedItems = list.data.items.filter((item) => item.status === "skipped");
+  const acceptedMembers = list.data.members?.filter((member) => member.status === "accepted") ?? [];
+  const isSharedList = acceptedMembers.length > 1;
 
   return (
     <ScreenContainer title={list.data.name} subtitle={list.data.description ?? undefined}>
-      <OnlineParticipantsBar participants={onlineParticipants.length ? onlineParticipants : list.data.members?.map((member) => ({ userId: member.user.id, name: member.user.name }))} />
-
       <div className="grid grid-cols-2 gap-2">
-        <AppButton icon={<ShoppingCart className="h-5 w-5" />} onClick={() => start.mutate()}>
+        <AppButton icon={<ShoppingCart className="h-5 w-5" />} onClick={() => start.mutate()} loading={start.isPending} loadingLabel="Iniciando">
           Comprar
         </AppButton>
         <AppButton variant="secondary" icon={<Edit className="h-5 w-5" />} onClick={() => navigate(`/app/lists/${id}/edit`)}>
           Editar
         </AppButton>
-        <AppButton variant="secondary" icon={<Share2 className="h-5 w-5" />} onClick={() => setInviteOpen((value) => !value)}>
-          Compartilhar
-        </AppButton>
-        <AppButton variant="secondary" icon={<Archive className="h-5 w-5" />} onClick={() => archive.mutate()}>
+        <AppButton variant="secondary" icon={<Archive className="h-5 w-5" />} onClick={() => archive.mutate()} loading={archive.isPending} loadingLabel="Arquivando">
           Arquivar
         </AppButton>
-        <AppButton variant="secondary" icon={<RefreshCcw className="h-5 w-5" />} onClick={() => duplicate.mutate()}>
+        <AppButton variant="secondary" icon={<RefreshCcw className="h-5 w-5" />} onClick={() => duplicate.mutate()} loading={duplicate.isPending} loadingLabel="Duplicando">
           Duplicar
         </AppButton>
         <AppButton variant="danger" icon={<Trash2 className="h-5 w-5" />} onClick={() => setDeleteOpen(true)}>
@@ -370,71 +642,69 @@ export function ListDetailPage() {
         </AppButton>
       </div>
 
-      {inviteOpen ? (
-        <form className="mt-4 space-y-3 rounded-[8px] bg-white p-4 shadow-soft" onSubmit={inviteForm.handleSubmit((values) => invite.mutate(values))}>
-          <AppInput label="E-mail" type="email" {...inviteForm.register("inviteEmail")} />
-          <label className="block">
-            <span className="mb-1 block text-sm font-semibold text-ink/80">Permissão</span>
-            <select className="h-12 w-full rounded-[8px] border border-ink/10 bg-white px-3" {...inviteForm.register("role")}>
-              <option value="editor">Editor</option>
-              <option value="viewer">Visualizador</option>
-            </select>
-          </label>
-          <AppButton type="submit" full>
-            Criar convite
-          </AppButton>
-          {list.data.invites?.map((entry) => (
-            <p key={entry.id} className="break-all rounded-[8px] bg-paper p-2 text-xs text-ink/60">
-              {window.location.origin}/invite/{entry.inviteToken}
-            </p>
-          ))}
-        </form>
-      ) : null}
-
-      <div className="mt-4 grid grid-cols-3 gap-2">
+      <div className={`mt-4 grid gap-2 ${isSharedList ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
         <PriceCard label="Pendentes" value={pendingItems.length} />
-        <PriceCard label="Pegando" value={activeItems.length} />
+        {isSharedList ? <PriceCard label="Pegando" value={activeItems.length} /> : null}
         <PriceCard label="Comprados" value={purchasedItems.length} />
+        <PriceCard label="Em casa" value={skippedItems.length} />
       </div>
 
       <SectionHeader title="Itens" action={<AppButton variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={() => navigate(`/app/lists/${id}/edit`)}>Adicionar</AppButton>} />
       <div className="space-y-3">
         {!list.data.items.length ? <EmptyState title="Adicione produtos ao carrinho para começar sua compra." /> : null}
-        {list.data.items.map((item) => (
-          <div key={item.id} className="rounded-[8px] bg-white p-2 shadow-soft">
-            <div className="flex gap-2">
-              <div className="min-w-0 flex-1">
-                <ListItemRow item={item} onToggle={() => toggleItem.mutate(item.id)} />
+        {list.data.items.map((item, index) => (
+          <Fragment key={item.id}>
+            <div className="rounded-[8px] bg-white p-2 shadow-soft">
+              <div className="flex gap-2">
+                <div className="min-w-0 flex-1">
+                  <ListItemRow item={item} onToggle={() => toggleItem.mutate(item.id)} loading={toggleItem.isPending && toggleItem.variables === item.id} />
+                </div>
+                <button
+                  type="button"
+                  className="grid h-auto w-11 place-items-center rounded-[8px] bg-white text-tomato shadow-soft transition disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => removeItem.mutate(item.id)}
+                  disabled={removeItem.isPending && removeItem.variables === item.id}
+                  aria-busy={(removeItem.isPending && removeItem.variables === item.id) || undefined}
+                >
+                  {removeItem.isPending && removeItem.variables === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                </button>
               </div>
-              <button className="grid h-auto w-11 place-items-center rounded-[8px] bg-white text-tomato shadow-soft" onClick={() => removeItem.mutate(item.id)}>
-                <Trash2 className="h-4 w-4" />
-              </button>
+              <div className={`mt-2 grid gap-2 ${isSharedList ? "grid-cols-3" : "grid-cols-2"}`}>
+                {isSharedList ? (
+                  <AppButton
+                    className="h-10 px-2 text-xs"
+                    variant="secondary"
+                    onClick={() => assignItem.mutate(item.id)}
+                    loading={assignItem.isPending && assignItem.variables === item.id}
+                    loadingLabel="Salvando"
+                  >
+                    Pegando
+                  </AppButton>
+                ) : null}
+                <AppButton
+                  className="h-10 px-2 text-xs"
+                  variant="secondary"
+                  onClick={() => purchaseListItem.mutate(item.id)}
+                  loading={purchaseListItem.isPending && purchaseListItem.variables === item.id}
+                  loadingLabel="Salvando"
+                >
+                  Comprado
+                </AppButton>
+                <AppButton
+                  className="h-10 px-2 text-xs"
+                  variant="ghost"
+                  onClick={() => skipItem.mutate(item.id)}
+                  loading={skipItem.isPending && skipItem.variables === item.id}
+                  loadingLabel="Salvando"
+                >
+                  Em casa
+                </AppButton>
+              </div>
             </div>
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              <AppButton className="h-10 px-2 text-xs" variant="secondary" onClick={() => assignItem.mutate(item.id)}>
-                Pegando
-              </AppButton>
-              <AppButton className="h-10 px-2 text-xs" variant="secondary" onClick={() => purchaseListItem.mutate(item.id)}>
-                Comprado
-              </AppButton>
-              <AppButton className="h-10 px-2 text-xs" variant="ghost" onClick={() => skipItem.mutate(item.id)}>
-                Pular
-              </AppButton>
-            </div>
-          </div>
+            {(index + 1) % 3 === 0 ? <AdSlot /> : null}
+          </Fragment>
         ))}
       </div>
-
-      <SectionHeader title="Membros" />
-      <div className="flex gap-2 overflow-x-auto pb-2">
-        {list.data.members?.map((member) => (
-          <div key={member.id} className="flex min-w-max items-center gap-2 rounded-full bg-white px-2 py-1 shadow-soft">
-            <MemberAvatar user={member.user} />
-            <span className="text-xs font-semibold text-ink/65">{member.user.name}</span>
-          </div>
-        ))}
-      </div>
-      {!list.data.members?.length ? <EmptyState title="Compartilhe esta lista para comprar junto com outra pessoa." /> : null}
 
       <ConfirmDialog
         open={deleteOpen}
@@ -442,6 +712,7 @@ export function ListDetailPage() {
         description="Esta lista sera removida. Compras ja finalizadas continuam no historico."
         onCancel={() => setDeleteOpen(false)}
         onConfirm={() => remove.mutate()}
+        confirmLoading={remove.isPending}
       />
     </ScreenContainer>
   );
@@ -457,6 +728,8 @@ export function CreateEditListPage() {
   const itemForm = useForm<{ productName: string; expectedQuantity: number; unit: Unit }>({
     defaultValues: { productName: "", expectedQuantity: 1, unit: "un" },
   });
+  const [itemFeedback, setItemFeedback] = useState<{ tone: "info" | "success" | "error"; message: string } | null>(null);
+  const [recentlyAddedItems, setRecentlyAddedItems] = useState<MarketListItem[]>([]);
 
   useEffect(() => {
     if (list.data) form.reset({ name: list.data.name, description: list.data.description ?? "" });
@@ -465,17 +738,26 @@ export function CreateEditListPage() {
   const save = useMutation({
     mutationFn: (values: ListForm) =>
       isEdit ? api<MarketList>(`/lists/${id}`, { method: "PUT", body: values }) : api<MarketList>("/lists", { method: "POST", body: values }),
-    onSuccess: async (saved) => {
-      await queryClient.invalidateQueries({ queryKey: ["lists"] });
+    onSuccess: (saved) => {
+      queryClient.setQueryData(["list", saved.id], saved);
+      queryClient.setQueryData<MarketList[]>(["lists"], (current) => (isEdit ? updateListsCache(current, saved) : addListCache(current, saved)));
       navigate(`/app/lists/${saved.id}`);
     },
   });
   const addItem = useMutation({
     mutationFn: (values: { productName: string; expectedQuantity: number; unit: Unit }) =>
-      api(`/lists/${id}/items`, { method: "POST", body: values }),
-    onSuccess: async () => {
+      api<MarketListItem>(`/lists/${id}/items`, { method: "POST", body: values }),
+    onMutate: (values) => {
+      setItemFeedback({ tone: "info", message: `Adicionando ${values.productName} à lista...` });
+    },
+    onSuccess: (item) => {
+      setRecentlyAddedItems((current) => [item, ...current.filter((entry) => entry.id !== item.id)].slice(0, 5));
+      setItemFeedback({ tone: "success", message: `${item.productName} foi adicionado à lista.` });
       itemForm.reset({ productName: "", expectedQuantity: 1, unit: "un" });
-      await queryClient.invalidateQueries({ queryKey: ["list", id] });
+      queryClient.setQueryData<MarketList>(["list", id], (current) => addListItemCache(current, item));
+    },
+    onError: () => {
+      setItemFeedback({ tone: "error", message: "Não foi possível adicionar o item. Tente novamente." });
     },
   });
 
@@ -484,7 +766,7 @@ export function CreateEditListPage() {
       <form className="space-y-3" onSubmit={form.handleSubmit((values) => save.mutate(values))}>
         <AppInput label="Nome" error={form.formState.errors.name?.message} {...form.register("name")} />
         <AppInput label="Descrição" {...form.register("description")} />
-        <AppButton type="submit" full>
+        <AppButton type="submit" full loading={save.isPending} loadingLabel="Salvando">
           Salvar
         </AppButton>
       </form>
@@ -492,19 +774,55 @@ export function CreateEditListPage() {
       {isEdit ? (
         <>
           <SectionHeader title="Adicionar item" />
-          <form className="grid gap-3 rounded-[8px] bg-white p-4 shadow-soft" onSubmit={itemForm.handleSubmit((values) => addItem.mutate(values))}>
-            <AppInput label="Produto" {...itemForm.register("productName", { required: true })} />
+          <form className="grid gap-3 rounded-[8px] bg-white p-4 shadow-soft" onSubmit={itemForm.handleSubmit((values) => addItem.mutate({ ...values, productName: values.productName.trim() }))}>
+            <AppInput label="Produto" disabled={addItem.isPending} {...itemForm.register("productName", { required: true })} />
             <div className="grid grid-cols-[1fr_120px] gap-2">
-              <QuantityInput label="Qtd." {...itemForm.register("expectedQuantity", { valueAsNumber: true })} />
-              <UnitSelect label="Un." {...itemForm.register("unit")} />
+              <QuantityInput label="Qtd." disabled={addItem.isPending} {...itemForm.register("expectedQuantity", { valueAsNumber: true })} />
+              <UnitSelect label="Un." disabled={addItem.isPending} {...itemForm.register("unit")} />
             </div>
-            <AppButton type="submit" full icon={<Plus className="h-4 w-4" />}>
+            <AppButton type="submit" full icon={<Plus className="h-4 w-4" />} loading={addItem.isPending} loadingLabel="Adicionando">
               Adicionar
             </AppButton>
+            {itemFeedback ? <ItemFeedback tone={itemFeedback.tone} message={itemFeedback.message} /> : null}
           </form>
+          {recentlyAddedItems.length ? (
+            <>
+              <SectionHeader title="Adicionados recentemente" />
+              <div className="space-y-2">
+                {recentlyAddedItems.map((item) => (
+                  <div key={item.id} className="flex items-center gap-3 rounded-[8px] bg-white p-3 shadow-soft">
+                    <span className="grid h-8 w-8 flex-none place-items-center rounded-[8px] bg-mint/12 text-mint">
+                      <Check className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-black text-ink">{item.productName}</span>
+                      <span className="block text-xs font-semibold text-ink/50">
+                        {item.expectedQuantity ?? 1} {unitLabels[item.unit]}
+                      </span>
+                    </span>
+                    <span className="rounded-full bg-mint/12 px-2 py-1 text-xs font-black text-mint">Novo</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : null}
         </>
       ) : null}
     </ScreenContainer>
+  );
+}
+
+function ItemFeedback({ tone, message }: { tone: "info" | "success" | "error"; message: string }) {
+  const tones = {
+    info: "border-sky/20 bg-sky/10 text-sky",
+    success: "border-mint/20 bg-mint/10 text-mint",
+    error: "border-tomato/20 bg-tomato/10 text-tomato",
+  };
+
+  return (
+    <div role="status" aria-live="polite" className={["rounded-[8px] border px-3 py-2 text-sm font-semibold", tones[tone]].join(" ")}>
+      {message}
+    </div>
   );
 }
 
@@ -520,7 +838,7 @@ export function SharedListPage() {
     <ScreenContainer title="Convite">
       <div className="rounded-[8px] bg-white p-4 shadow-soft">
         <p className="text-sm text-ink/65">Aceite o convite para acessar a lista compartilhada.</p>
-        <AppButton className="mt-4" full onClick={() => accept.mutate()}>
+        <AppButton className="mt-4" full onClick={() => accept.mutate()} loading={accept.isPending} loadingLabel="Aceitando">
           Aceitar convite
         </AppButton>
       </div>
@@ -530,12 +848,16 @@ export function SharedListPage() {
 
 export function StartPurchasePage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const lists = useQuery({ queryKey: ["lists"], queryFn: () => api<MarketList[]>("/lists") });
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   const start = useMutation({
     mutationFn: (payload: { sourceListId?: string; cancelActive?: boolean } = {}) =>
       api<Purchase>("/purchases/start", { method: "POST", body: payload }),
-    onSuccess: (purchase) => navigate(`/app/purchase/${purchase.id}`),
+    onSuccess: (purchase) => {
+      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => setActivePurchaseCache(current, purchase));
+      navigate(`/app/purchase/${purchase.id}`);
+    },
   });
   const activePurchase = active.data?.[0];
 
@@ -549,19 +871,38 @@ export function StartPurchasePage() {
             <AppButton variant="secondary" onClick={() => navigate(`/app/purchase/${activePurchase.id}`)}>
               Continuar
             </AppButton>
-            <AppButton variant="danger" onClick={() => start.mutate({ cancelActive: true })}>
+            <AppButton
+              variant="danger"
+              onClick={() => start.mutate({ cancelActive: true })}
+              loading={start.isPending && Boolean(start.variables?.cancelActive)}
+              loadingLabel="Iniciando"
+              disabled={start.isPending && !start.variables?.cancelActive}
+            >
               Cancelar e iniciar
             </AppButton>
           </div>
         </div>
       ) : null}
-      <AppButton full icon={<ShoppingCart className="h-5 w-5" />} onClick={() => start.mutate({})}>
+      <AppButton
+        full
+        icon={<ShoppingCart className="h-5 w-5" />}
+        onClick={() => start.mutate({})}
+        loading={start.isPending && !start.variables?.sourceListId && !start.variables?.cancelActive}
+        loadingLabel="Iniciando"
+        disabled={start.isPending && Boolean(start.variables?.sourceListId || start.variables?.cancelActive)}
+      >
         Começar do zero
       </AppButton>
       <SectionHeader title="A partir de lista" />
       <div className="space-y-3">
         {lists.data?.map((list) => (
-          <MarketListCard key={list.id} list={list} onClick={() => start.mutate({ sourceListId: list.id })} />
+          <MarketListCard
+            key={list.id}
+            list={list}
+            onClick={() => start.mutate({ sourceListId: list.id })}
+            loading={start.isPending && start.variables?.sourceListId === list.id}
+            disabled={start.isPending && start.variables?.sourceListId !== list.id}
+          />
         ))}
         {!lists.isLoading && !lists.data?.length ? <EmptyState title="Você ainda não tem listas. Crie sua primeira lista de mercado." /> : null}
       </div>
@@ -574,28 +915,13 @@ export function ActivePurchasePage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { token } = useAuth();
   const purchaseId = routeParams.purchaseId ?? params.get("purchaseId");
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   const purchase = useMemo(() => active.data?.find((entry) => entry.id === purchaseId) ?? active.data?.[0], [active.data, purchaseId]);
   const cancel = useMutation({
-    mutationFn: () => api(`/purchases/${purchase?.id}/cancel`, { method: "POST" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["active-purchases"] }),
+    mutationFn: () => api<Purchase>(`/purchases/${purchase?.id}/cancel`, { method: "POST" }),
+    onSuccess: (cancelled) => queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => removeActivePurchaseCache(current, cancelled.id)),
   });
-
-  useEffect(() => {
-    if (!token || !purchase?.id) return;
-    const socket = createRealtimeSocket(token);
-    socket.emit("joinPurchase", { purchaseId: purchase.id });
-    socket.on("purchaseItemCreated", () => queryClient.invalidateQueries({ queryKey: ["active-purchases"] }));
-    socket.on("purchaseItemUpdated", () => queryClient.invalidateQueries({ queryKey: ["active-purchases"] }));
-    socket.on("purchaseItemDeleted", () => queryClient.invalidateQueries({ queryKey: ["active-purchases"] }));
-    socket.on("purchaseTotalUpdated", () => queryClient.invalidateQueries({ queryKey: ["active-purchases"] }));
-    return () => {
-      socket.emit("leavePurchase", { purchaseId: purchase.id });
-      socket.disconnect();
-    };
-  }, [purchase?.id, queryClient, token]);
 
   if (active.isLoading) return <LoadingState />;
   if (!purchase) {
@@ -615,13 +941,11 @@ export function ActivePurchasePage() {
         </div>
       </div>
 
-      <OnlineParticipantsBar participants={purchase.participants} />
-
       <div className="mt-4 grid grid-cols-2 gap-2">
         <AppButton variant="secondary" icon={<Check className="h-4 w-4" />} onClick={() => navigate(`/app/purchase/${purchase.id}/finish`)}>
           Finalizar
         </AppButton>
-        <AppButton variant="danger" icon={<Trash2 className="h-4 w-4" />} onClick={() => cancel.mutate()}>
+        <AppButton variant="danger" icon={<Trash2 className="h-4 w-4" />} onClick={() => cancel.mutate()} loading={cancel.isPending} loadingLabel="Cancelando">
           Cancelar
         </AppButton>
       </div>
@@ -642,8 +966,8 @@ function CartItemActions({ purchaseId, item }: { purchaseId: string; item: Purch
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const remove = useMutation({
-    mutationFn: () => api(`/purchases/${purchaseId}/items/${item.id}`, { method: "DELETE" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["active-purchases"] }),
+    mutationFn: () => api<Purchase>(`/purchases/${purchaseId}/items/${item.id}`, { method: "DELETE" }),
+    onSuccess: (purchase) => queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => reconcilePurchaseCache(current, purchase)),
   });
 
   return (
@@ -652,17 +976,19 @@ function CartItemActions({ purchaseId, item }: { purchaseId: string; item: Purch
         type="button"
         className="grid h-10 w-10 place-items-center rounded-[8px] bg-ink/5 text-ink"
         onClick={() => navigate(`/app/purchase/${purchaseId}/item?itemId=${item.id}`)}
-        aria-label="Editar item"
+        aria-label="Adicionar ao carrinho"
       >
-        <Edit className="h-4 w-4" />
+        <ShoppingCart className="h-4 w-4" />
       </button>
       <button
         type="button"
-        className="grid h-10 w-10 place-items-center rounded-[8px] bg-tomato/10 text-tomato"
+        className="grid h-10 w-10 place-items-center rounded-[8px] bg-tomato/10 text-tomato transition disabled:cursor-not-allowed disabled:opacity-60"
         onClick={() => remove.mutate()}
+        disabled={remove.isPending}
+        aria-busy={remove.isPending || undefined}
         aria-label="Remover item"
       >
-        <Trash2 className="h-4 w-4" />
+        {remove.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
       </button>
     </div>
   );
@@ -702,15 +1028,28 @@ export function AddEditCartItemPage() {
       itemId
         ? api<Purchase>(`/purchases/${purchaseId}/items/${itemId}`, { method: "PUT", body: values })
         : api<Purchase>(`/purchases/${purchaseId}/items`, { method: "POST", body: values }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["active-purchases"] });
+    onMutate: async (values) => {
+      await queryClient.cancelQueries({ queryKey: ["active-purchases"] });
+      const previousActivePurchases = queryClient.getQueryData<Purchase[]>(["active-purchases"]);
+      const item = optimisticCartItem(values, itemId ?? undefined);
+
+      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => patchPurchaseItemCache(current, purchaseId, item, itemId ?? undefined));
       navigate(`/app/purchase/${purchaseId}`);
+      return { previousActivePurchases, optimisticItemId: item.id.startsWith("local-") ? item.id : undefined };
+    },
+    onSuccess: (saved, _values, context) => {
+      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => reconcilePurchaseCache(current, saved, context?.optimisticItemId));
+    },
+    onError: (_error, _values, context) => {
+      if (context?.previousActivePurchases) {
+        queryClient.setQueryData(["active-purchases"], context.previousActivePurchases);
+      }
     },
   });
 
   return (
-    <ScreenContainer title={itemId ? "Editar produto" : "Produto"}>
-      <form className="space-y-3" onSubmit={form.handleSubmit((values) => save.mutate({ ...values, productName }))}>
+    <ScreenContainer title="Adicionar ao carrinho">
+      <form className="space-y-3" onSubmit={form.handleSubmit((values) => save.mutate({ ...values, productName: productName.trim() }))}>
         <ProductSearchInput
           value={productName}
           onChange={(value) => {
@@ -736,8 +1075,14 @@ export function AddEditCartItemPage() {
           <input type="checkbox" defaultChecked={!form.watch("productId")} />
           Salvar produto na minha base
         </label>
-        <AppButton type="submit" full icon={<Plus className="h-4 w-4" />}>
-          {itemId ? "Salvar" : "Adicionar"}
+        <AppButton
+          type="submit"
+          full
+          icon={<ShoppingCart className="h-4 w-4" />}
+          loading={save.isPending}
+          loadingLabel={itemId ? "Atualizando carrinho" : "Adicionando ao carrinho"}
+        >
+          {itemId ? "Atualizar carrinho" : "Adicionar ao carrinho"}
         </AppButton>
       </form>
     </ScreenContainer>
@@ -749,19 +1094,40 @@ export function FinishPurchasePage() {
   const [params] = useSearchParams();
   const purchaseId = routeParams.purchaseId ?? params.get("purchaseId");
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [showCreateMarket, setShowCreateMarket] = useState(false);
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   const purchase = active.data?.find((entry) => entry.id === purchaseId) ?? active.data?.[0];
   const form = useForm<FinishForm>({
     resolver: zodResolver(finishSchema),
-    values: { marketId: "", finalPaidAmount: purchase?.subtotalCalculated ?? 0, notes: "" },
+    defaultValues: { marketId: "", finalPaidAmount: 0, notes: "" },
   });
+  const marketForm = useForm<MarketForm>({ resolver: zodResolver(marketSchema), defaultValues: { name: "", address: "", city: "", notes: "" } });
   const finish = useMutation({
     mutationFn: (values: FinishForm) => api<Purchase>(`/purchases/${purchase?.id}/finish`, { method: "POST", body: values }),
-    onSuccess: (saved) => navigate(`/app/history/${saved.id}`),
+    onSuccess: (saved) => {
+      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => removeActivePurchaseCache(current, saved.id));
+      queryClient.setQueryData(["purchase", saved.id], saved);
+      queryClient.setQueryData<Purchase[]>(["purchases"], (current) => (current ? [saved, ...current.filter((purchase) => purchase.id !== saved.id)] : current));
+      navigate(`/app/history/${saved.id}`);
+    },
+  });
+  const createMarket = useMutation({
+    mutationFn: (values: MarketForm) => api<Market>("/markets", { method: "POST", body: values }),
+    onSuccess: (market) => {
+      queryClient.setQueryData<Market[]>(["markets"], (current) => (current ? [market, ...current.filter((entry) => entry.id !== market.id)] : current));
+      form.setValue("marketId", market.id, { shouldValidate: true });
+      marketForm.reset({ name: "", address: "", city: "", notes: "" });
+      setShowCreateMarket(false);
+    },
   });
 
+  useEffect(() => {
+    if (purchase) form.setValue("finalPaidAmount", purchase.subtotalCalculated, { shouldDirty: false });
+  }, [form, purchase?.id, purchase?.subtotalCalculated]);
+
   if (!purchase) return <LoadingState />;
-  const finalPaidAmount = Number(form.watch("finalPaidAmount") ?? 0);
+  const finalPaidAmount = decimalValue(form.watch("finalPaidAmount"));
   const difference = purchase.subtotalCalculated - finalPaidAmount;
 
   return (
@@ -771,7 +1137,32 @@ export function FinishPurchasePage() {
         <p className="text-3xl font-black">{formatBRL(purchase.subtotalCalculated)}</p>
       </div>
       <form className="space-y-3" onSubmit={form.handleSubmit((values) => finish.mutate(values))}>
-        <MarketSelect value={form.watch("marketId")} onChange={(value) => form.setValue("marketId", value, { shouldValidate: true })} />
+        <MarketSelect
+          value={form.watch("marketId")}
+          onChange={(value) => form.setValue("marketId", value, { shouldValidate: true })}
+          onCreate={() => setShowCreateMarket(true)}
+        />
+        {showCreateMarket ? (
+          <div className="grid gap-3 rounded-[8px] bg-white p-4 shadow-soft">
+            <p className="text-sm font-black text-ink">Cadastrar mercado</p>
+            <AppInput label="Nome" error={marketForm.formState.errors.name?.message} {...marketForm.register("name")} />
+            <AppInput label="Endereço" {...marketForm.register("address")} />
+            <AppInput label="Cidade" {...marketForm.register("city")} />
+            <div className="grid grid-cols-2 gap-2">
+              <AppButton type="button" variant="secondary" onClick={() => setShowCreateMarket(false)} disabled={createMarket.isPending}>
+                Cancelar
+              </AppButton>
+              <AppButton
+                type="button"
+                onClick={marketForm.handleSubmit((values) => createMarket.mutate(values))}
+                loading={createMarket.isPending}
+                loadingLabel="Cadastrando"
+              >
+                Cadastrar
+              </AppButton>
+            </div>
+          </div>
+        ) : null}
         <MoneyInput label="Valor pago no caixa" error={form.formState.errors.finalPaidAmount?.message} {...form.register("finalPaidAmount")} />
         <AppInput label="Observações" {...form.register("notes")} />
         <div className="rounded-[8px] bg-white p-3 shadow-soft">
@@ -779,7 +1170,7 @@ export function FinishPurchasePage() {
           <p className={difference >= 0 ? "text-lg font-black text-mint" : "text-lg font-black text-tomato"}>{formatBRL(difference)}</p>
           {difference < 0 ? <p className="mt-1 text-xs text-tomato">Diferenca positiva, talvez algum item nao tenha sido lancado.</p> : null}
         </div>
-        <AppButton type="submit" full>
+        <AppButton type="submit" full loading={finish.isPending} loadingLabel="Salvando">
           Salvar compra
         </AppButton>
       </form>
@@ -843,7 +1234,14 @@ export function PurchaseDetailPage() {
         <SummaryCard label="Total" value={formatBRL(purchase.data.finalPaidAmount ?? purchase.data.subtotalCalculated)} />
         <SummaryCard label="Desconto" value={formatBRL(purchase.data.discountAmount ?? 0)} tone="tomato" />
       </div>
-      <SectionHeader title="Itens" action={<AppButton variant="secondary" icon={<RefreshCcw className="h-4 w-4" />} onClick={() => duplicate.mutate()}>Virar lista</AppButton>} />
+      <SectionHeader
+        title="Itens"
+        action={
+          <AppButton variant="secondary" icon={<RefreshCcw className="h-4 w-4" />} onClick={() => duplicate.mutate()} loading={duplicate.isPending} loadingLabel="Criando lista">
+            Virar lista
+          </AppButton>
+        }
+      />
       <div className="space-y-3">
         {purchase.data.items.map((item) => (
           <PurchaseItemCard key={item.id} item={item} />
@@ -855,10 +1253,10 @@ export function PurchaseDetailPage() {
 
 export function PriceComparisonPage() {
   const [q, setQ] = useState("");
-  const { user } = useAuth();
+  const debouncedQ = useDebouncedValue(q);
   const comparison = useQuery({
-    queryKey: ["price-comparison", q],
-    queryFn: () => api<PriceComparison[]>(`/reports/products-price-comparison?q=${encodeURIComponent(q)}`),
+    queryKey: ["price-comparison", debouncedQ],
+    queryFn: () => api<PriceComparison[]>(`/reports/products-price-comparison?q=${encodeURIComponent(debouncedQ)}`),
   });
 
   return (
@@ -933,8 +1331,9 @@ export function MarketDetailPage() {
   const summary = useQuery({ queryKey: ["market-summary", id], queryFn: () => api<{ market: Market; purchaseCount: number; totalSpent: number; averageTicket: number; topProduct: string | null }>(`/markets/${id}/summary`) });
   const remove = useMutation({
     mutationFn: () => api(`/markets/${id}`, { method: "DELETE" }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["markets"] });
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: ["market-summary", id] });
+      queryClient.setQueryData<Market[]>(["markets"], (current) => removeById(current, id));
       navigate("/app/markets");
     },
   });
@@ -964,6 +1363,7 @@ export function MarketDetailPage() {
         description="O mercado sera removido da sua lista. Compras antigas continuam no historico."
         onCancel={() => setDeleteOpen(false)}
         onConfirm={() => remove.mutate()}
+        confirmLoading={remove.isPending}
       />
     </ScreenContainer>
   );
@@ -983,8 +1383,11 @@ export function CreateEditMarketPage() {
 
   const save = useMutation({
     mutationFn: (values: MarketForm) => (isEdit ? api<Market>(`/markets/${id}`, { method: "PUT", body: values }) : api<Market>("/markets", { method: "POST", body: values })),
-    onSuccess: async (saved) => {
-      await queryClient.invalidateQueries({ queryKey: ["markets"] });
+    onSuccess: (saved) => {
+      queryClient.setQueryData<Market[]>(["markets"], (current) => upsertById(current, saved));
+      queryClient.setQueryData<{ market: Market; purchaseCount: number; totalSpent: number; averageTicket: number; topProduct: string | null }>(["market-summary", saved.id], (current) =>
+        current ? { ...current, market: saved } : { market: saved, purchaseCount: 0, totalSpent: 0, averageTicket: 0, topProduct: null },
+      );
       navigate(`/app/markets/${saved.id}`);
     },
   });
@@ -996,7 +1399,7 @@ export function CreateEditMarketPage() {
         <AppInput label="Endereço" {...form.register("address")} />
         <AppInput label="Cidade" {...form.register("city")} />
         <AppInput label="Observações" {...form.register("notes")} />
-        <AppButton full type="submit">
+        <AppButton full type="submit" loading={save.isPending} loadingLabel="Salvando">
           Salvar
         </AppButton>
       </form>
@@ -1006,8 +1409,9 @@ export function CreateEditMarketPage() {
 
 export function ProductsPage() {
   const [q, setQ] = useState("");
+  const debouncedQ = useDebouncedValue(q);
   const navigate = useNavigate();
-  const { data = [], isLoading } = useQuery({ queryKey: ["products", q], queryFn: () => api<Product[]>(`/products?q=${encodeURIComponent(q)}`) });
+  const { data = [], isLoading } = useQuery({ queryKey: ["products", debouncedQ], queryFn: () => api<Product[]>(`/products?q=${encodeURIComponent(debouncedQ)}`) });
 
   return (
     <ScreenContainer title="Produtos">
@@ -1047,15 +1451,17 @@ export function CreateEditProductPage() {
 
   const save = useMutation({
     mutationFn: (values: ProductForm) => (isEdit ? api<Product>(`/products/${id}`, { method: "PUT", body: values }) : api<Product>("/products", { method: "POST", body: values })),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["products"] });
+    onSuccess: (saved) => {
+      queryClient.setQueryData(["product", saved.id], saved);
+      queryClient.setQueryData<Product[]>(["products", ""], (current) => upsertById(current, saved));
       navigate("/app/products");
     },
   });
   const remove = useMutation({
     mutationFn: () => api(`/products/${id}`, { method: "DELETE" }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["products"] });
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: ["product", id] });
+      queryClient.setQueryData<Product[]>(["products", ""], (current) => removeById(current, id ?? ""));
       navigate("/app/products");
     },
   });
@@ -1068,7 +1474,7 @@ export function CreateEditProductPage() {
         <AppInput label="Categoria" {...form.register("category")} />
         <UnitSelect label="Unidade padrão" {...form.register("defaultUnit")} />
         <AppInput label="Código de barras" {...form.register("barcode")} />
-        <AppButton full type="submit">
+        <AppButton full type="submit" loading={save.isPending} loadingLabel="Salvando">
           Salvar
         </AppButton>
       </form>
@@ -1083,6 +1489,7 @@ export function CreateEditProductPage() {
         description="O produto sera removido da sua base. Historico de compras permanece preservado."
         onCancel={() => setDeleteOpen(false)}
         onConfirm={() => remove.mutate()}
+        confirmLoading={remove.isPending}
       />
     </ScreenContainer>
   );
@@ -1118,17 +1525,12 @@ export function InsightsPage() {
 }
 
 export function BillingPage() {
-  const { refreshUser } = useAuth();
-  const { status, hasNoAds, refreshBillingStatus } = useAds();
+  const { status, hasNoAds } = useAds();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const offer = status?.availableOffers[0];
   const checkout = useMutation({
     mutationFn: () => api<{ checkoutUrl: string; purchaseId: string }>("/billing/remove-ads/checkout", { method: "POST" }),
-    onSuccess: async (response) => {
-      await queryClient.invalidateQueries({ queryKey: ["billing-status"] });
-      await refreshBillingStatus();
-      await refreshUser();
+    onSuccess: (response) => {
       window.location.href = response.checkoutUrl;
     },
   });
@@ -1155,8 +1557,8 @@ export function BillingPage() {
             <p className="mt-2 text-sm text-ink/60">Use o Gondly com uma experiencia mais limpa. Pague uma vez e nao veja mais anuncios.</p>
             <p className="mt-4 text-2xl font-black text-mint">{formatBRL(offer?.price ?? 19.9)}</p>
             <p className="mt-2 text-xs text-ink/50">Este pagamento remove apenas os anuncios. Recursos futuros poderao ser vendidos separadamente.</p>
-            <AppButton className="mt-4" full onClick={() => checkout.mutate()} disabled={checkout.isPending}>
-              {checkout.isPending ? "Abrindo checkout" : `Remover anuncios por ${formatBRL(offer?.price ?? 19.9)}`}
+            <AppButton className="mt-4" full onClick={() => checkout.mutate()} loading={checkout.isPending} loadingLabel="Abrindo checkout">
+              {`Remover anuncios por ${formatBRL(offer?.price ?? 19.9)}`}
             </AppButton>
           </div>
           <div className="rounded-[8px] border border-dashed border-ink/15 bg-white/70 p-3 text-xs font-semibold text-ink/50">
@@ -1194,6 +1596,16 @@ export function SettingsPage() {
   const { user, logout } = useAuth();
   const { hasNoAds } = useAds();
   const navigate = useNavigate();
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setLoggingOut(false);
+    }
+  }
 
   return (
     <ScreenContainer title="Ajustes">
@@ -1206,23 +1618,14 @@ export function SettingsPage() {
           </div>
         </div>
 
-        <SectionHeader title="Monetizacao" />
-        <div className="rounded-[8px] border border-ink/10 bg-paper p-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-ink/60">Status</p>
-            <MonetizationBadge hasNoAds={hasNoAds} />
-          </div>
-          {hasNoAds ? (
-            <p className="mt-2 text-xs text-ink/55">Anuncios removidos para sempre.</p>
-          ) : (
-            <AppButton className="mt-3" full variant="secondary" onClick={() => navigate("/app/billing")}>
-              Remover anuncios
-            </AppButton>
-          )}
-        </div>
+        {!hasNoAds ? (
+          <AppButton className="mt-4" full variant="secondary" onClick={() => navigate("/app/billing")}>
+            Remover anuncios
+          </AppButton>
+        ) : null}
 
         <div className="mt-4 grid gap-2">
-          <AppButton variant="danger" icon={<LogOut className="h-4 w-4" />} onClick={logout}>
+          <AppButton variant="danger" icon={<LogOut className="h-4 w-4" />} onClick={handleLogout} loading={loggingOut} loadingLabel="Saindo">
             Sair
           </AppButton>
         </div>
@@ -1235,14 +1638,20 @@ function BillingReturnPage({ title, description, successLabel }: { title: string
   const navigate = useNavigate();
   const { hasNoAds, refreshBillingStatus } = useAds();
   const { refreshUser } = useAuth();
+  const [refreshing, setRefreshing] = useState(false);
 
   async function refresh() {
-    await refreshBillingStatus();
-    await refreshUser();
+    setRefreshing(true);
+    try {
+      await refreshBillingStatus();
+      await refreshUser();
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, []);
 
   return (
@@ -1250,7 +1659,7 @@ function BillingReturnPage({ title, description, successLabel }: { title: string
       <div className="rounded-[8px] bg-white p-4 shadow-soft">
         <p className="text-sm text-ink/60">{hasNoAds && successLabel ? successLabel : description}</p>
         <div className="mt-4 grid gap-2">
-          <AppButton full onClick={refresh}>
+          <AppButton full onClick={refresh} loading={refreshing} loadingLabel="Atualizando">
             Atualizar status
           </AppButton>
           <AppButton full variant="secondary" onClick={() => navigate("/app/home")}>
@@ -1281,7 +1690,19 @@ declare global {
       accounts: {
         id: {
           initialize: (config: { client_id: string; callback: (response: { credential: string }) => void }) => void;
-          renderButton: (element: HTMLElement | null, options: { theme: string; size: string; width: number }) => void;
+          renderButton: (
+            element: HTMLElement | null,
+            options: {
+              type?: "standard" | "icon";
+              theme?: string;
+              size?: string;
+              shape?: string;
+              text?: string;
+              logo_alignment?: string;
+              width?: number;
+              locale?: string;
+            },
+          ) => void;
         };
       };
     };

@@ -1,7 +1,9 @@
-import { useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, forwardRef } from "react";
+import { useEffect, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, forwardRef } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
+  ArrowLeft,
   Check,
   ChevronRight,
   CircleDollarSign,
@@ -40,9 +42,11 @@ type AppButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "ghost" | "danger";
   icon?: ReactNode;
   full?: boolean;
+  loading?: boolean;
+  loadingLabel?: string;
 };
 
-export function AppButton({ variant = "primary", icon, full, className, children, ...props }: AppButtonProps) {
+export function AppButton({ variant = "primary", icon, full, loading, loadingLabel, disabled, className, children, ...props }: AppButtonProps) {
   const variants = {
     primary: "bg-mint text-white shadow-soft hover:bg-mint/90",
     secondary: "bg-white text-ink border border-ink/10 hover:border-mint/40",
@@ -58,10 +62,12 @@ export function AppButton({ variant = "primary", icon, full, className, children
         full && "w-full",
         className,
       )}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
       {...props}
     >
-      {icon}
-      {children}
+      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : icon}
+      {loading ? loadingLabel ?? children : children}
     </button>
   );
 }
@@ -136,10 +142,17 @@ export function ProductSearchInput({
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedValue(value), 350);
+    return () => window.clearTimeout(timeout);
+  }, [value]);
+
   const { data = [] } = useQuery({
-    queryKey: ["products-search", value],
-    queryFn: () => api<Product[]>(`/products/search?q=${encodeURIComponent(value)}`),
-    enabled: value.trim().length >= 2,
+    queryKey: ["products-search", debouncedValue],
+    queryFn: () => api<Product[]>(`/products/search?q=${encodeURIComponent(debouncedValue)}`),
+    enabled: debouncedValue.trim().length >= 2,
   });
 
   return (
@@ -183,10 +196,12 @@ export function ProductSearchInput({
 export function MarketSelect({
   value,
   onChange,
+  onCreate,
   label = "Mercado",
 }: {
   value: string;
   onChange: (value: string) => void;
+  onCreate?: () => void;
   label?: string;
 }) {
   const { data = [] } = useQuery({ queryKey: ["markets"], queryFn: () => api<Market[]>("/markets") });
@@ -194,8 +209,19 @@ export function MarketSelect({
   return (
     <label className="block">
       <span className="mb-1 block text-sm font-semibold text-ink/80">{label}</span>
-      <select className={controlClass} value={value} onChange={(event) => onChange(event.target.value)}>
+      <select
+        className={controlClass}
+        value={value}
+        onChange={(event) => {
+          if (event.target.value === "__create_market__") {
+            onCreate?.();
+            return;
+          }
+          onChange(event.target.value);
+        }}
+      >
         <option value="">Selecione</option>
+        {onCreate ? <option value="__create_market__">+ Cadastrar mercado</option> : null}
         {data.map((market) => (
           <option key={market.id} value={market.id}>
             {market.name}
@@ -240,12 +266,14 @@ export function ConfirmDialog({
   description,
   onCancel,
   onConfirm,
+  confirmLoading,
 }: {
   open: boolean;
   title: string;
   description: string;
   onCancel: () => void;
   onConfirm: () => void;
+  confirmLoading?: boolean;
 }) {
   if (!open) return null;
 
@@ -255,10 +283,10 @@ export function ConfirmDialog({
         <h2 className="text-lg font-bold text-ink">{title}</h2>
         <p className="mt-2 text-sm text-ink/65">{description}</p>
         <div className="mt-4 grid grid-cols-2 gap-2">
-          <AppButton variant="secondary" onClick={onCancel}>
+          <AppButton variant="secondary" onClick={onCancel} disabled={confirmLoading}>
             Cancelar
           </AppButton>
-          <AppButton variant="danger" onClick={onConfirm}>
+          <AppButton variant="danger" onClick={onConfirm} loading={confirmLoading} loadingLabel="Confirmando">
             Confirmar
           </AppButton>
         </div>
@@ -267,18 +295,81 @@ export function ConfirmDialog({
   );
 }
 
-export function ScreenContainer({ title, subtitle, children }: { title?: string; subtitle?: string; children: ReactNode }) {
+type ScreenContainerProps = {
+  title?: string;
+  subtitle?: string;
+  children: ReactNode;
+  showBack?: boolean;
+  backTo?: string | false;
+};
+
+export function ScreenContainer({ title, subtitle, children, showBack, backTo }: ScreenContainerProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const shouldShowBack = backTo !== false && (showBack ?? shouldShowScreenBack(location.pathname));
+
+  function handleBack() {
+    const historyState = window.history.state as { idx?: number } | null;
+    if (typeof historyState?.idx === "number" && historyState.idx > 0) {
+      navigate(-1);
+      return;
+    }
+
+    navigate(typeof backTo === "string" ? backTo : getScreenBackFallback(location.pathname), { replace: true });
+  }
+
   return (
     <main className="safe-bottom mx-auto min-h-screen w-full max-w-xl px-4 pt-5">
       {title ? (
-        <header className="mb-4">
-          <h1 className="text-2xl font-black tracking-normal text-ink">{title}</h1>
-          {subtitle ? <p className="mt-1 text-sm text-ink/60">{subtitle}</p> : null}
+        <header className="mb-4 flex items-start gap-3">
+          {shouldShowBack ? (
+            <button
+              type="button"
+              onClick={handleBack}
+              className="grid h-10 w-10 flex-none place-items-center rounded-[8px] bg-white text-ink shadow-soft transition hover:bg-ink/5"
+              aria-label="Voltar"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          ) : null}
+          <div className="min-w-0 flex-1">
+            <h1 className="break-words text-2xl font-black tracking-normal text-ink">{title}</h1>
+            {subtitle ? <p className="mt-1 break-words text-sm text-ink/60">{subtitle}</p> : null}
+          </div>
         </header>
       ) : null}
       {children}
     </main>
   );
+}
+
+function shouldShowScreenBack(pathname: string) {
+  return !new Set(["/", "/app/home", "/app/lists", "/app/purchase/start", "/app/history", "/app/compare", "/lists", "/purchase/start", "/history", "/prices"]).has(pathname);
+}
+
+function getScreenBackFallback(pathname: string) {
+  if (pathname === "/app/settings" || pathname === "/settings") return "/app/home";
+  if (pathname === "/app/billing" || pathname === "/billing") return "/app/settings";
+  if (pathname.startsWith("/app/billing/") || pathname.startsWith("/billing/")) return "/app/billing";
+  if (pathname === "/app/lists/new" || pathname === "/lists/new") return "/app/lists";
+  if (/^\/app\/lists\/[^/]+\/edit$/.test(pathname)) return pathname.replace(/\/edit$/, "");
+  if (/^\/lists\/[^/]+\/edit$/.test(pathname)) return `/app${pathname.replace(/\/edit$/, "")}`;
+  if (/^\/app\/lists\/[^/]+$/.test(pathname) || /^\/lists\/[^/]+$/.test(pathname)) return "/app/lists";
+  if (pathname === "/app/purchase" || pathname === "/purchase/active") return "/app/purchase/start";
+  if (/^\/app\/purchase\/[^/]+\/item$/.test(pathname)) return pathname.replace(/\/item$/, "");
+  if (/^\/app\/purchase\/[^/]+\/finish$/.test(pathname)) return pathname.replace(/\/finish$/, "");
+  if (/^\/app\/purchase\/[^/]+$/.test(pathname) || pathname === "/purchase/item" || pathname === "/purchase/finish") return "/app/purchase/start";
+  if (/^\/app\/history\/[^/]+$/.test(pathname) || /^\/history\/[^/]+$/.test(pathname)) return "/app/history";
+  if (/^\/app\/compare\/products\/[^/]+$/.test(pathname) || /^\/prices\/products\/[^/]+$/.test(pathname)) return "/app/compare";
+  if (pathname === "/app/markets/new" || pathname === "/markets/new") return "/app/markets";
+  if (/^\/app\/markets\/[^/]+\/edit$/.test(pathname)) return pathname.replace(/\/edit$/, "");
+  if (/^\/markets\/[^/]+\/edit$/.test(pathname)) return `/app${pathname.replace(/\/edit$/, "")}`;
+  if (/^\/app\/markets\/[^/]+$/.test(pathname) || /^\/markets\/[^/]+$/.test(pathname)) return "/app/markets";
+  if (pathname === "/app/markets" || pathname === "/markets") return "/app/home";
+  if (pathname === "/app/products/new" || pathname === "/products/new") return "/app/products";
+  if (/^\/app\/products\/[^/]+(?:\/edit)?$/.test(pathname) || /^\/products\/[^/]+\/edit$/.test(pathname)) return "/app/products";
+  if (pathname === "/app/products" || pathname === "/products" || pathname === "/app/insights" || pathname === "/insights") return "/app/home";
+  return "/app/home";
 }
 
 export function SectionHeader({ title, action }: { title: string; action?: ReactNode }) {
@@ -331,10 +422,16 @@ export function PurchaseItemCard({ item, action }: { item: PurchaseItem; action?
   );
 }
 
-export function MarketListCard({ list, onClick }: { list: MarketList; onClick?: () => void }) {
-  const completed = list.items.filter((item) => item.checked || item.status === "purchased").length;
+export function MarketListCard({ list, onClick, loading, disabled }: { list: MarketList; onClick?: () => void; loading?: boolean; disabled?: boolean }) {
+  const completed = list.items.filter((item) => item.checked || item.status === "purchased" || item.status === "skipped").length;
   return (
-    <button onClick={onClick} className="w-full rounded-[8px] bg-white p-4 text-left shadow-soft">
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      className="w-full rounded-[8px] bg-white p-4 text-left shadow-soft transition disabled:cursor-not-allowed disabled:opacity-60"
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-base font-black text-ink">{list.name}</p>
@@ -342,7 +439,7 @@ export function MarketListCard({ list, onClick }: { list: MarketList; onClick?: 
             {completed}/{list.items.length} itens · {list.status === "archived" ? "Arquivada" : "Ativa"}
           </p>
         </div>
-        <ChevronRight className="h-5 w-5 flex-none text-ink/35" />
+        {loading ? <Loader2 className="h-5 w-5 flex-none animate-spin text-mint" /> : <ChevronRight className="h-5 w-5 flex-none text-ink/35" />}
       </div>
     </button>
   );
@@ -465,33 +562,60 @@ export function Toast({ message, tone = "info" }: { message: string; tone?: "inf
   return <div className={cls("rounded-[8px] px-3 py-2 text-sm font-semibold shadow-soft", tones[tone])}>{message}</div>;
 }
 
-export function ListItemRow({ item, onToggle }: { item: MarketListItem; onToggle?: () => void }) {
+const listItemStatusLabels = {
+  pending: "Pendente",
+  assigned: "Pegando",
+  in_cart: "No carrinho",
+  purchased: "Comprado",
+  skipped: "Tenho em casa",
+} satisfies Record<MarketListItem["status"], string>;
+
+function listItemMarkerClass(item: MarketListItem) {
+  if (item.checked || item.status === "purchased") return "border-mint bg-mint text-white";
+  if (item.status === "skipped") return "border-leaf bg-leaf text-white";
+  if (item.status === "assigned" || item.status === "in_cart") return "border-sky bg-sky text-white";
+  return "border-ink/15 bg-white text-transparent";
+}
+
+export function ListItemRow({ item, onToggle, loading }: { item: MarketListItem; onToggle?: () => void; loading?: boolean }) {
   return (
-    <button onClick={onToggle} className="flex w-full items-center gap-3 rounded-[8px] bg-white p-3 text-left shadow-soft">
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={loading}
+      aria-busy={loading || undefined}
+      className="flex w-full items-center gap-3 rounded-[8px] bg-white p-3 text-left shadow-soft transition disabled:cursor-not-allowed disabled:opacity-60"
+    >
       <div
         className={cls(
           "grid h-8 w-8 flex-none place-items-center rounded-[8px] border",
-          item.checked || item.status === "purchased" ? "border-mint bg-mint text-white" : "border-ink/15 bg-white text-transparent",
+          listItemMarkerClass(item),
         )}
       >
-        <Check className="h-4 w-4" />
+        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-black text-ink">{item.productName}</p>
         <p className="text-xs text-ink/55">
-          {item.expectedQuantity ?? 1} {unitLabels[item.unit]} · {item.status}
+          {item.expectedQuantity ?? 1} {unitLabels[item.unit]} · {listItemStatusLabels[item.status]}
         </p>
       </div>
     </button>
   );
 }
 
-export function StartPurchasePanel({ onStart }: { onStart: () => void }) {
+export function StartPurchasePanel({ onStart, loading }: { onStart: () => void; loading?: boolean }) {
   return (
-    <button onClick={onStart} className="flex w-full items-center gap-3 rounded-[8px] bg-ink p-4 text-left text-white shadow-soft">
-      <ShoppingBasket className="h-6 w-6 text-leaf" />
+    <button
+      type="button"
+      onClick={onStart}
+      disabled={loading}
+      aria-busy={loading || undefined}
+      className="flex w-full items-center gap-3 rounded-[8px] bg-ink p-4 text-left text-white shadow-soft transition disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {loading ? <Loader2 className="h-6 w-6 animate-spin text-leaf" /> : <ShoppingBasket className="h-6 w-6 text-leaf" />}
       <span className="min-w-0">
-        <span className="block text-sm font-black">Iniciar compra</span>
+        <span className="block text-sm font-black">{loading ? "Iniciando compra" : "Iniciar compra"}</span>
         <span className="block text-xs text-white/65">Carrinho rapido com total em tempo real</span>
       </span>
     </button>

@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api, storeToken } from "./api";
 import type { User } from "../types";
 
@@ -24,6 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(Boolean(token));
+  const skipNextTokenRefresh = useRef(false);
 
   async function applyLogin(idToken: string) {
     const response = await api<LoginResponse>("/auth/google", {
@@ -32,9 +33,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       body: { idToken },
     });
     storeToken(response.accessToken);
+    skipNextTokenRefresh.current = true;
     setToken(response.accessToken);
     setUser(response.user);
-    await refreshUser();
   }
 
   async function refreshUser() {
@@ -59,6 +60,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    if (skipNextTokenRefresh.current) {
+      skipNextTokenRefresh.current = false;
       setLoading(false);
       return;
     }

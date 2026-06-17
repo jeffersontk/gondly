@@ -226,7 +226,14 @@ export class ListsService {
 
     const item = await this.prisma.marketListItem.update({
       where: { id: itemId },
-      data: { status: "skipped", checked: false },
+      data: {
+        status: "skipped",
+        checked: false,
+        assignedToUserId: null,
+        assignedAt: null,
+        purchasedByUserId: null,
+        purchasedAt: null,
+      },
     });
 
     this.realtime.emitToList(listId, "listItemUpdated", { listId, item, action: "skipped", byUserId: userId });

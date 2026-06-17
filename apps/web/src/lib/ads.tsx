@@ -27,8 +27,8 @@ export function AdProvider({ children }: { children: ReactNode }) {
   const query = useQuery({
     queryKey: ["billing-status"],
     queryFn: () => api<BillingStatus>("/billing/status"),
-    enabled: Boolean(user),
-    staleTime: 30_000,
+    enabled: Boolean(user && !user.monetization),
+    staleTime: 30 * 60_000,
   });
 
   const status = query.data ?? normalizeUserStatus(user?.monetization) ?? defaultStatus;
