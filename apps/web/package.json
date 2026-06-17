@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -p tsconfig.json && vite build",
+    "build:web": "npm run build",
+    "vercel-build": "npm run build",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit"

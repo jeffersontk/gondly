@@ -42,6 +42,40 @@ VITE_ADSENSE_CLIENT_ID=""
 
 Depois do primeiro deploy da Vercel, copie a URL final para configurar `FRONTEND_URL` e `WEB_ORIGIN` no Render.
 
+Se o projeto da Vercel estiver com Root Directory em `apps/web`, use:
+
+```txt
+buildCommand = npm run build:web
+outputDirectory = dist
+```
+
+O arquivo `apps/web/vercel.json` cobre esse cenario.
+
+## 2.1 Google Login
+
+O erro do Google `no registered origin` / `401: invalid_client` acontece quando o dominio atual da PWA nao esta autorizado no OAuth Client ID.
+
+No Google Cloud Console:
+
+1. Va em APIs & Services > Credentials.
+2. Abra o OAuth 2.0 Client ID usado em `VITE_GOOGLE_CLIENT_ID`.
+3. Confirme que o tipo do client e `Web application`.
+4. Em `Authorized JavaScript origins`, adicione exatamente as origens usadas pela PWA:
+
+```txt
+http://localhost:5173
+https://SEU-PROJETO.vercel.app
+https://SEU-DOMINIO-PRODUCAO.com
+```
+
+Regras importantes:
+
+- Use apenas origem: protocolo + dominio + porta, sem path e sem barra final.
+- `https://app.exemplo.com` e `https://www.app.exemplo.com` sao origens diferentes.
+- Preview URLs da Vercel mudam; para login Google, teste no dominio fixo de producao ou adicione manualmente a preview URL atual.
+- `VITE_GOOGLE_CLIENT_ID` na Vercel e `GOOGLE_CLIENT_ID` no Render devem ser o mesmo Client ID Web.
+- Depois de alterar o Client ID ou as envs, faca redeploy na Vercel e no Render.
+
 ## 3. Render
 
 Use o Blueprint `render.yaml` ou crie um Web Service manualmente.
