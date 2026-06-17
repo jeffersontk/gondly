@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: gondly-api
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: npm ci && npm run prisma:generate && npm run build:api
+    preDeployCommand: npm run prisma:deploy
+    startCommand: npm run start:api
+    healthCheckPath: /docs
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 30d
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: ALLOW_DEV_LOGIN
+        value: "false"
+      - key: FRONTEND_URL
+        sync: false
+      - key: WEB_ORIGIN
+        sync: false
+      - key: API_PUBLIC_URL
+        sync: false
+      - key: MERCADO_PAGO_ACCESS_TOKEN
+        sync: false
+      - key: MERCADO_PAGO_WEBHOOK_SECRET
+        sync: false
+      - key: REMOVE_ADS_PRICE
+        value: "19.90"
+      - key: REMOVE_ADS_CURRENCY
+        value: BRL

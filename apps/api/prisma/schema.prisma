@@ -1,0 +1,372 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Unit {
+  un
+  kg
+  g
+  l
+  ml
+  pacote
+  caixa
+  outro
+}
+
+enum MarketListStatus {
+  active
+  archived
+}
+
+enum PurchaseStatus {
+  in_progress
+  completed
+  cancelled
+}
+
+enum SharedRole {
+  owner
+  editor
+  viewer
+}
+
+enum MemberStatus {
+  invited
+  accepted
+  removed
+}
+
+enum ListItemStatus {
+  pending
+  assigned
+  in_cart
+  purchased
+  skipped
+}
+
+enum Plan {
+  free
+  plus
+  family
+}
+
+enum SubscriptionStatus {
+  active
+  trialing
+  past_due
+  canceled
+  expired
+}
+
+enum InviteStatus {
+  pending
+  accepted
+  expired
+  cancelled
+}
+
+enum BillingProvider {
+  mercado_pago
+  stripe
+  manual
+}
+
+enum EntitlementKey {
+  no_ads
+}
+
+enum EntitlementSource {
+  one_time_purchase
+  manual
+  promo
+}
+
+enum OneTimePurchaseType {
+  remove_ads
+}
+
+enum PaymentProvider {
+  mercado_pago
+  manual
+}
+
+enum PaymentStatus {
+  pending
+  approved
+  rejected
+  cancelled
+  refunded
+  expired
+}
+
+model User {
+  id                     String                @id @default(cuid())
+  name                   String
+  email                  String                @unique
+  photoUrl               String?
+  googleId               String?               @unique
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  markets                Market[]
+  products               Product[]
+  lists                  MarketList[]          @relation("ListOwner")
+  purchases              Purchase[]
+  memberships            ListMember[]
+  invitedListInvites     ListInvite[]          @relation("InvitedByUser")
+  assignedListItems      MarketListItem[]      @relation("AssignedListItems")
+  purchasedListItems     MarketListItem[]      @relation("PurchasedListItems")
+  addedPurchaseItems     PurchaseItem[]        @relation("AddedPurchaseItems")
+  updatedPurchaseItems   PurchaseItem[]        @relation("UpdatedPurchaseItems")
+  purchaseParticipations PurchaseParticipant[]
+  subscription           Subscription?
+  entitlements           UserEntitlement[]
+  oneTimePurchases       OneTimePurchase[]
+}
+
+model Market {
+  id        String     @id @default(cuid())
+  userId    String
+  name      String
+  address   String?
+  city      String?
+  notes     String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  deletedAt DateTime?
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purchases Purchase[]
+
+  @@index([userId, deletedAt])
+}
+
+model Product {
+  id          String           @id @default(cuid())
+  userId      String
+  name        String
+  brand       String?
+  category    String?
+  defaultUnit Unit             @default(un)
+  barcode     String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  deletedAt   DateTime?
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listItems   MarketListItem[]
+  items       PurchaseItem[]
+
+  @@index([userId, deletedAt])
+  @@index([userId, name])
+}
+
+model MarketList {
+  id          String           @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  status      MarketListStatus @default(active)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  deletedAt   DateTime?
+  user        User             @relation("ListOwner", fields: [userId], references: [id], onDelete: Cascade)
+  items       MarketListItem[]
+  members     ListMember[]
+  invites     ListInvite[]
+  purchases   Purchase[]
+
+  @@index([userId, status, deletedAt])
+}
+
+model MarketListItem {
+  id                String         @id @default(cuid())
+  listId            String
+  productId         String?
+  productName       String
+  brand             String?
+  category          String?
+  expectedQuantity  Float?
+  unit              Unit           @default(un)
+  checked           Boolean        @default(false)
+  status            ListItemStatus @default(pending)
+  assignedToUserId  String?
+  assignedAt        DateTime?
+  purchasedByUserId String?
+  purchasedAt       DateTime?
+  notes             String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  list              MarketList     @relation(fields: [listId], references: [id], onDelete: Cascade)
+  product           Product?       @relation(fields: [productId], references: [id], onDelete: SetNull)
+  assignedToUser    User?          @relation("AssignedListItems", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  purchasedByUser   User?          @relation("PurchasedListItems", fields: [purchasedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([listId, status])
+}
+
+model Purchase {
+  id                 String                @id @default(cuid())
+  userId             String
+  marketId           String?
+  sourceListId       String?
+  status             PurchaseStatus        @default(in_progress)
+  startedAt          DateTime              @default(now())
+  completedAt        DateTime?
+  subtotalCalculated Decimal               @default(0) @db.Decimal(12, 2)
+  finalPaidAmount    Decimal?              @db.Decimal(12, 2)
+  discountAmount     Decimal?              @db.Decimal(12, 2)
+  notes              String?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  deletedAt          DateTime?
+  user               User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  market             Market?               @relation(fields: [marketId], references: [id], onDelete: SetNull)
+  sourceList         MarketList?           @relation(fields: [sourceListId], references: [id], onDelete: SetNull)
+  items              PurchaseItem[]
+  participants       PurchaseParticipant[]
+
+  @@index([userId, status, deletedAt])
+  @@index([marketId])
+}
+
+model PurchaseItem {
+  id                  String   @id @default(cuid())
+  purchaseId          String
+  productId           String?
+  productName         String
+  brand               String?
+  category            String?
+  quantity            Float
+  unit                Unit     @default(un)
+  pricePaid           Decimal  @db.Decimal(12, 2)
+  unitPriceNormalized Decimal? @db.Decimal(12, 4)
+  normalizedUnitLabel String?
+  addedByUserId       String?
+  updatedByUserId     String?
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  purchase            Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product             Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  addedByUser         User?    @relation("AddedPurchaseItems", fields: [addedByUserId], references: [id], onDelete: SetNull)
+  updatedByUser       User?    @relation("UpdatedPurchaseItems", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([purchaseId])
+  @@index([productId])
+  @@index([productName])
+}
+
+model ListMember {
+  id         String       @id @default(cuid())
+  listId     String
+  userId     String
+  role       SharedRole   @default(viewer)
+  status     MemberStatus @default(invited)
+  invitedAt  DateTime     @default(now())
+  acceptedAt DateTime?
+  removedAt  DateTime?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  list       MarketList   @relation(fields: [listId], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([listId, userId])
+  @@index([userId, status])
+}
+
+model ListInvite {
+  id              String       @id @default(cuid())
+  listId          String
+  invitedByUserId String
+  inviteEmail     String?
+  inviteToken     String       @unique
+  role            SharedRole   @default(editor)
+  status          InviteStatus @default(pending)
+  expiresAt       DateTime
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  list            MarketList   @relation(fields: [listId], references: [id], onDelete: Cascade)
+  invitedByUser   User         @relation("InvitedByUser", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([listId, status])
+}
+
+model PurchaseParticipant {
+  id         String   @id @default(cuid())
+  purchaseId String
+  userId     String
+  joinedAt   DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([purchaseId, userId])
+}
+
+model Subscription {
+  id                     String             @id @default(cuid())
+  userId                 String             @unique
+  plan                   Plan               @default(free)
+  status                 SubscriptionStatus @default(active)
+  provider               BillingProvider    @default(manual)
+  providerCustomerId     String?
+  providerSubscriptionId String?
+  currentPeriodStart     DateTime           @default(now())
+  currentPeriodEnd       DateTime
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  user                   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+}
+
+model UserEntitlement {
+  id        String            @id @default(cuid())
+  userId    String
+  key       EntitlementKey
+  source    EntitlementSource
+  active    Boolean           @default(true)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId, active])
+}
+
+model OneTimePurchase {
+  id                        String              @id @default(cuid())
+  userId                    String
+  type                      OneTimePurchaseType
+  provider                  PaymentProvider
+  providerPreferenceId      String?
+  providerPaymentId         String?
+  providerExternalReference String?             @unique
+  status                    PaymentStatus       @default(pending)
+  amount                    Decimal             @db.Decimal(12, 2)
+  currency                  String              @default("BRL")
+  checkoutUrl               String?
+  paidAt                    DateTime?
+  rejectedAt                DateTime?
+  refundedAt                DateTime?
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  user                      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([providerPaymentId])
+}
+
+model AppConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

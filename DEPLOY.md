@@ -1,0 +1,104 @@
+# Deploy Gondly
+
+Este monorepo esta preparado para:
+
+- Vercel: PWA React/Vite em `apps/web`.
+- Render: API NestJS em `apps/api`.
+- Supabase: PostgreSQL usado pelo Prisma.
+
+## 1. GitHub
+
+Antes de subir:
+
+```bash
+npm ci
+npm run typecheck
+npm run test
+npm run build
+```
+
+Nao commite arquivos `.env`. Use apenas os `.env.example`.
+
+## 2. Vercel
+
+Crie um projeto apontando para o repositorio do GitHub. Use a raiz do monorepo como root do projeto. O arquivo `vercel.json` ja define:
+
+```txt
+installCommand = npm ci
+buildCommand   = npm run build:web
+outputDirectory = apps/web/dist
+```
+
+Variaveis de ambiente no projeto Vercel:
+
+```env
+VITE_API_URL="https://SEU-SERVICO-RENDER.onrender.com"
+VITE_WS_URL="https://SEU-SERVICO-RENDER.onrender.com"
+VITE_GOOGLE_CLIENT_ID="seu-client-id.apps.googleusercontent.com"
+VITE_APP_URL="https://SEU-PROJETO.vercel.app"
+VITE_ENABLE_ADS="true"
+VITE_ADSENSE_CLIENT_ID=""
+```
+
+Depois do primeiro deploy da Vercel, copie a URL final para configurar `FRONTEND_URL` e `WEB_ORIGIN` no Render.
+
+## 3. Render
+
+Use o Blueprint `render.yaml` ou crie um Web Service manualmente.
+
+Com Blueprint:
+
+1. No Render, escolha Blueprint.
+2. Selecione o repositorio GitHub.
+3. O Render detecta `render.yaml`.
+4. Preencha as variaveis marcadas como `sync: false`.
+
+Variaveis obrigatorias no Render:
+
+```env
+DATABASE_URL="postgresql://...pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1"
+DIRECT_URL="postgresql://...pooler.supabase.com:5432/postgres"
+GOOGLE_CLIENT_ID="seu-client-id.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET=""
+FRONTEND_URL="https://SEU-PROJETO.vercel.app"
+WEB_ORIGIN="https://SEU-PROJETO.vercel.app"
+API_PUBLIC_URL="https://SEU-SERVICO-RENDER.onrender.com"
+MERCADO_PAGO_ACCESS_TOKEN="seu-token-mercado-pago"
+MERCADO_PAGO_WEBHOOK_SECRET=""
+```
+
+O Blueprint tambem define:
+
+```txt
+buildCommand     = npm ci && npm run prisma:generate && npm run build:api
+preDeployCommand = npm run prisma:deploy
+startCommand     = npm run start:api
+```
+
+O backend usa `PORT` quando existir, como exigido pelo Render.
+
+## 4. Mercado Pago
+
+Configure o webhook no Mercado Pago apontando para:
+
+```txt
+https://SEU-SERVICO-RENDER.onrender.com/billing/webhook/mercado-pago
+```
+
+O checkout e criado no backend em:
+
+```txt
+POST /billing/remove-ads/checkout
+```
+
+O entitlement `no_ads` so e liberado depois que o webhook consulta o pagamento na API do Mercado Pago.
+
+## 5. Ordem Recomendada
+
+1. Subir o repositorio no GitHub.
+2. Criar o serviço da API no Render.
+3. Criar o projeto da PWA no Vercel com `VITE_API_URL` apontando para o Render.
+4. Atualizar `FRONTEND_URL` e `WEB_ORIGIN` no Render com a URL final da Vercel.
+5. Atualizar `API_PUBLIC_URL` no Render com a URL final da API.
+6. Configurar webhook no Mercado Pago.
+7. Fazer um login real e testar `/app/billing`.
