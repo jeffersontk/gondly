@@ -129,6 +129,17 @@ export class ReportsService {
       .slice(0, 20);
   }
 
+  async insights(userId: string, filters: ReportFiltersDto = {}) {
+    const [monthly, markets, products, variation] = await Promise.all([
+      this.monthlySpending(userId, filters),
+      this.marketsRanking(userId, filters),
+      this.mostPurchasedProducts(userId, filters),
+      this.highestPriceVariation(userId, filters),
+    ]);
+
+    return { monthly, markets, products, variation };
+  }
+
   async mostExpensiveProducts(userId: string, filters: ReportFiltersDto = {}) {
     const grouped = await this.groupNormalizedPrices(userId, undefined, filters);
     return grouped.sort((a, b) => (b.averagePrice ?? 0) - (a.averagePrice ?? 0)).slice(0, 20);
@@ -145,6 +156,16 @@ export class ReportsService {
       include: { purchase: { include: { market: true } } },
       orderBy: { createdAt: "asc" },
     });
+  }
+
+  async productPriceDetails(userId: string, productId: string, filters: ReportFiltersDto = {}) {
+    const [history, markets] = await Promise.all([
+      this.productPriceHistory(userId, productId, filters),
+      this.productMarketsComparison(userId, productId, filters),
+    ]);
+    const best = [...markets].sort((a, b) => a.averagePrice - b.averagePrice)[0] ?? null;
+
+    return { history, markets, best };
   }
 
   async productMarketsComparison(userId: string, productId: string, filters: ReportFiltersDto = {}) {

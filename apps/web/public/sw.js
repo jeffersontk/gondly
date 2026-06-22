@@ -1,4 +1,4 @@
-const CACHE_NAME = "gondly-cache-v1";
+const CACHE_NAME = "gondly-cache-v2";
 const APP_SHELL = ["/", "/app/home", "/manifest.webmanifest", "/icons/icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -18,14 +18,34 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
+  if (!shouldHandleRequest(request)) return;
 
   event.respondWith(
-    fetch(request)
-      .then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-        return response;
-      })
-      .catch(() => caches.match(request).then((response) => response || caches.match("/"))),
+    caches.match(request).then((cached) => {
+      const network = fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(() => undefined);
+
+      if (cached) {
+        event.waitUntil(network);
+        return cached;
+      }
+
+      return network.then((response) => response || caches.match("/"));
+    }),
   );
 });
+
+function shouldHandleRequest(request) {
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return false;
+  if (request.headers.has("authorization")) return false;
+  if (url.pathname.startsWith("/api")) return false;
+  return true;
+}

@@ -5,22 +5,32 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./App";
 import { AdProvider } from "./lib/ads";
 import { AuthProvider } from "./lib/auth";
-import { queryClient } from "./lib/queryClient";
+import { installOfflineQueueSync } from "./lib/offlineQueue";
+import { installBackgroundQuerySync, installQueryCachePersistence, queryClient, restorePersistedQueryCache } from "./lib/queryClient";
 import { registerServiceWorker } from "./lib/register-sw";
 import "./styles.css";
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <BrowserRouter>
-          <AdProvider>
-            <App />
-          </AdProvider>
-        </BrowserRouter>
-      </AuthProvider>
-    </QueryClientProvider>
-  </StrictMode>,
-);
+async function bootstrap() {
+  await restorePersistedQueryCache();
+  installQueryCachePersistence();
+  installBackgroundQuerySync();
+  installOfflineQueueSync();
 
-registerServiceWorker();
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <BrowserRouter>
+            <AdProvider>
+              <App />
+            </AdProvider>
+          </BrowserRouter>
+        </AuthProvider>
+      </QueryClientProvider>
+    </StrictMode>,
+  );
+
+  registerServiceWorker();
+}
+
+void bootstrap();

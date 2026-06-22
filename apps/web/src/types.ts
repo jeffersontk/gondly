@@ -167,3 +167,16 @@ export type PriceComparison = {
   lastPrice: number | null;
   lastMarket: string | null;
 };
+
+export type InsightsReport = {
+  monthly: Array<{ month: string; total: number }>;
+  markets: Array<{ marketName: string; total: number }>;
+  products: Array<{ productName: string; quantity: number }>;
+  variation: Array<{ productName: string; variation: number }>;
+};
+
+export type ProductPriceDetailsReport = {
+  history: unknown[];
+  markets: Array<{ marketName: string; averagePrice: number }>;
+  best: { marketName: string; averagePrice: number } | null;
+};

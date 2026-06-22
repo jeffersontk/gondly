@@ -24,8 +24,17 @@ import {
   Trash2,
 } from "lucide-react";
 import type { Unit } from "@gondly/types";
-import { api } from "../lib/api";
+import { api, isNetworkFailure } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import {
+  createLocalItemId,
+  isLocalId,
+  queuePurchaseItemDelete,
+  queuePurchaseItemUpsert,
+  removePurchaseItemCache,
+  syncOutbox,
+  useOutboxStatus,
+} from "../lib/offlineQueue";
 import {
   AppButton,
   AppInput,
@@ -56,7 +65,19 @@ import {
   unitLabels,
 } from "../components";
 import { AdSlot, useAds } from "../lib/ads";
-import type { DashboardReport, Market, MarketList, MarketListItem, PriceComparison, Product, Purchase, PurchaseItem, User } from "../types";
+import type {
+  DashboardReport,
+  InsightsReport,
+  Market,
+  MarketList,
+  MarketListItem,
+  PriceComparison,
+  Product,
+  ProductPriceDetailsReport,
+  Purchase,
+  PurchaseItem,
+  User,
+} from "../types";
 
 const units = ["un", "kg", "g", "l", "ml", "pacote", "caixa", "outro"] as const;
 
@@ -118,7 +139,7 @@ function roundMoney(value: number) {
 
 function optimisticCartItem(values: CartItemForm, id?: string): PurchaseItem {
   return {
-    id: id ?? `local-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    id: id ?? createLocalItemId(),
     productId: values.productId ?? null,
     productName: values.productName,
     brand: values.brand || null,
@@ -171,6 +192,10 @@ function setActivePurchaseCache(purchases: Purchase[] | undefined, nextPurchase:
 function removeActivePurchaseCache(purchases: Purchase[] | undefined, purchaseId?: string) {
   if (!purchases) return purchases;
   return purchases.filter((purchase) => purchase.id !== purchaseId);
+}
+
+function isQueueableWriteError(error: unknown) {
+  return isNetworkFailure(error);
 }
 
 function updateListItemCache(list: MarketList | undefined, item: MarketListItem) {
@@ -918,6 +943,7 @@ export function ActivePurchasePage() {
   const purchaseId = routeParams.purchaseId ?? params.get("purchaseId");
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   const purchase = useMemo(() => active.data?.find((entry) => entry.id === purchaseId) ?? active.data?.[0], [active.data, purchaseId]);
+  const outbox = useOutboxStatus(purchase?.id);
   const cancel = useMutation({
     mutationFn: () => api<Purchase>(`/purchases/${purchase?.id}/cancel`, { method: "POST" }),
     onSuccess: (cancelled) => queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => removeActivePurchaseCache(current, cancelled.id)),
@@ -942,13 +968,27 @@ export function ActivePurchasePage() {
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <AppButton variant="secondary" icon={<Check className="h-4 w-4" />} onClick={() => navigate(`/app/purchase/${purchase.id}/finish`)}>
+        <AppButton
+          variant="secondary"
+          icon={<Check className="h-4 w-4" />}
+          onClick={() => navigate(`/app/purchase/${purchase.id}/finish`)}
+          disabled={outbox.pendingCount > 0}
+        >
           Finalizar
         </AppButton>
         <AppButton variant="danger" icon={<Trash2 className="h-4 w-4" />} onClick={() => cancel.mutate()} loading={cancel.isPending} loadingLabel="Cancelando">
           Cancelar
         </AppButton>
       </div>
+
+      {outbox.pendingCount > 0 ? (
+        <div className="mt-3 rounded-[8px] border border-sky/20 bg-sky/10 p-3 text-sm font-semibold text-sky">
+          {outbox.isSyncing ? "Sincronizando alterações do carrinho..." : `${outbox.pendingCount} alteração(ões) aguardando sinal.`}
+          <button type="button" className="ml-2 font-black underline" onClick={() => void outbox.syncNow()}>
+            Sincronizar
+          </button>
+        </div>
+      ) : null}
 
       <SectionHeader title="Carrinho" />
       <div className="space-y-3">
@@ -966,8 +1006,28 @@ function CartItemActions({ purchaseId, item }: { purchaseId: string; item: Purch
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const remove = useMutation({
-    mutationFn: () => api<Purchase>(`/purchases/${purchaseId}/items/${item.id}`, { method: "DELETE" }),
+    mutationFn: () => {
+      if (isLocalId(item.id)) throw new Error("Item pendente de sincronização.");
+      return api<Purchase>(`/purchases/${purchaseId}/items/${item.id}`, { method: "DELETE" });
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["active-purchases"] });
+      const previousActivePurchases = queryClient.getQueryData<Purchase[]>(["active-purchases"]);
+      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => removePurchaseItemCache(current, purchaseId, item.id));
+      return { previousActivePurchases };
+    },
     onSuccess: (purchase) => queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => reconcilePurchaseCache(current, purchase)),
+    onError: async (error, _values, context) => {
+      if (isQueueableWriteError(error) || isLocalId(item.id)) {
+        await queuePurchaseItemDelete(purchaseId, item.id);
+        void syncOutbox();
+        return;
+      }
+
+      if (context?.previousActivePurchases) {
+        queryClient.setQueryData(["active-purchases"], context.previousActivePurchases);
+      }
+    },
   });
 
   return (
@@ -1024,10 +1084,12 @@ export function AddEditCartItemPage() {
     });
   }, [editingItem, form]);
   const save = useMutation({
-    mutationFn: (values: CartItemForm) =>
-      itemId
+    mutationFn: (values: CartItemForm) => {
+      if (isLocalId(itemId)) throw new Error("Item pendente de sincronização.");
+      return itemId
         ? api<Purchase>(`/purchases/${purchaseId}/items/${itemId}`, { method: "PUT", body: values })
-        : api<Purchase>(`/purchases/${purchaseId}/items`, { method: "POST", body: values }),
+        : api<Purchase>(`/purchases/${purchaseId}/items`, { method: "POST", body: values });
+    },
     onMutate: async (values) => {
       await queryClient.cancelQueries({ queryKey: ["active-purchases"] });
       const previousActivePurchases = queryClient.getQueryData<Purchase[]>(["active-purchases"]);
@@ -1040,7 +1102,18 @@ export function AddEditCartItemPage() {
     onSuccess: (saved, _values, context) => {
       queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => reconcilePurchaseCache(current, saved, context?.optimisticItemId));
     },
-    onError: (_error, _values, context) => {
+    onError: async (error, values, context) => {
+      if (isQueueableWriteError(error) || isLocalId(itemId)) {
+        await queuePurchaseItemUpsert({
+          purchaseId,
+          itemId,
+          localItemId: context?.optimisticItemId,
+          body: values,
+        });
+        void syncOutbox();
+        return;
+      }
+
       if (context?.previousActivePurchases) {
         queryClient.setQueryData(["active-purchases"], context.previousActivePurchases);
       }
@@ -1098,6 +1171,7 @@ export function FinishPurchasePage() {
   const [showCreateMarket, setShowCreateMarket] = useState(false);
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   const purchase = active.data?.find((entry) => entry.id === purchaseId) ?? active.data?.[0];
+  const outbox = useOutboxStatus(purchase?.id);
   const form = useForm<FinishForm>({
     resolver: zodResolver(finishSchema),
     defaultValues: { marketId: "", finalPaidAmount: 0, notes: "" },
@@ -1137,6 +1211,16 @@ export function FinishPurchasePage() {
         <p className="text-3xl font-black">{formatBRL(purchase.subtotalCalculated)}</p>
       </div>
       <form className="space-y-3" onSubmit={form.handleSubmit((values) => finish.mutate(values))}>
+        {outbox.pendingCount > 0 ? (
+          <ItemFeedback
+            tone="info"
+            message={
+              outbox.isSyncing
+                ? "Sincronizando itens do carrinho antes de finalizar."
+                : "Finalize depois que os itens pendentes forem enviados. O app tenta sincronizar automaticamente quando o sinal voltar."
+            }
+          />
+        ) : null}
         <MarketSelect
           value={form.watch("marketId")}
           onChange={(value) => form.setValue("marketId", value, { shouldValidate: true })}
@@ -1170,7 +1254,7 @@ export function FinishPurchasePage() {
           <p className={difference >= 0 ? "text-lg font-black text-mint" : "text-lg font-black text-tomato"}>{formatBRL(difference)}</p>
           {difference < 0 ? <p className="mt-1 text-xs text-tomato">Diferenca positiva, talvez algum item nao tenha sido lancado.</p> : null}
         </div>
-        <AppButton type="submit" full loading={finish.isPending} loadingLabel="Salvando">
+        <AppButton type="submit" full loading={finish.isPending} loadingLabel="Salvando" disabled={outbox.pendingCount > 0}>
           Salvar compra
         </AppButton>
       </form>
@@ -1286,21 +1370,23 @@ export function PriceComparisonPage() {
 
 export function ProductPriceDetailPage() {
   const { productId = "" } = useParams();
-  const history = useQuery({ queryKey: ["price-history", productId], queryFn: () => api(`/reports/products/${productId}/price-history`) });
-  const markets = useQuery({ queryKey: ["markets-comparison", productId], queryFn: () => api<Array<{ marketName: string; averagePrice: number }>>(`/reports/products/${productId}/markets-comparison`) });
-  const best = useQuery({ queryKey: ["best-market", productId], queryFn: () => api<{ marketName: string; averagePrice: number } | null>(`/reports/products/${productId}/best-market`) });
+  const details = useQuery({
+    queryKey: ["product-price-details", productId],
+    queryFn: () => api<ProductPriceDetailsReport>(`/reports/products/${productId}/price-details`),
+    enabled: Boolean(productId),
+  });
 
   return (
     <ScreenContainer title="Preço do produto">
-      <SummaryCard label="Melhor mercado" value={best.data ? `${best.data.marketName} · ${formatBRL(best.data.averagePrice)}` : "-"} />
+      <SummaryCard label="Melhor mercado" value={details.data?.best ? `${details.data.best.marketName} · ${formatBRL(details.data.best.averagePrice)}` : "-"} />
       <SectionHeader title="Mercados" />
       <div className="space-y-2">
-        {markets.data?.map((entry) => (
+        {details.data?.markets.map((entry) => (
           <PriceCard key={entry.marketName} label={entry.marketName} value={formatBRL(entry.averagePrice)} />
         ))}
       </div>
       <SectionHeader title="Histórico" />
-      <pre className="overflow-auto rounded-[8px] bg-white p-3 text-xs text-ink/60">{JSON.stringify(history.data ?? [], null, 2)}</pre>
+      <pre className="overflow-auto rounded-[8px] bg-white p-3 text-xs text-ink/60">{JSON.stringify(details.data?.history ?? [], null, 2)}</pre>
     </ScreenContainer>
   );
 }
@@ -1496,29 +1582,26 @@ export function CreateEditProductPage() {
 }
 
 export function InsightsPage() {
-  const monthly = useQuery({ queryKey: ["monthly-spending"], queryFn: () => api<Array<{ month: string; total: number }>>("/reports/monthly-spending") });
-  const markets = useQuery({ queryKey: ["markets-ranking"], queryFn: () => api<Array<{ marketName: string; total: number }>>("/reports/markets-ranking") });
-  const products = useQuery({ queryKey: ["most-products"], queryFn: () => api<Array<{ productName: string; quantity: number }>>("/reports/most-purchased-products") });
-  const variation = useQuery({ queryKey: ["price-variation"], queryFn: () => api<Array<{ productName: string; variation: number }>>("/reports/highest-price-variation") });
+  const insights = useQuery({ queryKey: ["insights"], queryFn: () => api<InsightsReport>("/reports/insights") });
 
   return (
     <ScreenContainer title="Insights">
       <AdSlot />
       <SectionHeader title="Gasto mensal" />
       <div className="space-y-2">
-        {monthly.data?.map((entry) => <PriceCard key={entry.month} label={entry.month} value={formatBRL(entry.total)} />)}
+        {insights.data?.monthly.map((entry) => <PriceCard key={entry.month} label={entry.month} value={formatBRL(entry.total)} />)}
       </div>
       <SectionHeader title="Mercados" />
       <div className="space-y-2">
-        {markets.data?.map((entry) => <PriceCard key={entry.marketName} label={entry.marketName} value={formatBRL(entry.total)} />)}
+        {insights.data?.markets.map((entry) => <PriceCard key={entry.marketName} label={entry.marketName} value={formatBRL(entry.total)} />)}
       </div>
       <SectionHeader title="Produtos" />
       <div className="space-y-2">
-        {products.data?.map((entry) => <PriceCard key={entry.productName} label={entry.productName} value={`${entry.quantity}`} />)}
+        {insights.data?.products.map((entry) => <PriceCard key={entry.productName} label={entry.productName} value={`${entry.quantity}`} />)}
       </div>
       <SectionHeader title="Variacao" />
       <div className="space-y-2">
-        {variation.data?.map((entry) => <PriceCard key={entry.productName} label={entry.productName} value={formatBRL(entry.variation)} />)}
+        {insights.data?.variation.map((entry) => <PriceCard key={entry.productName} label={entry.productName} value={formatBRL(entry.variation)} />)}
       </div>
     </ScreenContainer>
   );

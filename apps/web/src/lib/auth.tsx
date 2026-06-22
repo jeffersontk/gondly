@@ -1,5 +1,7 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { api, storeToken } from "./api";
+import { api, getCachedApiRecord, storeToken } from "./api";
+import { clearHttpCache, clearOutbox } from "./db";
+import { clearPersistedQueryCache, queryClient } from "./queryClient";
 import type { User } from "../types";
 
 type LoginResponse = {
@@ -18,7 +20,14 @@ type AuthContextValue = {
 };
 
 const TOKEN_KEY = "gondly.token";
+const AUTH_USER_CACHE_MAX_AGE = 24 * 60 * 60_000;
+const AUTH_USER_BACKGROUND_REFRESH_INTERVAL = 5 * 60_000;
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+async function clearLocalSessionCache() {
+  queryClient.clear();
+  await Promise.allSettled([clearHttpCache(), clearPersistedQueryCache(), clearOutbox()]);
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
@@ -27,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const skipNextTokenRefresh = useRef(false);
 
   async function applyLogin(idToken: string) {
+    await clearLocalSessionCache();
     const response = await api<LoginResponse>("/auth/google", {
       method: "POST",
       skipAuth: true,
@@ -55,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       storeToken(null);
       setToken(null);
       setUser(null);
+      await clearLocalSessionCache();
     }
   }
 
@@ -64,19 +75,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    let cancelled = false;
+
     if (skipNextTokenRefresh.current) {
       skipNextTokenRefresh.current = false;
       setLoading(false);
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
 
-    refreshUser()
-      .catch(() => {
+    async function loadCurrentUser() {
+      let usedCachedUser = false;
+
+      try {
+        const cachedUserRecord = await getCachedApiRecord<User>("/auth/me").catch(() => null);
+        if (cancelled) return;
+
+        if (cachedUserRecord && Date.now() - cachedUserRecord.savedAt <= AUTH_USER_CACHE_MAX_AGE) {
+          usedCachedUser = true;
+          setUser(cachedUserRecord.value);
+          setLoading(false);
+        }
+
+        if (cachedUserRecord && Date.now() - cachedUserRecord.savedAt <= AUTH_USER_BACKGROUND_REFRESH_INTERVAL) {
+          return;
+        }
+
+        const current = await api<User>("/auth/me");
+        if (cancelled) return;
+        setUser(current);
+      } catch {
+        if (cancelled) return;
         storeToken(null);
         setToken(null);
         setUser(null);
-      })
-      .finally(() => setLoading(false));
+        await clearLocalSessionCache();
+      } finally {
+        if (!cancelled && !usedCachedUser) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadCurrentUser();
+
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   useEffect(() => {
@@ -84,6 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       storeToken(null);
       setToken(null);
       setUser(null);
+      void clearLocalSessionCache();
     }
 
     window.addEventListener("gondly:unauthorized", handleUnauthorized);

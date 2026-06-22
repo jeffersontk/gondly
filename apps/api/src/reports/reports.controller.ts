@@ -38,6 +38,11 @@ export class ReportsController {
     return this.reportsService.highestPriceVariation(user.id, filters);
   }
 
+  @Get("insights")
+  insights(@CurrentUser() user: JwtUser, @Query() filters: ReportFiltersDto) {
+    return this.reportsService.insights(user.id, filters);
+  }
+
   @Get("most-expensive-products")
   mostExpensiveProducts(@CurrentUser() user: JwtUser, @Query() filters: ReportFiltersDto) {
     return this.reportsService.mostExpensiveProducts(user.id, filters);
@@ -51,6 +56,11 @@ export class ReportsController {
   @Get("products/:productId/price-history")
   priceHistory(@CurrentUser() user: JwtUser, @Param("productId") productId: string, @Query() filters: ReportFiltersDto) {
     return this.reportsService.productPriceHistory(user.id, productId, filters);
+  }
+
+  @Get("products/:productId/price-details")
+  priceDetails(@CurrentUser() user: JwtUser, @Param("productId") productId: string, @Query() filters: ReportFiltersDto) {
+    return this.reportsService.productPriceDetails(user.id, productId, filters);
   }
 
   @Get("products/:productId/markets-comparison")

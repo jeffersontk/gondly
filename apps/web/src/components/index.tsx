@@ -409,10 +409,15 @@ export function PriceCard({ label, value }: { label: string; value: ReactNode })
 }
 
 export function PurchaseItemCard({ item, action }: { item: PurchaseItem; action?: ReactNode }) {
+  const isPending = item.id.startsWith("local-");
+
   return (
     <div className="flex items-center justify-between gap-3 rounded-[8px] bg-white p-3 shadow-soft">
       <div className="min-w-0">
-        <p className="truncate text-sm font-black text-ink">{item.productName}</p>
+        <div className="flex items-center gap-2">
+          <p className="truncate text-sm font-black text-ink">{item.productName}</p>
+          {isPending ? <span className="rounded-full bg-sky/12 px-2 py-0.5 text-[11px] font-black text-sky">Pendente</span> : null}
+        </div>
         <p className="text-xs text-ink/55">
           {item.quantity} {unitLabels[item.unit]} · {formatBRL(item.pricePaid)}
         </p>
