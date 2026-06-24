@@ -52,6 +52,18 @@ describe("shared list access requests", () => {
         },
       },
       marketList: {
+        findMany: async () =>
+          memberStatus === "accepted"
+            ? [
+                {
+                  id: "list-1",
+                  userId: "owner-1",
+                  name: "Compra do mês",
+                  items: [],
+                  members: [{ userId: "guest-1", status: memberStatus }],
+                },
+              ]
+            : [],
         findFirst: async () => ({
           id: "list-1",
           userId: "owner-1",
@@ -69,10 +81,12 @@ describe("shared list access requests", () => {
     const request = await service.requestAccess("guest-1", "share-token");
     assert.equal(request.status, "invited");
     assert.equal(memberStatus, "invited");
+    assert.equal((await service.list("guest-1")).length, 0);
 
     const approved = await service.approveMember("owner-1", "list-1", "member-1");
     assert.equal(approved.status, "accepted");
     assert.equal(memberStatus, "accepted");
+    assert.equal((await service.list("guest-1")).length, 1);
     assert.deepEqual(emittedEvents, ["accessRequested", "memberApproved"]);
   });
 });

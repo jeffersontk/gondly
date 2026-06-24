@@ -34,6 +34,11 @@ queryClient.setQueryDefaults(["active-purchases"], {
   staleTime: 60_000,
 });
 
+queryClient.setQueryDefaults(["lists"], {
+  staleTime: 30_000,
+  refetchOnMount: true,
+});
+
 queryClient.setQueryDefaults(["billing-status"], {
   staleTime: 30 * 60_000,
 });

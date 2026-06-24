@@ -1478,10 +1478,31 @@ export function SharedListPage() {
   });
 
   useEffect(() => {
-    if (info.data?.accessStatus === "accepted" || info.data?.accessStatus === "owner") {
-      navigate(`/app/lists/${info.data.listId}`, { replace: true });
+    if (info.data?.accessStatus !== "accepted" && info.data?.accessStatus !== "owner") return;
+
+    let cancelled = false;
+    const listId = info.data.listId;
+
+    async function refreshAccessibleLists() {
+      queryClient.removeQueries({ queryKey: ["lists"] });
+      await queryClient
+        .fetchQuery({
+          queryKey: ["lists"],
+          queryFn: () => api<MarketList[]>("/lists"),
+          staleTime: 0,
+        })
+        .catch(() => undefined);
+
+      if (!cancelled) {
+        navigate(`/app/lists/${listId}`, { replace: true });
+      }
     }
-  }, [info.data?.accessStatus, info.data?.listId, navigate]);
+
+    void refreshAccessibleLists();
+    return () => {
+      cancelled = true;
+    };
+  }, [info.data?.accessStatus, info.data?.listId, navigate, queryClient]);
 
   if (info.isLoading) return <LoadingState label="Carregando convite" />;
   if (info.isError || !info.data) {
