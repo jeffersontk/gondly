@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Unit } from "@gondly/types";
-import { ApiError, api, isNetworkFailure } from "./api";
+import { ApiError, api, getStoredToken, isNetworkFailure } from "./api";
 import { outboxDelete, outboxGetAll, outboxPut } from "./db";
 import { queryClient } from "./queryClient";
 import type { Purchase } from "../types";
@@ -34,18 +34,8 @@ type PurchaseItemUpsertEntry = {
   lastError?: string;
 };
 
-type PurchaseItemDeleteEntry = {
-  id: string;
-  type: "purchase-item-delete";
-  purchaseId: string;
-  itemId: string;
-  createdAt: number;
-  updatedAt: number;
-  attempts: number;
-  lastError?: string;
-};
-
-type OutboxEntry = PurchaseItemUpsertEntry | PurchaseItemDeleteEntry;
+type OutboxEntry = PurchaseItemUpsertEntry;
+type StoredOutboxEntry = OutboxEntry | { id: string; type: string; createdAt: number };
 
 let syncRunning = false;
 
@@ -89,61 +79,76 @@ export async function queuePurchaseItemUpsert({
   notifyOutboxChanged();
 }
 
-export async function queuePurchaseItemDelete(purchaseId: string, itemId: string) {
-  if (isLocalId(itemId)) {
-    await outboxDelete(itemId);
-    notifyOutboxChanged();
-    return;
-  }
-
-  await outboxDelete(`purchase-item-upsert:${purchaseId}:${itemId}`);
-  await outboxPut<PurchaseItemDeleteEntry>({
-    id: `purchase-item-delete:${purchaseId}:${itemId}`,
-    type: "purchase-item-delete",
-    purchaseId,
-    itemId,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    attempts: 0,
-  });
-  notifyOutboxChanged();
+export async function discardQueuedPurchaseChanges(purchaseId: string) {
+  const entries = await getOutboxEntries();
+  const purchaseEntries = entries.filter((entry) => entry.purchaseId === purchaseId);
+  await Promise.all(purchaseEntries.map((entry) => outboxDelete(entry.id)));
+  if (purchaseEntries.length) notifyOutboxChanged();
 }
 
 export async function syncOutbox() {
-  if (syncRunning || !navigator.onLine) return;
+  if (syncRunning || !navigator.onLine || !getStoredToken()) return;
 
   syncRunning = true;
   notifySyncChanged(true);
 
   try {
-    const entries = await getOutboxEntries();
+    let entries = await getOutboxEntries();
+    if (!entries.length) return;
+
+    const activePurchases = await queryClient.fetchQuery({
+      queryKey: ["active-purchases"],
+      queryFn: () => api<Purchase[]>("/purchases/active"),
+      staleTime: 0,
+      retry: false,
+    });
+    const activePurchaseIds = new Set(activePurchases.map((purchase) => purchase.id));
+    const obsoleteEntries = entries.filter((entry) => !activePurchaseIds.has(entry.purchaseId));
+
+    if (obsoleteEntries.length) {
+      await Promise.all(obsoleteEntries.map((entry) => outboxDelete(entry.id)));
+      notifyOutboxChanged();
+      entries = entries.filter((entry) => activePurchaseIds.has(entry.purchaseId));
+    }
 
     for (const entry of entries) {
       try {
-        if (entry.type === "purchase-item-upsert") {
-          const purchase =
-            entry.method === "POST"
-              ? await api<Purchase>(`/purchases/${entry.purchaseId}/items`, { method: "POST", body: entry.body })
-              : await api<Purchase>(`/purchases/${entry.purchaseId}/items/${entry.itemId}`, { method: "PUT", body: entry.body });
+        const purchase =
+          entry.method === "POST"
+            ? await api<Purchase>(`/purchases/${entry.purchaseId}/items`, { method: "POST", body: entry.body })
+            : await api<Purchase>(`/purchases/${entry.purchaseId}/items/${entry.itemId}`, { method: "PUT", body: entry.body });
 
-          queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => reconcilePurchaseCache(current, purchase, entry.localItemId));
-          await outboxDelete(entry.id);
-        } else {
-          const purchase = await api<Purchase>(`/purchases/${entry.purchaseId}/items/${entry.itemId}`, { method: "DELETE" });
-          queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => reconcilePurchaseCache(current, purchase));
-          await outboxDelete(entry.id);
-        }
+        queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => reconcilePurchaseCache(current, purchase, entry.localItemId));
+        await outboxDelete(entry.id);
 
         notifyOutboxChanged();
       } catch (error) {
+        if (isObsoleteQueuedWrite(error)) {
+          await outboxDelete(entry.id);
+          queryClient.invalidateQueries({ queryKey: ["active-purchases"] });
+          notifyOutboxChanged();
+          continue;
+        }
+
         await markOutboxAttempt(entry, error);
-        if (isNetworkFailure(error) || (error instanceof ApiError && error.status >= 500)) break;
+        if (
+          isNetworkFailure(error) ||
+          (error instanceof ApiError && (error.status === 401 || error.status === 408 || error.status === 429 || error.status >= 500))
+        ) {
+          break;
+        }
       }
     }
   } finally {
     syncRunning = false;
     notifySyncChanged(false);
   }
+}
+
+function isObsoleteQueuedWrite(error: unknown) {
+  if (!(error instanceof ApiError)) return false;
+
+  return error.status >= 400 && error.status < 500 && ![401, 408, 429].includes(error.status);
 }
 
 export function installOfflineQueueSync() {
@@ -197,8 +202,16 @@ async function getOutboxEntry(id: string) {
 }
 
 async function getOutboxEntries() {
-  const entries = await outboxGetAll<OutboxEntry>();
-  return entries.sort((a, b) => a.createdAt - b.createdAt);
+  const entries = await outboxGetAll<StoredOutboxEntry>();
+  const obsoleteEntries = entries.filter((entry) => entry.type !== "purchase-item-upsert");
+  if (obsoleteEntries.length) {
+    await Promise.all(obsoleteEntries.map((entry) => outboxDelete(entry.id)));
+    notifyOutboxChanged();
+  }
+
+  return entries
+    .filter((entry): entry is OutboxEntry => entry.type === "purchase-item-upsert")
+    .sort((a, b) => a.createdAt - b.createdAt);
 }
 
 async function markOutboxAttempt(entry: OutboxEntry, error: unknown) {
@@ -231,21 +244,6 @@ function reconcilePurchaseCache(purchases: Purchase[] | undefined, nextPurchase:
 
     return {
       ...nextPurchase,
-      items,
-      subtotalCalculated: roundMoney(items.reduce((sum, entry) => sum + Number(entry.pricePaid ?? 0), 0)),
-    };
-  });
-}
-
-export function removePurchaseItemCache(purchases: Purchase[] | undefined, purchaseId: string, itemId: string) {
-  if (!purchases) return purchases;
-
-  return purchases.map((purchase) => {
-    if (purchase.id !== purchaseId) return purchase;
-
-    const items = purchase.items.filter((entry) => entry.id !== itemId);
-    return {
-      ...purchase,
       items,
       subtotalCalculated: roundMoney(items.reduce((sum, entry) => sum + Number(entry.pricePaid ?? 0), 0)),
     };

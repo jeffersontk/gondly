@@ -4,9 +4,10 @@ import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import type { JwtUser } from "../common/auth.types";
 import {
-  CheckListItemDto,
   CreateListDto,
   CreateListItemDto,
+  ImportListItemsDto,
+  SetListItemStateDto,
   UpdateListDto,
   UpdateListItemDto,
 } from "./dto";
@@ -59,6 +60,11 @@ export class ListsController {
     return this.listsService.addItem(user.id, id, dto);
   }
 
+  @Post(":id/items/import")
+  importItems(@CurrentUser() user: JwtUser, @Param("id") id: string, @Body() dto: ImportListItemsDto) {
+    return this.listsService.importItems(user.id, id, dto);
+  }
+
   @Put(":id/items/:itemId")
   updateItem(
     @CurrentUser() user: JwtUser,
@@ -74,33 +80,13 @@ export class ListsController {
     return this.listsService.removeItem(user.id, id, itemId);
   }
 
-  @Patch(":id/items/:itemId/check")
-  checkItem(
+  @Patch(":id/items/:itemId/state")
+  setItemState(
     @CurrentUser() user: JwtUser,
     @Param("id") id: string,
     @Param("itemId") itemId: string,
-    @Body() dto: CheckListItemDto,
+    @Body() dto: SetListItemStateDto,
   ) {
-    return this.listsService.checkItem(user.id, id, itemId, dto.checked);
-  }
-
-  @Patch(":id/items/:itemId/assign")
-  assignItem(@CurrentUser() user: JwtUser, @Param("id") id: string, @Param("itemId") itemId: string) {
-    return this.listsService.assignItem(user.id, id, itemId);
-  }
-
-  @Patch(":id/items/:itemId/unassign")
-  unassignItem(@CurrentUser() user: JwtUser, @Param("id") id: string, @Param("itemId") itemId: string) {
-    return this.listsService.unassignItem(user.id, id, itemId);
-  }
-
-  @Patch(":id/items/:itemId/purchase")
-  purchaseItem(@CurrentUser() user: JwtUser, @Param("id") id: string, @Param("itemId") itemId: string) {
-    return this.listsService.purchaseItem(user.id, id, itemId);
-  }
-
-  @Patch(":id/items/:itemId/skip")
-  skipItem(@CurrentUser() user: JwtUser, @Param("id") id: string, @Param("itemId") itemId: string) {
-    return this.listsService.skipItem(user.id, id, itemId);
+    return this.listsService.setItemState(user.id, id, itemId, dto.status);
   }
 }

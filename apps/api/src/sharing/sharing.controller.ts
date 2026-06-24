@@ -23,9 +23,29 @@ export class SharingController {
     return this.sharingService.invite(user.id, id, dto);
   }
 
+  @Post(":id/share-link")
+  createShareLink(@CurrentUser() user: JwtUser, @Param("id") id: string) {
+    return this.sharingService.createShareLink(user.id, id);
+  }
+
+  @Get("share-links/:token")
+  shareLink(@CurrentUser() user: JwtUser, @Param("token") token: string) {
+    return this.sharingService.shareLink(user.id, token);
+  }
+
+  @Post("share-links/:token/request")
+  requestAccess(@CurrentUser() user: JwtUser, @Param("token") token: string) {
+    return this.sharingService.requestAccess(user.id, token);
+  }
+
   @Post("invites/:token/accept")
   acceptInvite(@CurrentUser() user: JwtUser, @Param("token") token: string) {
     return this.sharingService.acceptInvite(user.id, user.email, token);
+  }
+
+  @Put(":id/members/:memberId/approve")
+  approveMember(@CurrentUser() user: JwtUser, @Param("id") id: string, @Param("memberId") memberId: string) {
+    return this.sharingService.approveMember(user.id, id, memberId);
   }
 
   @Delete(":id/members/:memberId")

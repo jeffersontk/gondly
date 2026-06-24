@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext, useEffect } from "react";
+﻿import { createContext, ReactNode, useContext, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "react-router-dom";
 import { api } from "./api";
@@ -83,7 +83,7 @@ export function AdSlot({ className }: { className?: string }) {
 
 export function AdPlaceholder({ className }: { className?: string }) {
   return (
-    <div className={["rounded-[8px] border border-dashed border-ink/15 bg-white/70 p-3 text-center text-xs font-semibold text-ink/45", className].filter(Boolean).join(" ")}>
+    <div className={["rounded-xl border border-dashed border-line bg-white/70 p-3 text-center text-xs font-semibold text-ink/45", className].filter(Boolean).join(" ")}>
       Espaco para anuncio
     </div>
   );
@@ -112,7 +112,7 @@ export function AdSenseSlot({ clientId, className }: { clientId: string; classNa
 
   return (
     <ins
-      className={["adsbygoogle block min-h-20 rounded-[8px] bg-white/70", className].filter(Boolean).join(" ")}
+      className={["adsbygoogle block min-h-20 rounded-xl bg-white/70", className].filter(Boolean).join(" ")}
       data-ad-client={clientId}
       data-ad-format="auto"
       data-full-width-responsive="true"

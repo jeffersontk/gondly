@@ -1,4 +1,4 @@
-import { useEffect, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, forwardRef } from "react";
+﻿import { useEffect, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, forwardRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -25,7 +25,7 @@ function cls(...classes: Array<string | false | null | undefined>) {
 }
 
 const controlClass =
-  "h-12 w-full rounded-[8px] border border-ink/10 bg-white px-3 text-base text-ink outline-none transition focus:border-mint focus:ring-4 focus:ring-mint/15";
+  "h-12 w-full rounded-xl border border-line bg-white px-4 text-base text-ink shadow-sm outline-none transition duration-200 placeholder:text-muted focus:border-mint focus:ring-4 focus:ring-mint/10 disabled:cursor-not-allowed disabled:bg-paper disabled:text-muted";
 
 export const unitLabels: Record<Unit, string> = {
   un: "Un",
@@ -48,16 +48,16 @@ type AppButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 export function AppButton({ variant = "primary", icon, full, loading, loadingLabel, disabled, className, children, ...props }: AppButtonProps) {
   const variants = {
-    primary: "bg-mint text-white shadow-soft hover:bg-mint/90",
-    secondary: "bg-white text-ink border border-ink/10 hover:border-mint/40",
-    ghost: "bg-transparent text-ink hover:bg-ink/5",
-    danger: "bg-tomato text-white hover:bg-tomato/90",
+    primary: "bg-mint text-white shadow-soft hover:bg-mint/90 active:bg-mint",
+    secondary: "border border-line bg-white text-ink shadow-sm hover:border-mint/30 hover:bg-paper",
+    ghost: "bg-transparent text-ink hover:bg-white",
+    danger: "bg-ink text-white shadow-soft hover:bg-ink/90",
   };
 
   return (
     <button
       className={cls(
-        "inline-flex h-12 items-center justify-center gap-2 rounded-[8px] px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60",
+        "inline-flex h-12 items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold tracking-[-0.01em] transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100",
         variants[variant],
         full && "w-full",
         className,
@@ -84,10 +84,10 @@ export const AppInput = forwardRef<HTMLInputElement, AppInputProps>(function App
 ) {
   return (
     <label className="block">
-      {label ? <span className="mb-1 block text-sm font-semibold text-ink/80">{label}</span> : null}
+      {label ? <span className="mb-1.5 block text-sm font-semibold text-ink">{label}</span> : null}
       <input ref={ref} className={cls(controlClass, error && "border-tomato focus:border-tomato focus:ring-tomato/15", className)} {...props} />
       {error ? <span className="mt-1 block text-xs font-medium text-tomato">{error}</span> : null}
-      {hint && !error ? <span className="mt-1 block text-xs text-ink/50">{hint}</span> : null}
+      {hint && !error ? <span className="mt-1.5 block text-xs text-ink/60">{hint}</span> : null}
     </label>
   );
 });
@@ -108,7 +108,7 @@ type UnitSelectProps = Omit<SelectHTMLAttributes<HTMLSelectElement>, "children">
 export const UnitSelect = forwardRef<HTMLSelectElement, UnitSelectProps>(function UnitSelect({ label, error, className, ...props }, ref) {
   return (
     <label className="block">
-      {label ? <span className="mb-1 block text-sm font-semibold text-ink/80">{label}</span> : null}
+      {label ? <span className="mb-1.5 block text-sm font-semibold text-ink">{label}</span> : null}
       <select ref={ref} className={cls(controlClass, className)} {...props}>
         {Object.entries(unitLabels).map(([value, labelText]) => (
           <option key={value} value={value}>
@@ -124,8 +124,8 @@ export const UnitSelect = forwardRef<HTMLSelectElement, UnitSelectProps>(functio
 export function SearchBar({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <div className={cls("relative", className)}>
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink/40" />
-      <input className={cls(controlClass, "pl-10")} type="search" {...props} />
+      <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
+      <input className={cls(controlClass, "pl-11")} type="search" {...props} />
     </div>
   );
 }
@@ -168,12 +168,12 @@ export function ProductSearchInput({
         placeholder="Digite o produto"
       />
       {open && data.length ? (
-        <div className="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-[8px] border border-ink/10 bg-white shadow-soft">
+        <div className="absolute z-30 mt-2 max-h-56 w-full overflow-auto rounded-xl border border-line bg-white p-1 shadow-lift">
           {data.map((product) => (
             <button
               key={product.id}
               type="button"
-              className="flex w-full items-center justify-between px-3 py-3 text-left text-sm hover:bg-mint/10"
+              className="flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm transition hover:bg-paper"
               onClick={() => {
                 onSelect(product);
                 onChange(product.name);
@@ -208,7 +208,7 @@ export function MarketSelect({
 
   return (
     <label className="block">
-      <span className="mb-1 block text-sm font-semibold text-ink/80">{label}</span>
+      <span className="mb-1.5 block text-sm font-semibold text-ink">{label}</span>
       <select
         className={controlClass}
         value={value}
@@ -234,9 +234,11 @@ export function MarketSelect({
 
 export function EmptyState({ title, action }: { title: string; action?: ReactNode }) {
   return (
-    <div className="flex min-h-44 flex-col items-center justify-center rounded-[8px] border border-dashed border-ink/15 bg-white/70 p-5 text-center">
-      <PackagePlus className="mb-3 h-9 w-9 text-mint" />
-      <p className="text-sm font-semibold text-ink/70">{title}</p>
+    <div className="flex min-h-44 flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-white p-6 text-center">
+      <div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-mint/10 text-mint">
+        <PackagePlus className="h-6 w-6" />
+      </div>
+      <p className="max-w-xs text-sm font-semibold leading-6 text-ink/70">{title}</p>
       {action ? <div className="mt-4">{action}</div> : null}
     </div>
   );
@@ -244,7 +246,7 @@ export function EmptyState({ title, action }: { title: string; action?: ReactNod
 
 export function LoadingState({ label = "Carregando" }: { label?: string }) {
   return (
-    <div className="flex items-center justify-center gap-2 py-10 text-sm font-semibold text-ink/60">
+    <div className="flex items-center justify-center gap-2 py-12 text-sm font-semibold text-ink/60">
       <Loader2 className="h-5 w-5 animate-spin text-mint" />
       {label}
     </div>
@@ -253,7 +255,7 @@ export function LoadingState({ label = "Carregando" }: { label?: string }) {
 
 export function ErrorState({ message = "Nao foi possivel carregar os dados." }: { message?: string }) {
   return (
-    <div className="flex items-center gap-2 rounded-[8px] border border-tomato/20 bg-tomato/10 p-3 text-sm font-semibold text-tomato">
+    <div className="flex items-center gap-3 rounded-xl border border-line bg-white p-4 text-sm font-semibold text-ink shadow-soft">
       <AlertTriangle className="h-5 w-5" />
       {message}
     </div>
@@ -278,10 +280,10 @@ export function ConfirmDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-ink/35 p-4">
-      <div className="w-full max-w-sm rounded-[8px] bg-white p-4 shadow-soft">
-        <h2 className="text-lg font-bold text-ink">{title}</h2>
-        <p className="mt-2 text-sm text-ink/65">{description}</p>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-ink/45 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-2xl border border-line bg-white p-5 shadow-lift">
+        <h2 className="text-lg font-bold tracking-tight text-ink">{title}</h2>
+        <p className="mt-2 text-sm leading-6 text-ink/65">{description}</p>
         <div className="mt-4 grid grid-cols-2 gap-2">
           <AppButton variant="secondary" onClick={onCancel} disabled={confirmLoading}>
             Cancelar
@@ -319,22 +321,22 @@ export function ScreenContainer({ title, subtitle, children, showBack, backTo }:
   }
 
   return (
-    <main className="safe-bottom mx-auto min-h-screen w-full max-w-xl px-4 pt-5">
+    <main className="safe-bottom mx-auto min-h-screen w-full max-w-xl px-4 pb-6 pt-6 sm:px-6">
       {title ? (
-        <header className="mb-4 flex items-start gap-3">
+        <header className="mb-6 flex items-start gap-3">
           {shouldShowBack ? (
             <button
               type="button"
               onClick={handleBack}
-              className="grid h-10 w-10 flex-none place-items-center rounded-[8px] bg-white text-ink shadow-soft transition hover:bg-ink/5"
+              className="grid h-11 w-11 flex-none place-items-center rounded-xl border border-line bg-white text-ink shadow-sm transition hover:border-mint/30 hover:text-mint"
               aria-label="Voltar"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
           ) : null}
           <div className="min-w-0 flex-1">
-            <h1 className="break-words text-2xl font-black tracking-normal text-ink">{title}</h1>
-            {subtitle ? <p className="mt-1 break-words text-sm text-ink/60">{subtitle}</p> : null}
+            <h1 className="break-words text-2xl font-extrabold tracking-[-0.035em] text-ink">{title}</h1>
+            {subtitle ? <p className="mt-1 break-words text-sm leading-5 text-ink/60">{subtitle}</p> : null}
           </div>
         </header>
       ) : null}
@@ -374,8 +376,8 @@ function getScreenBackFallback(pathname: string) {
 
 export function SectionHeader({ title, action }: { title: string; action?: ReactNode }) {
   return (
-    <div className="mb-3 mt-5 flex items-center justify-between gap-3">
-      <h2 className="text-base font-black text-ink">{title}</h2>
+    <div className="mb-3 mt-7 flex items-center justify-between gap-3">
+      <h2 className="text-base font-bold tracking-[-0.02em] text-ink">{title}</h2>
       {action}
     </div>
   );
@@ -389,21 +391,21 @@ export function SummaryCard({ label, value, tone = "mint" }: { label: string; va
     leaf: "bg-leaf/12 text-leaf",
   };
   return (
-    <div className="rounded-[8px] bg-white p-4 shadow-soft">
-      <div className={cls("mb-3 grid h-9 w-9 place-items-center rounded-[8px]", tones[tone])}>
+    <div className="rounded-2xl border border-line bg-white p-5 shadow-soft">
+      <div className={cls("mb-4 grid h-10 w-10 place-items-center rounded-xl", tones[tone])}>
         <CircleDollarSign className="h-5 w-5" />
       </div>
-      <p className="text-xs font-semibold uppercase text-ink/45">{label}</p>
-      <p className="mt-1 text-xl font-black text-ink">{value}</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-ink/60">{label}</p>
+      <p className="mt-1 text-xl font-extrabold tracking-tight text-ink">{value}</p>
     </div>
   );
 }
 
 export function PriceCard({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="rounded-[8px] border border-ink/10 bg-white p-3">
-      <p className="text-xs text-ink/50">{label}</p>
-      <p className="mt-1 text-lg font-black text-ink">{value}</p>
+    <div className="rounded-xl border border-line bg-white p-3.5 shadow-sm">
+      <p className="text-xs font-medium text-ink/60">{label}</p>
+      <p className="mt-1 text-lg font-extrabold tracking-tight text-ink">{value}</p>
     </div>
   );
 }
@@ -412,13 +414,13 @@ export function PurchaseItemCard({ item, action }: { item: PurchaseItem; action?
   const isPending = item.id.startsWith("local-");
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-[8px] bg-white p-3 shadow-soft">
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-white p-3.5 shadow-sm">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <p className="truncate text-sm font-black text-ink">{item.productName}</p>
-          {isPending ? <span className="rounded-full bg-sky/12 px-2 py-0.5 text-[11px] font-black text-sky">Pendente</span> : null}
+          {isPending ? <span className="rounded-full bg-mint/10 px-2 py-0.5 text-[11px] font-bold text-mint">Pendente</span> : null}
         </div>
-        <p className="text-xs text-ink/55">
+        <p className="mt-0.5 text-xs text-ink/60">
           {item.quantity} {unitLabels[item.unit]} · {formatBRL(item.pricePaid)}
         </p>
       </div>
@@ -428,20 +430,20 @@ export function PurchaseItemCard({ item, action }: { item: PurchaseItem; action?
 }
 
 export function MarketListCard({ list, onClick, loading, disabled }: { list: MarketList; onClick?: () => void; loading?: boolean; disabled?: boolean }) {
-  const completed = list.items.filter((item) => item.checked || item.status === "purchased" || item.status === "skipped").length;
+  const needed = list.items.filter((item) => item.status === "pending").length;
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className="w-full rounded-[8px] bg-white p-4 text-left shadow-soft transition disabled:cursor-not-allowed disabled:opacity-60"
+      className="w-full rounded-2xl border border-line bg-white p-4 text-left shadow-sm transition duration-200 hover:border-mint/25 hover:shadow-soft active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-base font-black text-ink">{list.name}</p>
-          <p className="mt-1 text-xs text-ink/55">
-            {completed}/{list.items.length} itens · {list.status === "archived" ? "Arquivada" : "Ativa"}
+          <p className="truncate text-base font-bold tracking-tight text-ink">{list.name}</p>
+          <p className="mt-1 text-xs text-ink/60">
+            {needed} para comprar · {list.status === "archived" ? "Arquivada" : "Ativa"}
           </p>
         </div>
         {loading ? <Loader2 className="h-5 w-5 flex-none animate-spin text-mint" /> : <ChevronRight className="h-5 w-5 flex-none text-ink/35" />}
@@ -452,7 +454,7 @@ export function MarketListCard({ list, onClick, loading, disabled }: { list: Mar
 
 export function ProductCard({ product, onClick }: { product: Product; onClick?: () => void }) {
   return (
-    <button onClick={onClick} className="flex w-full items-center justify-between gap-3 rounded-[8px] bg-white p-4 text-left shadow-soft">
+    <button onClick={onClick} className="flex w-full items-center justify-between gap-3 rounded-2xl border border-line bg-white p-4 text-left shadow-sm transition hover:border-mint/25 hover:shadow-soft">
       <div className="min-w-0">
         <p className="truncate text-sm font-black text-ink">{product.name}</p>
         <p className="text-xs text-ink/55">{[product.brand, product.category, unitLabels[product.defaultUnit]].filter(Boolean).join(" · ")}</p>
@@ -464,13 +466,13 @@ export function ProductCard({ product, onClick }: { product: Product; onClick?: 
 
 export function MarketCard({ market, onClick }: { market: Market; onClick?: () => void }) {
   return (
-    <button onClick={onClick} className="flex w-full items-center gap-3 rounded-[8px] bg-white p-4 text-left shadow-soft">
-      <div className="grid h-10 w-10 flex-none place-items-center rounded-[8px] bg-sky/12 text-sky">
+    <button onClick={onClick} className="flex w-full items-center gap-3 rounded-2xl border border-line bg-white p-4 text-left shadow-sm transition hover:border-mint/25 hover:shadow-soft">
+      <div className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-mint/10 text-mint">
         <Store className="h-5 w-5" />
       </div>
       <div className="min-w-0">
-        <p className="truncate text-sm font-black text-ink">{market.name}</p>
-        <p className="truncate text-xs text-ink/55">{[market.address, market.city].filter(Boolean).join(" · ") || "Sem endereco"}</p>
+        <p className="truncate text-sm font-bold text-ink">{market.name}</p>
+        <p className="mt-0.5 truncate text-xs text-ink/60">{[market.address, market.city].filter(Boolean).join(" · ") || "Sem endereco"}</p>
       </div>
     </button>
   );
@@ -481,7 +483,7 @@ export function FloatingActionButton({ label, onClick }: { label: string; onClic
     <button
       type="button"
       onClick={onClick}
-      className="fixed bottom-[92px] right-4 z-30 inline-flex h-14 items-center gap-2 rounded-full bg-tomato px-5 text-sm font-black text-white shadow-soft"
+      className="fixed bottom-[92px] right-4 z-30 inline-flex h-14 items-center gap-2 rounded-2xl bg-mint px-5 text-sm font-bold text-white shadow-lift transition hover:bg-mint/90 active:scale-[0.98]"
     >
       <Plus className="h-5 w-5" />
       {label}
@@ -507,7 +509,7 @@ export function MemberAvatar({ user }: { user: Pick<User, "name" | "photoUrl"> }
 
 export function OnlineParticipantsBar({ participants = [] }: { participants?: Array<{ user?: User; userId?: string; name?: string }> }) {
   return (
-    <div className="flex items-center gap-2 rounded-[8px] bg-white px-3 py-2 shadow-soft">
+    <div className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 shadow-soft">
       <Users className="h-4 w-4 text-mint" />
       <p className="text-xs font-semibold text-ink/60">{participants.length || 1} participante(s) online</p>
     </div>
@@ -526,8 +528,8 @@ export function PaywallModal({ open, onClose, children }: { open: boolean; onClo
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-ink/35 p-4">
-      <div className="w-full max-w-sm rounded-[8px] bg-white p-5 shadow-soft">
-        <button type="button" onClick={onClose} className="ml-auto grid h-9 w-9 place-items-center rounded-[8px] bg-ink/5">
+      <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-soft">
+        <button type="button" onClick={onClose} className="ml-auto grid h-9 w-9 place-items-center rounded-xl bg-ink/5">
           <X className="h-4 w-4" />
         </button>
         {children}
@@ -539,7 +541,7 @@ export function PaywallModal({ open, onClose, children }: { open: boolean; onClo
 export function AdPlaceholder({ show = true }: { show?: boolean }) {
   if (!show) return null;
   return (
-    <div className="rounded-[8px] border border-dashed border-ink/15 bg-white/70 p-3 text-center text-xs font-semibold text-ink/45">
+    <div className="rounded-xl border border-dashed border-line bg-white/70 p-3 text-center text-xs font-semibold text-ink/45">
       Espaco para anuncio
     </div>
   );
@@ -564,48 +566,45 @@ export function Toast({ message, tone = "info" }: { message: string; tone?: "inf
     error: "bg-tomato text-white",
   };
 
-  return <div className={cls("rounded-[8px] px-3 py-2 text-sm font-semibold shadow-soft", tones[tone])}>{message}</div>;
+  return <div className={cls("rounded-xl px-3 py-2 text-sm font-semibold shadow-soft", tones[tone])}>{message}</div>;
 }
 
 const listItemStatusLabels = {
-  pending: "Pendente",
-  assigned: "Pegando",
-  in_cart: "No carrinho",
-  purchased: "Comprado",
-  skipped: "Tenho em casa",
+  pending: "Não tenho em casa",
+  at_home: "Tenho em casa",
+  not_needed: "Não precisa esse mês",
 } satisfies Record<MarketListItem["status"], string>;
 
 function listItemMarkerClass(item: MarketListItem) {
-  if (item.checked || item.status === "purchased") return "border-mint bg-mint text-white";
-  if (item.status === "skipped") return "border-leaf bg-leaf text-white";
-  if (item.status === "assigned" || item.status === "in_cart") return "border-sky bg-sky text-white";
-  return "border-ink/15 bg-white text-transparent";
+  if (item.status === "at_home") return "border-muted bg-muted text-white";
+  if (item.status === "not_needed") return "border-muted bg-paper text-muted";
+  return "border-line bg-white text-transparent";
 }
 
-export function ListItemRow({ item, onToggle, loading }: { item: MarketListItem; onToggle?: () => void; loading?: boolean }) {
+export function ListItemRow({ item }: { item: MarketListItem }) {
+  const isReduced = item.status !== "pending";
+
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      disabled={loading}
-      aria-busy={loading || undefined}
-      className="flex w-full items-center gap-3 rounded-[8px] bg-white p-3 text-left shadow-soft transition disabled:cursor-not-allowed disabled:opacity-60"
+    <div
+      className="flex w-full items-center gap-3 rounded-xl bg-white p-2 text-left transition"
     >
       <div
         className={cls(
-          "grid h-8 w-8 flex-none place-items-center rounded-[8px] border",
+          "grid h-8 w-8 flex-none place-items-center rounded-xl border",
           listItemMarkerClass(item),
         )}
       >
-        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+        {item.status === "not_needed" ? <X className="h-4 w-4" /> : <Check className="h-4 w-4" />}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-black text-ink">{item.productName}</p>
-        <p className="text-xs text-ink/55">
+        <p className={cls("truncate text-sm font-bold", isReduced ? "text-muted" : "text-ink", item.status === "not_needed" && "line-through")}>
+          {item.productName}
+        </p>
+        <p className={cls("mt-0.5 text-xs", isReduced ? "text-muted" : "text-ink/60")}>
           {item.expectedQuantity ?? 1} {unitLabels[item.unit]} · {listItemStatusLabels[item.status]}
         </p>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -616,7 +615,7 @@ export function StartPurchasePanel({ onStart, loading }: { onStart: () => void; 
       onClick={onStart}
       disabled={loading}
       aria-busy={loading || undefined}
-      className="flex w-full items-center gap-3 rounded-[8px] bg-ink p-4 text-left text-white shadow-soft transition disabled:cursor-not-allowed disabled:opacity-60"
+      className="flex w-full items-center gap-3 rounded-2xl bg-mint p-4 text-left text-white shadow-soft transition duration-200 hover:bg-mint/90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
     >
       {loading ? <Loader2 className="h-6 w-6 animate-spin text-leaf" /> : <ShoppingBasket className="h-6 w-6 text-leaf" />}
       <span className="min-w-0">

@@ -5,15 +5,22 @@ export default {
   theme: {
     extend: {
       colors: {
-        ink: "#16211f",
-        mint: "#0f9f7a",
-        leaf: "#54b66e",
-        tomato: "#f25f5c",
-        sky: "#5f8dd3",
-        paper: "#f7f8f4",
+        ink: "#0F172A",
+        mint: "#4F46E5",
+        leaf: "#4F46E5",
+        tomato: "#0F172A",
+        sky: "#94A3B8",
+        paper: "#F8FAFC",
+        surface: "#FFFFFF",
+        muted: "#94A3B8",
+        line: "#E2E8F0",
       },
       boxShadow: {
-        soft: "0 14px 30px rgba(22, 33, 31, 0.08)",
+        soft: "0 8px 24px rgba(15, 23, 42, 0.06)",
+        lift: "0 16px 40px rgba(15, 23, 42, 0.08)",
+      },
+      fontFamily: {
+        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
       },
     },
   },

@@ -44,10 +44,8 @@ enum MemberStatus {
 
 enum ListItemStatus {
   pending
-  assigned
-  in_cart
-  purchased
-  skipped
+  at_home
+  not_needed
 }
 
 enum Plan {
@@ -204,6 +202,7 @@ model MarketListItem {
   product           Product?       @relation(fields: [productId], references: [id], onDelete: SetNull)
   assignedToUser    User?          @relation("AssignedListItems", fields: [assignedToUserId], references: [id], onDelete: SetNull)
   purchasedByUser   User?          @relation("PurchasedListItems", fields: [purchasedByUserId], references: [id], onDelete: SetNull)
+  purchaseItems     PurchaseItem[]
 
   @@index([listId, status])
 }
@@ -236,6 +235,7 @@ model Purchase {
 model PurchaseItem {
   id                  String   @id @default(cuid())
   purchaseId          String
+  sourceListItemId    String?
   productId           String?
   productName         String
   brand               String?
@@ -251,11 +251,13 @@ model PurchaseItem {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   purchase            Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  sourceListItem      MarketListItem? @relation(fields: [sourceListItemId], references: [id], onDelete: SetNull)
   product             Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
   addedByUser         User?    @relation("AddedPurchaseItems", fields: [addedByUserId], references: [id], onDelete: SetNull)
   updatedByUser       User?    @relation("UpdatedPurchaseItems", fields: [updatedByUserId], references: [id], onDelete: SetNull)
 
   @@index([purchaseId])
+  @@index([sourceListItemId])
   @@index([productId])
   @@index([productName])
 }

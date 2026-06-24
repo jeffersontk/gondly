@@ -14,6 +14,11 @@ import { Server, Socket } from "socket.io";
 import { PrismaService } from "../prisma/prisma.service";
 import { RealtimeService } from "./realtime.service";
 
+const realtimeOrigins = (process.env.FRONTEND_URL ?? process.env.WEB_ORIGIN ?? "*")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 type RealtimeUser = {
   id: string;
   email: string;
@@ -23,7 +28,7 @@ type RealtimeUser = {
 @WebSocketGateway({
   namespace: "/realtime",
   cors: {
-    origin: process.env.FRONTEND_URL ?? process.env.WEB_ORIGIN ?? "*",
+    origin: realtimeOrigins.length === 1 ? realtimeOrigins[0] : realtimeOrigins,
     credentials: true,
   },
 })

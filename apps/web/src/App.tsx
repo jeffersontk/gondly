@@ -1,5 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { NavLink, Navigate, Outlet, Route, Routes } from "react-router-dom";
+﻿import { useEffect, useState, type ReactNode } from "react";
+import { NavLink, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { BarChart3, Download, History, Home, ListChecks, Settings, ShoppingCart, WifiOff } from "lucide-react";
 import { AppButton, LoadingState } from "./components";
 import { useAuth } from "./lib/auth";
@@ -101,9 +101,13 @@ export function App() {
 
 function ProtectedLayout({ children }: { children?: ReactNode }) {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) return <LoadingState />;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) {
+    const redirect = `${location.pathname}${location.search}`;
+    return <Navigate to={`/login?redirect=${encodeURIComponent(redirect)}`} replace />;
+  }
 
   return (
     <>
@@ -146,19 +150,19 @@ function AppChrome() {
     <>
       <NavLink
         to="/app/settings"
-        className="fixed right-3 top-[calc(10px+env(safe-area-inset-top))] z-40 grid h-10 w-10 place-items-center rounded-[8px] bg-white/95 text-ink shadow-soft"
+        className="fixed right-4 top-[calc(12px+env(safe-area-inset-top))] z-40 grid h-11 w-11 place-items-center rounded-xl border border-line bg-white/95 text-ink shadow-sm backdrop-blur transition hover:border-mint/30 hover:text-mint"
         aria-label="Ajustes"
       >
         <Settings className="h-5 w-5" />
       </NavLink>
       {!online ? (
-        <div className="fixed inset-x-3 top-[calc(10px+env(safe-area-inset-top))] z-50 mx-auto flex max-w-xl items-center gap-2 rounded-[8px] bg-ink px-3 py-2 text-xs font-semibold text-white shadow-soft">
-          <WifiOff className="h-4 w-4 text-tomato" />
+        <div className="fixed inset-x-3 top-[calc(10px+env(safe-area-inset-top))] z-50 mx-auto flex max-w-xl items-center gap-2 rounded-xl bg-ink px-4 py-3 text-xs font-semibold text-white shadow-lift">
+          <WifiOff className="h-4 w-4 text-white" />
           Sem conexao. Dados recentes podem vir do cache local.
         </div>
       ) : null}
       {deferredPrompt && online ? (
-        <div className="fixed inset-x-3 bottom-[calc(86px+env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-xl items-center justify-between gap-3 rounded-[8px] bg-white p-3 shadow-soft">
+        <div className="fixed inset-x-3 bottom-[calc(86px+env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-xl items-center justify-between gap-3 rounded-2xl border border-line bg-white p-3 shadow-lift">
           <span className="text-xs font-semibold text-ink/65">Adicionar Gondly a tela inicial</span>
           <AppButton className="h-10 px-3" icon={<Download className="h-4 w-4" />} onClick={promptInstall}>
             Instalar
@@ -179,7 +183,7 @@ function BottomNav() {
   ];
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-ink/10 bg-white/95 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl">
       <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
         {items.map(({ to, label, icon: Icon }) => (
           <NavLink
@@ -187,8 +191,8 @@ function BottomNav() {
             to={to}
             className={({ isActive }) =>
               [
-                "flex h-16 flex-col items-center justify-center gap-1 rounded-[8px] text-[11px] font-bold transition",
-                isActive ? "bg-mint/12 text-mint" : "text-ink/50 hover:bg-ink/5",
+                "flex h-16 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-semibold transition duration-200",
+                isActive ? "bg-mint/10 text-mint" : "text-ink/60 hover:bg-paper hover:text-ink",
               ].join(" ")
             }
           >

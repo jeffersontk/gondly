@@ -1,6 +1,20 @@
 import { PartialType } from "@nestjs/swagger";
-import { SharedRole, Unit } from "@prisma/client";
-import { IsBoolean, IsEmail, IsEnum, IsNumber, IsOptional, IsString, MaxLength, Min, MinLength } from "class-validator";
+import { ListItemStatus, SharedRole, Unit } from "@prisma/client";
+import { Type } from "class-transformer";
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsEmail,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+  MinLength,
+  ValidateNested,
+} from "class-validator";
 
 export class CreateListDto {
   @IsString()
@@ -52,10 +66,18 @@ export class CreateListItemDto {
 
 export class UpdateListItemDto extends PartialType(CreateListItemDto) {}
 
-export class CheckListItemDto {
-  @IsOptional()
-  @IsBoolean()
-  checked?: boolean;
+export class ImportListItemsDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => CreateListItemDto)
+  items!: CreateListItemDto[];
+}
+
+export class SetListItemStateDto {
+  @IsEnum(ListItemStatus)
+  status!: ListItemStatus;
 }
 
 export class CreateInviteDto {

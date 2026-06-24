@@ -101,6 +101,7 @@ export type ListMember = {
 
 export type MarketList = {
   id: string;
+  userId: string;
   name: string;
   description?: string | null;
   status: MarketListStatus;
@@ -119,8 +120,18 @@ export type ListInvite = {
   expiresAt: string;
 };
 
+export type ShareLinkInfo = {
+  listId: string;
+  listName: string;
+  description?: string | null;
+  owner: Pick<User, "id" | "name" | "photoUrl">;
+  expiresAt: string;
+  accessStatus: "none" | "invited" | "accepted" | "removed" | "owner";
+};
+
 export type PurchaseItem = {
   id: string;
+  sourceListItemId?: string | null;
   productId?: string | null;
   productName: string;
   brand?: string | null;

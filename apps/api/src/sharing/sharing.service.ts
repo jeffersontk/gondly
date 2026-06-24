@@ -15,8 +15,24 @@ export class SharingService {
     return this.listsService.invite(userId, listId, dto);
   }
 
+  createShareLink(userId: string, listId: string) {
+    return this.listsService.createShareLink(userId, listId);
+  }
+
+  shareLink(userId: string, token: string) {
+    return this.listsService.shareLink(userId, token);
+  }
+
+  requestAccess(userId: string, token: string) {
+    return this.listsService.requestAccess(userId, token);
+  }
+
   acceptInvite(userId: string, userEmail: string, token: string) {
     return this.listsService.acceptInvite(userId, userEmail, token);
+  }
+
+  approveMember(userId: string, listId: string, memberId: string) {
+    return this.listsService.approveMember(userId, listId, memberId);
   }
 
   removeMember(userId: string, listId: string, memberId: string) {

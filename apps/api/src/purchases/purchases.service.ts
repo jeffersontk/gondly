@@ -28,48 +28,55 @@ export class PurchasesService {
 
     const sourceList = dto.sourceListId ? await this.listsService.get(userId, dto.sourceListId) : null;
 
-    return this.prisma.$transaction(async (tx) => {
-      if (activePurchase && dto.cancelActive) {
-        await tx.purchase.update({ where: { id: activePurchase.id }, data: { status: "cancelled" } });
-      }
+    const purchaseItems =
+      sourceList?.items
+        .filter((item) => item.status === "pending")
+        .map((item) => {
+          const quantity = item.expectedQuantity && item.expectedQuantity > 0 ? item.expectedQuantity : 1;
+          const normalized = normalizePrice(quantity, item.unit, 0);
+          return {
+            sourceListItemId: item.id,
+            productId: item.productId,
+            productName: item.productName,
+            brand: item.brand,
+            category: item.category,
+            quantity,
+            unit: item.unit,
+            pricePaid: 0,
+            unitPriceNormalized: normalized.unitPriceNormalized,
+            normalizedUnitLabel: normalized.normalizedUnitLabel,
+            addedByUserId: userId,
+          };
+        }) ?? [];
 
-      const purchase = await tx.purchase.create({
+    if (activePurchase && dto.cancelActive) {
+      await this.prisma.purchase.update({
+        where: { id: activePurchase.id },
+        data: { status: "cancelled" },
+      });
+    }
+
+    try {
+      return await this.prisma.purchase.create({
         data: {
           userId,
           sourceListId: sourceList?.id,
           participants: { create: { userId } },
+          ...(purchaseItems.length ? { items: { createMany: { data: purchaseItems } } } : {}),
         },
-      });
-
-      if (sourceList) {
-        await tx.purchaseItem.createMany({
-          data: sourceList.items
-            .filter((item) => item.status !== "skipped")
-            .map((item) => {
-              const quantity = item.expectedQuantity && item.expectedQuantity > 0 ? item.expectedQuantity : 1;
-              const normalized = normalizePrice(quantity, item.unit, 0);
-              return {
-                purchaseId: purchase.id,
-                productId: item.productId,
-                productName: item.productName,
-                brand: item.brand,
-                category: item.category,
-                quantity,
-                unit: item.unit,
-                pricePaid: 0,
-                unitPriceNormalized: normalized.unitPriceNormalized,
-                normalizedUnitLabel: normalized.normalizedUnitLabel,
-                addedByUserId: userId,
-              };
-            }),
-        });
-      }
-
-      return tx.purchase.findUnique({
-        where: { id: purchase.id },
         include: { items: true, market: true, participants: true, sourceList: true },
       });
-    });
+    } catch (error) {
+      if (activePurchase && dto.cancelActive) {
+        await this.prisma.purchase
+          .update({
+            where: { id: activePurchase.id },
+            data: { status: "in_progress" },
+          })
+          .catch(() => undefined);
+      }
+      throw error;
+    }
   }
 
   active(userId: string) {
@@ -170,7 +177,10 @@ export class PurchasesService {
 
   async removeItem(userId: string, purchaseId: string, itemId: string) {
     const purchase = await this.assertPurchaseEditable(userId, purchaseId);
-    await this.assertItemInPurchase(purchase.id, itemId);
+    const item = await this.assertItemInPurchase(purchase.id, itemId);
+    if (item.sourceListItemId) {
+      throw new BadRequestException("Items from the source list cannot be deleted during an active purchase.");
+    }
     await this.prisma.purchaseItem.delete({ where: { id: itemId } });
     const updatedPurchase = await this.recalculateSubtotal(purchase.id);
     this.realtime.emitToPurchase(purchase.id, "purchaseItemDeleted", { purchaseId: purchase.id, itemId, byUserId: userId });

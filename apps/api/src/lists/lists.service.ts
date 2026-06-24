@@ -3,9 +3,10 @@ import { ListItemStatus, SharedRole, Unit } from "@prisma/client";
 import { randomUUID } from "crypto";
 import { BillingService } from "../billing/billing.service";
 import { addDays } from "../common/utils/date";
+import { normalizePrice } from "../common/utils/normalize-price";
 import { PrismaService } from "../prisma/prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
-import { CreateInviteDto, CreateListDto, CreateListItemDto, UpdateListDto, UpdateListItemDto } from "./dto";
+import { CreateInviteDto, CreateListDto, CreateListItemDto, ImportListItemsDto, UpdateListDto, UpdateListItemDto } from "./dto";
 
 @Injectable()
 export class ListsService {
@@ -121,6 +122,81 @@ export class ListsService {
     return item;
   }
 
+  async importItems(userId: string, listId: string, dto: ImportListItemsDto) {
+    await this.assertCanEdit(userId, listId);
+
+    const list = await this.prisma.$transaction(async (tx) => {
+      const uniqueItems = new Map<string, CreateListItemDto>();
+      for (const item of dto.items) {
+        const key = this.normalizeProductName(item.productName);
+        if (!uniqueItems.has(key)) uniqueItems.set(key, item);
+      }
+
+      const names = [...uniqueItems.values()].map((item) => item.productName);
+      const existingProducts = await tx.product.findMany({
+        where: {
+          userId,
+          deletedAt: null,
+          name: { in: names, mode: "insensitive" },
+        },
+      });
+      const productsByName = new Map(existingProducts.map((product) => [this.normalizeProductName(product.name), product]));
+      const missingProducts = [...uniqueItems.entries()]
+        .filter(([key]) => !productsByName.has(key))
+        .map(([, item]) => ({
+          userId,
+          name: item.productName,
+          brand: item.brand,
+          category: item.category,
+          defaultUnit: item.unit,
+        }));
+
+      if (missingProducts.length) {
+        await tx.product.createMany({ data: missingProducts });
+      }
+
+      const products = missingProducts.length
+        ? await tx.product.findMany({
+            where: {
+              userId,
+              deletedAt: null,
+              name: { in: names, mode: "insensitive" },
+            },
+          })
+        : existingProducts;
+      const productIdsByName = new Map(products.map((product) => [this.normalizeProductName(product.name), product.id]));
+
+      await tx.marketListItem.createMany({
+        data: dto.items.map((item) => ({
+          listId,
+          productId: productIdsByName.get(this.normalizeProductName(item.productName)),
+          productName: item.productName,
+          brand: item.brand,
+          category: item.category,
+          expectedQuantity: item.expectedQuantity,
+          unit: item.unit,
+          notes: item.notes,
+        })),
+      });
+
+      return tx.marketList.findUnique({
+        where: { id: listId },
+        include: {
+          items: { orderBy: { createdAt: "asc" } },
+          members: { include: { user: { select: { id: true, name: true, email: true, photoUrl: true } } } },
+          invites: { where: { status: "pending" } },
+        },
+      });
+    });
+
+    this.realtime.emitToList(listId, "listItemsImported", {
+      listId,
+      count: dto.items.length,
+      byUserId: userId,
+    });
+    return list;
+  }
+
   async updateItem(userId: string, listId: string, itemId: string, dto: UpdateListItemDto) {
     await this.assertCanEdit(userId, listId);
     await this.assertItemInList(listId, itemId);
@@ -142,92 +218,14 @@ export class ListsService {
     return item;
   }
 
-  async checkItem(userId: string, listId: string, itemId: string, checked?: boolean) {
+  async setItemState(userId: string, listId: string, itemId: string, status: ListItemStatus) {
     await this.assertCanEdit(userId, listId);
-    const item = await this.assertItemInList(listId, itemId);
-    const nextChecked = typeof checked === "boolean" ? checked : !item.checked;
+    await this.assertItemInList(listId, itemId);
 
     const updated = await this.prisma.marketListItem.update({
       where: { id: itemId },
       data: {
-        checked: nextChecked,
-        status: nextChecked ? "purchased" : "pending",
-        purchasedByUserId: nextChecked ? userId : null,
-        purchasedAt: nextChecked ? new Date() : null,
-      },
-    });
-
-    this.realtime.emitToList(listId, "listItemUpdated", { listId, item: updated, action: "checked", byUserId: userId });
-    if (nextChecked) {
-      this.realtime.emitToList(listId, "itemPurchased", { listId, item: updated, byUserId: userId });
-    }
-    return updated;
-  }
-
-  async assignItem(userId: string, listId: string, itemId: string) {
-    await this.assertCanEdit(userId, listId);
-    await this.assertItemInList(listId, itemId);
-
-    const item = await this.prisma.marketListItem.update({
-      where: { id: itemId },
-      data: {
-        status: "assigned",
-        assignedToUserId: userId,
-        assignedAt: new Date(),
-      },
-      include: { assignedToUser: { select: { id: true, name: true, photoUrl: true } } },
-    });
-
-    this.realtime.emitToList(listId, "listItemUpdated", { listId, item, action: "assigned", byUserId: userId });
-    this.realtime.emitToList(listId, "itemAssigned", { listId, item, byUserId: userId });
-    return item;
-  }
-
-  async unassignItem(userId: string, listId: string, itemId: string) {
-    await this.assertCanEdit(userId, listId);
-    await this.assertItemInList(listId, itemId);
-
-    const item = await this.prisma.marketListItem.update({
-      where: { id: itemId },
-      data: {
-        status: "pending",
-        assignedToUserId: null,
-        assignedAt: null,
-      },
-    });
-
-    this.realtime.emitToList(listId, "listItemUpdated", { listId, item, action: "unassigned", byUserId: userId });
-    return item;
-  }
-
-  async purchaseItem(userId: string, listId: string, itemId: string) {
-    await this.assertCanEdit(userId, listId);
-    await this.assertItemInList(listId, itemId);
-
-    const item = await this.prisma.marketListItem.update({
-      where: { id: itemId },
-      data: {
-        status: "purchased",
-        checked: true,
-        purchasedByUserId: userId,
-        purchasedAt: new Date(),
-      },
-      include: { purchasedByUser: { select: { id: true, name: true, photoUrl: true } } },
-    });
-
-    this.realtime.emitToList(listId, "listItemUpdated", { listId, item, action: "purchased", byUserId: userId });
-    this.realtime.emitToList(listId, "itemPurchased", { listId, item, byUserId: userId });
-    return item;
-  }
-
-  async skipItem(userId: string, listId: string, itemId: string) {
-    await this.assertCanEdit(userId, listId);
-    await this.assertItemInList(listId, itemId);
-
-    const item = await this.prisma.marketListItem.update({
-      where: { id: itemId },
-      data: {
-        status: "skipped",
+        status,
         checked: false,
         assignedToUserId: null,
         assignedAt: null,
@@ -236,9 +234,9 @@ export class ListsService {
       },
     });
 
-    this.realtime.emitToList(listId, "listItemUpdated", { listId, item, action: "skipped", byUserId: userId });
-    this.realtime.emitToList(listId, "itemSkipped", { listId, item, byUserId: userId });
-    return item;
+    await this.syncItemWithActivePurchases(userId, listId, updated);
+    this.realtime.emitToList(listId, "listItemUpdated", { listId, item: updated, action: "state_changed", byUserId: userId });
+    return updated;
   }
 
   async members(userId: string, listId: string) {
@@ -269,6 +267,92 @@ export class ListsService {
         expiresAt: addDays(new Date(), 7),
       },
     });
+  }
+
+  async createShareLink(userId: string, listId: string) {
+    await this.assertOwner(userId, listId);
+
+    const existing = await this.prisma.listInvite.findFirst({
+      where: {
+        listId,
+        inviteEmail: null,
+        status: "pending",
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    if (existing) return existing;
+
+    await this.assertFreeShareLimit(userId, listId);
+    return this.prisma.listInvite.create({
+      data: {
+        listId,
+        invitedByUserId: userId,
+        role: SharedRole.editor,
+        inviteToken: randomUUID(),
+        expiresAt: addDays(new Date(), 30),
+      },
+    });
+  }
+
+  async shareLink(userId: string, token: string) {
+    const invite = await this.validShareLink(token);
+    const member = await this.prisma.listMember.findUnique({
+      where: { listId_userId: { listId: invite.listId, userId } },
+    });
+
+    return {
+      listId: invite.listId,
+      listName: invite.list.name,
+      description: invite.list.description,
+      owner: invite.list.user,
+      expiresAt: invite.expiresAt,
+      accessStatus: invite.list.userId === userId ? "owner" : member?.status ?? "none",
+    };
+  }
+
+  async requestAccess(userId: string, token: string) {
+    const invite = await this.validShareLink(token);
+    if (invite.list.userId === userId) {
+      return { status: "owner", listId: invite.listId };
+    }
+
+    const member = await this.prisma.listMember.upsert({
+      where: { listId_userId: { listId: invite.listId, userId } },
+      update: {
+        role: invite.role,
+        status: "invited",
+        invitedAt: new Date(),
+        acceptedAt: null,
+        removedAt: null,
+      },
+      create: {
+        listId: invite.listId,
+        userId,
+        role: invite.role,
+        status: "invited",
+      },
+      include: { user: { select: { id: true, name: true, email: true, photoUrl: true } } },
+    });
+
+    this.realtime.emitToList(invite.listId, "accessRequested", { listId: invite.listId, member });
+    return { status: member.status, listId: invite.listId };
+  }
+
+  async approveMember(userId: string, listId: string, memberId: string) {
+    await this.assertOwner(userId, listId);
+    const member = await this.prisma.listMember.findFirst({ where: { id: memberId, listId, status: "invited" } });
+    if (!member) {
+      throw new NotFoundException("Access request not found.");
+    }
+
+    const approved = await this.prisma.listMember.update({
+      where: { id: memberId },
+      data: { status: "accepted", acceptedAt: new Date(), removedAt: null },
+      include: { user: { select: { id: true, name: true, email: true, photoUrl: true } } },
+    });
+    this.realtime.emitToList(listId, "memberApproved", { listId, member: approved });
+    return approved;
   }
 
   async acceptInvite(userId: string, userEmail: string, token: string) {
@@ -321,10 +405,12 @@ export class ListsService {
       throw new BadRequestException("Owner cannot be removed from the list.");
     }
 
-    return this.prisma.listMember.update({
+    const removed = await this.prisma.listMember.update({
       where: { id: memberId },
       data: { status: "removed", removedAt: new Date() },
     });
+    this.realtime.emitToList(listId, "memberRemoved", { listId, memberId });
+    return removed;
   }
 
   async updateMemberRole(userId: string, listId: string, memberId: string, role: SharedRole) {
@@ -386,12 +472,127 @@ export class ListsService {
     return list;
   }
 
+  private async validShareLink(token: string) {
+    const invite = await this.prisma.listInvite.findUnique({
+      where: { inviteToken: token },
+      include: {
+        list: {
+          include: {
+            user: { select: { id: true, name: true, photoUrl: true } },
+          },
+        },
+      },
+    });
+
+    if (
+      !invite ||
+      invite.inviteEmail ||
+      invite.status !== "pending" ||
+      invite.expiresAt < new Date() ||
+      invite.list.deletedAt
+    ) {
+      throw new NotFoundException("Share link not found or expired.");
+    }
+    return invite;
+  }
+
   private async assertItemInList(listId: string, itemId: string) {
     const item = await this.prisma.marketListItem.findFirst({ where: { id: itemId, listId } });
     if (!item) {
       throw new NotFoundException("List item not found.");
     }
     return item;
+  }
+
+  private async syncItemWithActivePurchases(
+    userId: string,
+    listId: string,
+    item: {
+      id: string;
+      productId: string | null;
+      productName: string;
+      brand: string | null;
+      category: string | null;
+      expectedQuantity: number | null;
+      unit: Unit;
+      status: ListItemStatus;
+    },
+  ) {
+    const purchases = await this.prisma.purchase.findMany({
+      where: { sourceListId: listId, status: "in_progress", deletedAt: null },
+      select: {
+        id: true,
+        items: {
+          select: {
+            id: true,
+            sourceListItemId: true,
+            productId: true,
+            productName: true,
+          },
+        },
+      },
+    });
+
+    for (const purchase of purchases) {
+      const matchingItems = purchase.items.filter(
+        (purchaseItem) =>
+          purchaseItem.sourceListItemId === item.id ||
+          (!purchaseItem.sourceListItemId &&
+            (item.productId
+              ? purchaseItem.productId === item.productId
+              : purchaseItem.productName.localeCompare(item.productName, "pt-BR", { sensitivity: "base" }) === 0)),
+      );
+
+      if (item.status === "pending") {
+        const existing = matchingItems[0];
+        if (existing) {
+          if (!existing.sourceListItemId) {
+            await this.prisma.purchaseItem.update({
+              where: { id: existing.id },
+              data: { sourceListItemId: item.id },
+            });
+          }
+        } else {
+          const quantity = item.expectedQuantity && item.expectedQuantity > 0 ? item.expectedQuantity : 1;
+          const normalized = normalizePrice(quantity, item.unit, 0);
+          await this.prisma.purchaseItem.create({
+            data: {
+              purchaseId: purchase.id,
+              sourceListItemId: item.id,
+              productId: item.productId,
+              productName: item.productName,
+              brand: item.brand,
+              category: item.category,
+              quantity,
+              unit: item.unit,
+              pricePaid: 0,
+              unitPriceNormalized: normalized.unitPriceNormalized,
+              normalizedUnitLabel: normalized.normalizedUnitLabel,
+              addedByUserId: userId,
+            },
+          });
+        }
+      } else if (matchingItems.length) {
+        await this.prisma.purchaseItem.deleteMany({
+          where: { id: { in: matchingItems.map((purchaseItem) => purchaseItem.id) } },
+        });
+      }
+
+      const subtotal = await this.prisma.purchaseItem.aggregate({
+        where: { purchaseId: purchase.id },
+        _sum: { pricePaid: true },
+      });
+      await this.prisma.purchase.update({
+        where: { id: purchase.id },
+        data: { subtotalCalculated: subtotal._sum.pricePaid ?? 0 },
+      });
+      this.realtime.emitToPurchase(purchase.id, "purchaseItemsSynced", {
+        purchaseId: purchase.id,
+        sourceListItemId: item.id,
+        status: item.status,
+        byUserId: userId,
+      });
+    }
   }
 
   private async findOrCreateProduct(userId: string, dto: { productName: string; brand?: string; category?: string; unit?: Unit }) {
@@ -425,6 +626,10 @@ export class ListsService {
     }
 
     return product.id;
+  }
+
+  private normalizeProductName(value: string) {
+    return value.trim().toLocaleLowerCase("pt-BR");
   }
 
   private async assertFreeShareLimit(userId: string, listId: string) {

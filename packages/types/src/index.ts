@@ -13,7 +13,7 @@ export type SharedRole = (typeof sharedRoles)[number];
 export const memberStatuses = ["invited", "accepted", "removed"] as const;
 export type MemberStatus = (typeof memberStatuses)[number];
 
-export const listItemStatuses = ["pending", "assigned", "in_cart", "purchased", "skipped"] as const;
+export const listItemStatuses = ["pending", "at_home", "not_needed"] as const;
 export type ListItemStatus = (typeof listItemStatuses)[number];
 
 export const entitlementKeys = ["no_ads"] as const;
