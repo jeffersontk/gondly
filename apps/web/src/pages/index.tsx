@@ -1657,12 +1657,15 @@ export function ActivePurchasePage() {
       </ScreenContainer>
     );
   }
+  const cartItemsCount = purchase.items.filter((item) => Number(item.pricePaid ?? 0) > 0).length;
+  const cartItemsLabel = `${cartItemsCount} ${cartItemsCount === 1 ? "produto" : "produtos"} no carrinho`;
   const normalizedPurchaseSearch = purchaseSearch.trim().toLocaleLowerCase("pt-BR");
   const filteredPurchaseItems = purchase.items.filter(
     (item) =>
       !normalizedPurchaseSearch ||
       item.productName.toLocaleLowerCase("pt-BR").includes(normalizedPurchaseSearch) ||
-      item.brand?.toLocaleLowerCase("pt-BR").includes(normalizedPurchaseSearch),
+      item.brand?.toLocaleLowerCase("pt-BR").includes(normalizedPurchaseSearch) ||
+      item.category?.toLocaleLowerCase("pt-BR").includes(normalizedPurchaseSearch),
   );
   const groupedPurchaseItems = groupItemsByCategory(filteredPurchaseItems);
 
@@ -1675,25 +1678,37 @@ export function ActivePurchasePage() {
     });
   }
 
+  const purchaseTitle = purchase.sourceList?.name ?? "Compra sem lista";
+
   return (
-    <ScreenContainer title="Compra ativa" subtitle={purchase.sourceList?.name ?? undefined}>
-      <div className="sticky top-0 z-20 -mx-4 mb-5 bg-paper/95 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6">
-        <div className="rounded-2xl bg-ink p-5 text-white shadow-soft">
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-white/60">Total atual</p>
-          <p className="mt-1 text-3xl font-extrabold tracking-[-0.04em]">{formatBRL(purchase.subtotalCalculated)}</p>
+    <ScreenContainer title={purchaseTitle} subtitle={`Compra ativa · ${cartItemsLabel}`}>
+      <div className="rounded-[28px] bg-ink p-5 text-white shadow-[0_22px_52px_rgba(15,23,42,0.20)]">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs font-black uppercase tracking-[0.12em] text-white/55">Total atual</p>
+            <p className="mt-2 text-4xl font-black tracking-[-0.06em]">{formatBRL(purchase.subtotalCalculated)}</p>
+            <p className="mt-2 text-sm font-semibold text-white/90">{cartItemsLabel}</p>
+          </div>
+          <div className="grid h-14 w-14 flex-none place-items-center rounded-2xl bg-mint text-white shadow-[0_14px_32px_rgba(79,70,229,0.38)]">
+            <ShoppingCart className="h-7 w-7" />
+          </div>
         </div>
+        <p className="mt-4 flex items-center gap-2 text-xs font-medium text-white/60">
+          <span className="grid h-5 w-5 place-items-center rounded-full border border-white/20 text-[11px] font-black">i</span>
+          Estimativa antes do caixa
+        </p>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2">
+      <div className="mt-4 grid grid-cols-[1.35fr_1fr] gap-3">
         <AppButton
-          variant="secondary"
+          variant="primary"
           icon={<Check className="h-4 w-4" />}
           onClick={() => navigate(`/app/purchase/${purchase.id}/finish`)}
           disabled={outbox.pendingCount > 0}
         >
-          Finalizar
+          Finalizar compra
         </AppButton>
-        <AppButton variant="danger" icon={<Trash2 className="h-4 w-4" />} onClick={() => cancel.mutate()} loading={cancel.isPending} loadingLabel="Cancelando">
+        <AppButton variant="secondary" icon={<X className="h-4 w-4" />} onClick={() => cancel.mutate()} loading={cancel.isPending} loadingLabel="Cancelando">
           Cancelar
         </AppButton>
       </div>
@@ -1708,40 +1723,54 @@ export function ActivePurchasePage() {
       ) : null}
 
       <SectionHeader title="Carrinho" />
-      <div className="mb-5 rounded-2xl border border-line bg-white p-3.5 shadow-sm">
+      <div className="mb-4 rounded-[22px] border border-line bg-white p-3 shadow-sm">
         <SearchBar
-          placeholder="Buscar produto ou marca"
+          placeholder="Buscar produto, marca ou categoria"
           value={purchaseSearch}
           onChange={(event) => setPurchaseSearch(event.target.value)}
         />
       </div>
+      {cartItemsCount === 0 ? (
+        <div className="mb-4 rounded-[24px] border border-line bg-white p-5 shadow-sm">
+          <p className="text-base font-black tracking-[-0.02em] text-ink">Seu carrinho ainda está vazio.</p>
+          <p className="mt-1 text-sm leading-6 text-ink/60">Adicione produtos conforme for comprando.</p>
+          <AppButton className="mt-4" icon={<Plus className="h-4 w-4" />} onClick={() => navigate(`/app/purchase/${purchase.id}/item`)}>
+            Adicionar primeiro item
+          </AppButton>
+        </div>
+      ) : null}
       <div className="space-y-3">
-        {!purchase.items.length ? <EmptyState title="Adicione produtos ao carrinho para começar sua compra." /> : null}
         {purchase.items.length && !filteredPurchaseItems.length ? <EmptyState title="Nenhum produto encontrado." /> : null}
         {groupedPurchaseItems.map((group) => {
           const expanded = Boolean(normalizedPurchaseSearch) || expandedPurchaseCategories.has(group.category);
           const categoryId = `purchase-category-${group.category.replace(/\W+/g, "-").toLowerCase()}`;
 
           return (
-            <section key={group.category} className="space-y-2">
+            <section
+              key={group.category}
+              className={[
+                "overflow-hidden rounded-[22px] border shadow-sm transition",
+                expanded ? "border-[#C7D2FE] bg-[#EEF2FF]" : "border-line bg-white",
+              ].join(" ")}
+            >
               <button
                 type="button"
-                className="flex w-full items-center justify-between rounded-xl border border-line bg-white px-3.5 py-3 text-left text-ink shadow-sm transition hover:border-mint/25"
+                className="flex w-full items-center justify-between px-4 py-3.5 text-left text-ink transition"
                 onClick={() => togglePurchaseCategory(group.category)}
                 aria-expanded={expanded}
                 aria-controls={categoryId}
               >
-                <span className="flex min-w-0 items-center gap-2 text-sm font-black">
+                <span className="flex min-w-0 items-center gap-2 text-base font-black">
                   <Tags className="h-4 w-4 flex-none text-mint" />
                   <span className="truncate">{group.category}</span>
                 </span>
                 <span className="flex flex-none items-center gap-2">
-                  <span className="rounded-full bg-mint/10 px-2 py-0.5 text-xs font-bold text-mint">{group.items.length}</span>
-                  {expanded ? <ChevronDown className="h-4 w-4 text-muted" /> : <ChevronRight className="h-4 w-4 text-muted" />}
+                  <span className="rounded-full bg-mint/10 px-2.5 py-1 text-xs font-black text-mint">{group.items.length}</span>
+                  {expanded ? <ChevronDown className="h-4 w-4 text-ink/60" /> : <ChevronRight className="h-4 w-4 text-ink/45" />}
                 </span>
               </button>
               {expanded ? (
-                <div id={categoryId} className="space-y-2">
+                <div id={categoryId} className="space-y-2 p-2 pt-0">
                   {group.items.map((item) => (
                     <PurchaseItemCard key={item.id} item={item} action={<CartItemActions purchaseId={purchase.id} item={item} />} />
                   ))}
@@ -1751,22 +1780,27 @@ export function ActivePurchasePage() {
           );
         })}
       </div>
-      <FloatingActionButton label="Produto" onClick={() => navigate(`/app/purchase/${purchase.id}/item`)} />
+      <FloatingActionButton label="Item" onClick={() => navigate(`/app/purchase/${purchase.id}/item`)} />
     </ScreenContainer>
   );
 }
 
 function CartItemActions({ purchaseId, item }: { purchaseId: string; item: PurchaseItem }) {
   const navigate = useNavigate();
+  const added = Number(item.pricePaid ?? 0) > 0;
 
   return (
     <button
       type="button"
-      className="grid h-10 w-10 place-items-center rounded-xl bg-paper text-ink transition hover:bg-line hover:text-mint"
+      className={[
+        "inline-flex h-10 flex-none items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-black transition active:scale-[0.98]",
+        added ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-mint/10 text-mint hover:bg-mint/15",
+      ].join(" ")}
       onClick={() => navigate(`/app/purchase/${purchaseId}/item?itemId=${item.id}`)}
-      aria-label="Editar item da compra"
+      aria-label={added ? "Editar item adicionado" : "Adicionar item ao carrinho"}
     >
-      <ShoppingCart className="h-4 w-4" />
+      {added ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+      <span>{added ? "Adicionado" : "Adicionar"}</span>
     </button>
   );
 }
@@ -1836,46 +1870,63 @@ export function AddEditCartItemPage() {
       }
     },
   });
+  const sheetTitle = itemId ? "Editar item" : "Adicionar item";
+  const submitLabel = itemId ? "Atualizar item" : "Adicionar ao carrinho";
+  const closeSheet = () => navigate(purchaseId ? `/app/purchase/${purchaseId}` : "/app/purchase/start");
 
   return (
-    <ScreenContainer title="Adicionar ao carrinho">
-      <form className="space-y-3" onSubmit={form.handleSubmit((values) => save.mutate({ ...values, productName: productName.trim() }))}>
-        <ProductSearchInput
-          value={productName}
-          onChange={(value) => {
-            setProductName(value);
-            form.setValue("productName", value);
-          }}
-          onSelect={(product) => {
-            form.setValue("productId", product.id);
-            form.setValue("brand", product.brand ?? "");
-            form.setValue("category", product.category ?? "");
-            form.setValue("unit", product.defaultUnit);
-          }}
-        />
-        <div className="grid grid-cols-[1fr_120px] gap-2">
-          <QuantityInput label="Quantidade" error={form.formState.errors.quantity?.message} {...form.register("quantity")} />
-          <UnitSelect label="Unidade" {...form.register("unit")} />
-        </div>
-        <MoneyInput label="Preço pago" error={form.formState.errors.pricePaid?.message} {...form.register("pricePaid")} />
-        <AppInput label="Marca" {...form.register("brand")} />
-        <AppInput label="Categoria" {...form.register("category")} />
-        <AppInput label="Observações" {...form.register("notes")} />
-        <label className="flex items-center gap-2 rounded-xl bg-white p-3 text-sm font-semibold text-ink/65 shadow-soft">
-          <input type="checkbox" defaultChecked={!form.watch("productId")} />
-          Salvar produto na minha base
-        </label>
-        <AppButton
-          type="submit"
-          full
-          icon={<ShoppingCart className="h-4 w-4" />}
-          loading={save.isPending}
-          loadingLabel={itemId ? "Atualizando carrinho" : "Adicionando ao carrinho"}
-        >
-          {itemId ? "Atualizar carrinho" : "Adicionar ao carrinho"}
-        </AppButton>
-      </form>
-    </ScreenContainer>
+    <main className="fixed inset-0 z-50 flex items-end bg-ink/35 px-3 pb-0 pt-8 backdrop-blur-sm sm:items-center sm:p-4">
+      <section className="mx-auto max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-[32px] border border-line bg-paper p-4 shadow-[0_-24px_60px_rgba(15,23,42,0.18)] sm:rounded-[32px]">
+        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-line" aria-hidden="true" />
+        <header className="mb-5 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.1em] text-mint">Carrinho</p>
+            <h1 className="mt-1 text-2xl font-black tracking-[-0.04em] text-ink">{sheetTitle}</h1>
+          </div>
+          <button
+            type="button"
+            className="grid h-10 w-10 place-items-center rounded-xl border border-line bg-white text-ink/70 shadow-sm transition hover:border-mint/30 hover:text-mint"
+            onClick={closeSheet}
+            aria-label="Fechar"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </header>
+
+        <form className="space-y-3" onSubmit={form.handleSubmit((values) => save.mutate({ ...values, productName: productName.trim() }))}>
+          <input type="hidden" {...form.register("brand")} />
+          <input type="hidden" {...form.register("category")} />
+          <ProductSearchInput
+            value={productName}
+            onChange={(value) => {
+              setProductName(value);
+              form.setValue("productName", value);
+            }}
+            onSelect={(product) => {
+              form.setValue("productId", product.id);
+              form.setValue("brand", product.brand ?? "");
+              form.setValue("category", product.category ?? "");
+              form.setValue("unit", product.defaultUnit);
+            }}
+          />
+          <div className="grid grid-cols-[1fr_120px] gap-2">
+            <QuantityInput label="Quantidade" error={form.formState.errors.quantity?.message} {...form.register("quantity")} />
+            <UnitSelect label="Unidade" {...form.register("unit")} />
+          </div>
+          <MoneyInput label="Preço pago" error={form.formState.errors.pricePaid?.message} {...form.register("pricePaid")} />
+          <AppInput label="Observação opcional" {...form.register("notes")} />
+          <AppButton
+            type="submit"
+            full
+            icon={<ShoppingCart className="h-4 w-4" />}
+            loading={save.isPending}
+            loadingLabel={itemId ? "Atualizando item" : "Adicionando ao carrinho"}
+          >
+            {submitLabel}
+          </AppButton>
+        </form>
+      </section>
+    </main>
   );
 }
 

@@ -121,6 +121,8 @@ function ProtectedLayout({ children }: { children?: ReactNode }) {
 function AppChrome() {
   const [online, setOnline] = useState(navigator.onLine);
   const [deferredPrompt, setDeferredPrompt] = useState<Event | null>(null);
+  const location = useLocation();
+  const showSettingsShortcut = location.pathname === "/" || location.pathname === "/app/home";
 
   useEffect(() => {
     const handleOnline = () => setOnline(true);
@@ -148,13 +150,15 @@ function AppChrome() {
 
   return (
     <>
-      <NavLink
-        to="/app/settings"
-        className="fixed right-4 top-[calc(12px+env(safe-area-inset-top))] z-40 grid h-11 w-11 place-items-center rounded-xl border border-line bg-white/95 text-ink shadow-sm backdrop-blur transition hover:border-mint/30 hover:text-mint"
-        aria-label="Ajustes"
-      >
-        <Settings className="h-5 w-5" />
-      </NavLink>
+      {showSettingsShortcut ? (
+        <NavLink
+          to="/app/settings"
+          className="fixed right-4 top-[calc(12px+env(safe-area-inset-top))] z-40 grid h-10 w-10 place-items-center rounded-xl border border-line/80 bg-white/90 text-ink/70 shadow-sm backdrop-blur transition hover:border-mint/30 hover:text-mint"
+          aria-label="Ajustes"
+        >
+          <Settings className="h-5 w-5" />
+        </NavLink>
+      ) : null}
       {!online ? (
         <div className="fixed inset-x-3 top-[calc(10px+env(safe-area-inset-top))] z-50 mx-auto flex max-w-xl items-center gap-2 rounded-xl bg-ink px-4 py-3 text-xs font-semibold text-white shadow-lift">
           <WifiOff className="h-4 w-4 text-white" />
@@ -174,8 +178,9 @@ function AppChrome() {
 }
 
 function BottomNav() {
+  const location = useLocation();
   const items = [
-    { to: "/app/home", label: "Home", icon: Home },
+    { to: "/app/home", label: "Início", icon: Home },
     { to: "/app/lists", label: "Listas", icon: ListChecks },
     { to: "/app/purchase/start", label: "Compra", icon: ShoppingCart },
     { to: "/app/history", label: "Historico", icon: History },
@@ -185,22 +190,34 @@ function BottomNav() {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl">
       <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
-        {items.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              [
+        {items.map(({ to, label, icon: Icon }) => {
+          const isActive = isBottomNavActive(location.pathname, to);
+
+          return (
+            <NavLink
+              key={to}
+              to={to}
+              className={[
                 "flex h-16 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-semibold transition duration-200",
-                isActive ? "bg-mint/10 text-mint" : "text-ink/60 hover:bg-paper hover:text-ink",
-              ].join(" ")
-            }
-          >
-            <Icon className="h-5 w-5" />
-            <span>{label}</span>
-          </NavLink>
-        ))}
+                isActive ? "bg-mint/10 text-mint" : "text-[#64748B] hover:bg-paper hover:text-ink",
+              ].join(" ")}
+              aria-current={isActive ? "page" : undefined}
+            >
+              <Icon className="h-5 w-5" />
+              <span>{label}</span>
+            </NavLink>
+          );
+        })}
       </div>
     </nav>
   );
+}
+
+function isBottomNavActive(pathname: string, to: string) {
+  if (to === "/app/home") return pathname === "/" || pathname === "/app/home";
+  if (to === "/app/purchase/start") return pathname.startsWith("/app/purchase") || pathname.startsWith("/purchase");
+  if (to === "/app/lists") return pathname.startsWith("/app/lists") || pathname.startsWith("/lists");
+  if (to === "/app/history") return pathname.startsWith("/app/history") || pathname.startsWith("/history");
+  if (to === "/app/compare") return pathname.startsWith("/app/compare") || pathname.startsWith("/prices");
+  return pathname === to;
 }

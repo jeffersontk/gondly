@@ -328,7 +328,7 @@ export function ScreenContainer({ title, subtitle, children, showBack, backTo }:
             <button
               type="button"
               onClick={handleBack}
-              className="grid h-11 w-11 flex-none place-items-center rounded-xl border border-line bg-white text-ink shadow-sm transition hover:border-mint/30 hover:text-mint"
+              className="grid h-10 w-10 flex-none place-items-center rounded-xl border border-line/80 bg-white/90 text-ink/75 shadow-sm transition hover:border-mint/30 hover:text-mint"
               aria-label="Voltar"
             >
               <ArrowLeft className="h-5 w-5" />
@@ -412,16 +412,18 @@ export function PriceCard({ label, value }: { label: string; value: ReactNode })
 
 export function PurchaseItemCard({ item, action }: { item: PurchaseItem; action?: ReactNode }) {
   const isPending = item.id.startsWith("local-");
+  const pricePaid = Number(item.pricePaid ?? 0);
+  const hasPrice = pricePaid > 0;
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-white p-3.5 shadow-sm">
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-white p-3.5 shadow-sm transition hover:border-mint/25 hover:shadow-soft">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <p className="truncate text-sm font-black text-ink">{item.productName}</p>
           {isPending ? <span className="rounded-full bg-mint/10 px-2 py-0.5 text-[11px] font-bold text-mint">Pendente</span> : null}
         </div>
         <p className="mt-0.5 text-xs text-ink/60">
-          {item.quantity} {unitLabels[item.unit]} · {formatBRL(item.pricePaid)}
+          {item.quantity} {unitLabels[item.unit]} · {hasPrice ? `Preço atual: ${formatBRL(pricePaid)}` : "Último preço: --"}
         </p>
       </div>
       {action}
@@ -483,7 +485,7 @@ export function FloatingActionButton({ label, onClick }: { label: string; onClic
     <button
       type="button"
       onClick={onClick}
-      className="fixed bottom-[92px] right-4 z-30 inline-flex h-14 items-center gap-2 rounded-2xl bg-mint px-5 text-sm font-bold text-white shadow-lift transition hover:bg-mint/90 active:scale-[0.98]"
+      className="fixed bottom-[calc(112px+env(safe-area-inset-bottom))] right-4 z-30 inline-flex h-14 items-center gap-2 rounded-2xl bg-mint px-5 text-sm font-bold text-white shadow-[0_18px_42px_rgba(79,70,229,0.34)] transition hover:bg-mint/90 active:scale-[0.98]"
     >
       <Plus className="h-5 w-5" />
       {label}
