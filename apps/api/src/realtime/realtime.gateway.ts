@@ -11,13 +11,11 @@ import {
   WsException,
 } from "@nestjs/websockets";
 import { Server, Socket } from "socket.io";
+import { buildAllowedOrigins, isAllowedOrigin } from "../common/cors-origins";
 import { PrismaService } from "../prisma/prisma.service";
 import { RealtimeService } from "./realtime.service";
 
-const realtimeOrigins = (process.env.FRONTEND_URL ?? process.env.WEB_ORIGIN ?? "*")
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+const realtimeOrigins = buildAllowedOrigins(process.env.FRONTEND_URL, process.env.WEB_ORIGIN, process.env.CORS_ORIGINS);
 
 type RealtimeUser = {
   id: string;
@@ -28,7 +26,9 @@ type RealtimeUser = {
 @WebSocketGateway({
   namespace: "/realtime",
   cors: {
-    origin: realtimeOrigins.length === 1 ? realtimeOrigins[0] : realtimeOrigins,
+    origin: (origin, callback) => {
+      callback(null, isAllowedOrigin(origin, realtimeOrigins));
+    },
     credentials: true,
   },
 })

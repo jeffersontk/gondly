@@ -32,6 +32,8 @@ services:
         sync: false
       - key: WEB_ORIGIN
         sync: false
+      - key: CORS_ORIGINS
+        sync: false
       - key: API_PUBLIC_URL
         sync: false
       - key: MERCADO_PAGO_ACCESS_TOKEN

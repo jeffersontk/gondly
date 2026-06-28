@@ -96,9 +96,18 @@ GOOGLE_CLIENT_ID="seu-client-id.apps.googleusercontent.com"
 GOOGLE_CLIENT_SECRET=""
 FRONTEND_URL="https://SEU-PROJETO.vercel.app"
 WEB_ORIGIN="https://SEU-PROJETO.vercel.app"
+CORS_ORIGINS="https://SEU-PROJETO.vercel.app,https://SEU-DOMINIO-PRODUCAO.com,https://www.SEU-DOMINIO-PRODUCAO.com"
 API_PUBLIC_URL="https://SEU-SERVICO-RENDER.onrender.com"
 MERCADO_PAGO_ACCESS_TOKEN="seu-token-mercado-pago"
 MERCADO_PAGO_WEBHOOK_SECRET=""
+```
+
+Para dominio proprio, configure a API com as duas origens quando usar raiz e `www`, por exemplo:
+
+```env
+FRONTEND_URL="https://gondly.com.br"
+WEB_ORIGIN="https://www.gondly.com.br"
+CORS_ORIGINS="https://gondly.com.br,https://www.gondly.com.br,https://gondly-web.vercel.app"
 ```
 
 O Blueprint tambem define:
