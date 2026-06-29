@@ -144,6 +144,7 @@ export class PurchasesService {
 
     const updatedPurchase = await this.recalculateSubtotal(purchase.id);
     this.realtime.emitToPurchase(purchase.id, "purchaseItemCreated", { purchaseId: purchase.id, item, byUserId: userId });
+    this.emitListPurchaseItemChanged(purchase, "created", { item, byUserId: userId });
     this.emitPurchaseTotal(updatedPurchase, userId);
     return updatedPurchase;
   }
@@ -171,6 +172,7 @@ export class PurchasesService {
 
     const updatedPurchase = await this.recalculateSubtotal(purchase.id);
     this.realtime.emitToPurchase(purchase.id, "purchaseItemUpdated", { purchaseId: purchase.id, item: updatedItem, byUserId: userId });
+    this.emitListPurchaseItemChanged(purchase, "updated", { item: updatedItem, byUserId: userId });
     this.emitPurchaseTotal(updatedPurchase, userId);
     return updatedPurchase;
   }
@@ -184,6 +186,7 @@ export class PurchasesService {
     await this.prisma.purchaseItem.delete({ where: { id: itemId } });
     const updatedPurchase = await this.recalculateSubtotal(purchase.id);
     this.realtime.emitToPurchase(purchase.id, "purchaseItemDeleted", { purchaseId: purchase.id, itemId, byUserId: userId });
+    this.emitListPurchaseItemChanged(purchase, "deleted", { itemId, byUserId: userId });
     this.emitPurchaseTotal(updatedPurchase, userId);
     return updatedPurchase;
   }
@@ -375,6 +378,21 @@ export class PurchasesService {
       purchaseId: purchase.id,
       subtotalCalculated: toNumber(purchase.subtotalCalculated),
       byUserId: userId,
+    });
+  }
+
+  private emitListPurchaseItemChanged(
+    purchase: { id: string; sourceListId?: string | null },
+    action: "created" | "updated" | "deleted",
+    payload: { item?: unknown; itemId?: string; byUserId: string },
+  ) {
+    if (!purchase.sourceListId) return;
+
+    this.realtime.emitToList(purchase.sourceListId, "purchaseItemChanged", {
+      listId: purchase.sourceListId,
+      purchaseId: purchase.id,
+      action,
+      ...payload,
     });
   }
 }

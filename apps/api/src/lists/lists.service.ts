@@ -46,7 +46,7 @@ export class ListsService {
         },
       });
 
-      return list;
+      return tx.marketList.findUnique({ where: { id: list.id }, include: this.listInclude() });
     });
   }
 
@@ -56,17 +56,17 @@ export class ListsService {
 
   async update(userId: string, id: string, dto: UpdateListDto) {
     await this.assertCanEdit(userId, id);
-    return this.prisma.marketList.update({ where: { id }, data: dto });
+    return this.prisma.marketList.update({ where: { id }, data: dto, include: this.listInclude() });
   }
 
   async remove(userId: string, id: string) {
     await this.assertOwner(userId, id);
-    return this.prisma.marketList.update({ where: { id }, data: { deletedAt: new Date() } });
+    return this.prisma.marketList.update({ where: { id }, data: { deletedAt: new Date() }, include: this.listInclude() });
   }
 
   async archive(userId: string, id: string) {
     await this.assertCanEdit(userId, id);
-    return this.prisma.marketList.update({ where: { id }, data: { status: "archived" } });
+    return this.prisma.marketList.update({ where: { id }, data: { status: "archived" }, include: this.listInclude() });
   }
 
   async duplicate(userId: string, id: string) {
@@ -626,6 +626,13 @@ export class ListsService {
     }
 
     return product.id;
+  }
+
+  private listInclude() {
+    return {
+      items: { orderBy: { createdAt: "asc" as const } },
+      members: { include: { user: { select: { id: true, name: true, email: true, photoUrl: true } } } },
+    };
   }
 
   private normalizeProductName(value: string) {

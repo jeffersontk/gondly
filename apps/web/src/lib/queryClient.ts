@@ -31,7 +31,10 @@ export const queryClient = new QueryClient({
 });
 
 queryClient.setQueryDefaults(["active-purchases"], {
-  staleTime: 60_000,
+  staleTime: 0,
+  refetchOnMount: true,
+  refetchOnWindowFocus: true,
+  refetchOnReconnect: true,
 });
 
 queryClient.setQueryDefaults(["lists"], {
@@ -52,6 +55,7 @@ function shouldPersistQuery(query: Query) {
   if (query.state.status !== "success" || query.state.data === undefined) return false;
 
   const [scope, value] = query.queryKey;
+  if (scope === "active-purchases") return false;
   if (scope === "products-search" && typeof value === "string" && value.trim().length > 40) {
     return false;
   }

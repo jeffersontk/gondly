@@ -155,9 +155,24 @@ function roundMoney(value: number) {
   return Math.round(value * 100) / 100;
 }
 
-function optimisticCartItem(values: CartItemForm, id?: string): PurchaseItem {
+function toPurchaseItemPayload(values: CartItemForm, productName: string): CartItemForm {
+  return {
+    ...values,
+    productName,
+    pricePaid: roundMoney(Number(values.quantity ?? 0) * Number(values.pricePaid ?? 0)),
+  };
+}
+
+function pricePerUnitFromItem(item: PurchaseItem) {
+  const quantity = Number(item.quantity ?? 0);
+  if (quantity <= 0) return Number(item.pricePaid ?? 0);
+  return roundMoney(Number(item.pricePaid ?? 0) / quantity);
+}
+
+function optimisticCartItem(values: CartItemForm, id?: string, currentItem?: PurchaseItem): PurchaseItem {
   return {
     id: id ?? createLocalItemId(),
+    sourceListItemId: currentItem?.sourceListItemId ?? null,
     productId: values.productId ?? null,
     productName: values.productName,
     brand: values.brand || null,
@@ -181,9 +196,62 @@ function patchPurchaseItemCache(purchases: Purchase[] | undefined, purchaseId: s
     return {
       ...purchase,
       items,
-      subtotalCalculated: roundMoney(items.reduce((sum, entry) => sum + Number(entry.pricePaid ?? 0), 0)),
+      subtotalCalculated: calculatePurchaseSubtotal(items),
     };
   });
+}
+
+function upsertRealtimePurchaseItemCache(purchases: Purchase[] | undefined, purchaseId: string, nextItem: PurchaseItem) {
+  if (!purchases) return purchases;
+
+  const normalizedItem = normalizePurchaseItem(nextItem);
+  return purchases.map((purchase) => {
+    if (purchase.id !== purchaseId) return purchase;
+
+    const exists = purchase.items.some((item) => item.id === normalizedItem.id);
+    const items = exists
+      ? purchase.items.map((item) => (item.id === normalizedItem.id ? normalizedItem : item))
+      : [normalizedItem, ...purchase.items];
+
+    return { ...purchase, items, subtotalCalculated: calculatePurchaseSubtotal(items) };
+  });
+}
+
+function removeRealtimePurchaseItemCache(purchases: Purchase[] | undefined, purchaseId: string, itemId: string) {
+  if (!purchases) return purchases;
+
+  return purchases.map((purchase) => {
+    if (purchase.id !== purchaseId) return purchase;
+
+    const items = purchase.items.filter((item) => item.id !== itemId);
+    return { ...purchase, items, subtotalCalculated: calculatePurchaseSubtotal(items) };
+  });
+}
+
+function updateRealtimePurchaseTotalCache(purchases: Purchase[] | undefined, purchaseId: string, subtotalCalculated?: number, status?: string) {
+  if (!purchases) return purchases;
+  if (status && status !== "in_progress") return purchases.filter((purchase) => purchase.id !== purchaseId);
+
+  return purchases.map((purchase) => {
+    if (purchase.id !== purchaseId) return purchase;
+    return {
+      ...purchase,
+      subtotalCalculated: typeof subtotalCalculated === "number" ? subtotalCalculated : calculatePurchaseSubtotal(purchase.items),
+    };
+  });
+}
+
+function calculatePurchaseSubtotal(items: PurchaseItem[]) {
+  return roundMoney(items.reduce((sum, entry) => sum + Number(entry.pricePaid ?? 0), 0));
+}
+
+function normalizePurchaseItem(item: PurchaseItem): PurchaseItem {
+  return {
+    ...item,
+    quantity: Number(item.quantity ?? 0),
+    pricePaid: Number(item.pricePaid ?? 0),
+    unitPriceNormalized: item.unitPriceNormalized === null || item.unitPriceNormalized === undefined ? item.unitPriceNormalized : Number(item.unitPriceNormalized),
+  };
 }
 
 function reconcilePurchaseCache(purchases: Purchase[] | undefined, nextPurchase: Purchase, completedLocalItemId?: string) {
@@ -197,7 +265,7 @@ function reconcilePurchaseCache(purchases: Purchase[] | undefined, nextPurchase:
     return {
       ...nextPurchase,
       items,
-      subtotalCalculated: roundMoney(items.reduce((sum, entry) => sum + Number(entry.pricePaid ?? 0), 0)),
+      subtotalCalculated: calculatePurchaseSubtotal(items),
     };
   });
 }
@@ -231,14 +299,36 @@ function addListItemCache(list: MarketList | undefined, item: MarketListItem) {
   return { ...list, items: [item, ...list.items.filter((entry) => entry.id !== item.id)] };
 }
 
+function normalizeMarketList(list: MarketList): MarketList {
+  return {
+    ...list,
+    items: list.items ?? [],
+    members: list.members ?? [],
+    invites: list.invites ?? [],
+  };
+}
+
+function mergeMarketList(current: MarketList | undefined, nextList: MarketList): MarketList {
+  const normalized = normalizeMarketList(nextList);
+  if (!current) return normalized;
+  return {
+    ...current,
+    ...normalized,
+    items: nextList.items ?? current.items ?? [],
+    members: nextList.members ?? current.members,
+    invites: nextList.invites ?? current.invites,
+  };
+}
+
 function updateListsCache(lists: MarketList[] | undefined, nextList: MarketList) {
   if (!lists) return lists;
-  return lists.map((list) => (list.id === nextList.id ? { ...list, ...nextList } : list));
+  return lists.map((list) => (list.id === nextList.id ? mergeMarketList(list, nextList) : list));
 }
 
 function addListCache(lists: MarketList[] | undefined, nextList: MarketList) {
+  const normalized = normalizeMarketList(nextList);
   if (!lists) return lists;
-  return [nextList, ...lists.filter((list) => list.id !== nextList.id)];
+  return [normalized, ...lists.filter((list) => list.id !== normalized.id)];
 }
 
 function removeListCache(lists: MarketList[] | undefined, listId: string) {
@@ -265,6 +355,26 @@ function groupItemsByCategory<T extends { category?: string | null }>(items: T[]
 }
 
 type ListStatusFilter = "all" | ListItemStatus;
+type PurchaseViewFilter = "list" | "cart";
+type RealtimeActor = { userId?: string; name?: string };
+type PurchaseItemRealtimePayload = {
+  purchaseId: string;
+  item?: PurchaseItem;
+  itemId?: string;
+  subtotalCalculated?: number;
+  status?: string;
+  byUserId?: string;
+  by?: RealtimeActor;
+};
+type ListPurchaseItemChangedPayload = {
+  listId: string;
+  purchaseId: string;
+  action: "created" | "updated" | "deleted";
+  item?: PurchaseItem;
+  itemId?: string;
+  byUserId?: string;
+  by?: RealtimeActor;
+};
 
 function matchesListStatus(item: MarketListItem, status: ListStatusFilter) {
   return status === "all" || item.status === status;
@@ -369,10 +479,7 @@ export function LoginPage() {
     <main className="min-h-screen overflow-x-hidden bg-paper text-ink">
       <section className="relative mx-auto flex min-h-[88svh] w-full max-w-7xl flex-col px-5 pb-10 pt-5 sm:px-8 lg:px-10">
         <header className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <img src="/icons/icon.svg" alt="Gondly" className="h-12 w-12 rounded-[14px] shadow-soft" />
-            <span className="text-xl font-black tracking-normal text-ink">Gondly</span>
-          </div>
+          <img src="/gondly-logo.png" alt="Gondly" className="h-10 w-auto max-w-[150px] object-contain" />
           {clientId ? (
             <div ref={signinButtonRef} className="flex min-h-10 w-[198px] items-center justify-end rounded-full bg-white shadow-soft" />
           ) : (
@@ -641,8 +748,13 @@ export function ListDetailPage() {
   const [sectorFilter, setSectorFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<ListStatusFilter>("all");
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
+  const [listRealtimeNotice, setListRealtimeNotice] = useState<string | null>(null);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(() => new Set());
+  const [replacePurchaseOpen, setReplacePurchaseOpen] = useState(false);
+  const listRealtimeNoticeTimeoutRef = useRef<number | undefined>(undefined);
   const list = useQuery({ queryKey: ["list", id], queryFn: () => api<MarketList>(`/lists/${id}`), enabled: Boolean(id) });
+  const activePurchases = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
+  const activePurchase = activePurchases.data?.[0];
   const removeItem = useMutation({
     mutationFn: (itemId: string) => api<MarketListItem>(`/lists/${id}/items/${itemId}`, { method: "DELETE" }),
     onSuccess: (_item, itemId) => queryClient.setQueryData<MarketList>(["list", id], (current) => removeListItemCache(current, itemId)),
@@ -679,9 +791,14 @@ export function ListDetailPage() {
     },
   });
   const start = useMutation({
-    mutationFn: () => api<Purchase>("/purchases/start", { method: "POST", body: { sourceListId: id } }),
-    onSuccess: (purchase) => {
+    mutationFn: (payload: { sourceListId: string; cancelActive?: boolean }) =>
+      api<Purchase>("/purchases/start", { method: "POST", body: payload }),
+    onSuccess: (purchase, variables) => {
+      if (variables.cancelActive && activePurchase) {
+        void discardQueuedPurchaseChanges(activePurchase.id);
+      }
       queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => setActivePurchaseCache(current, purchase));
+      setReplacePurchaseOpen(false);
       navigate(`/app/purchase/${purchase.id}`);
     },
   });
@@ -748,6 +865,27 @@ export function ListDetailPage() {
       void queryClient.invalidateQueries({ queryKey: ["list", id] });
       void queryClient.invalidateQueries({ queryKey: ["lists"] });
     };
+    const showListRealtimeNotice = (message: string) => {
+      setListRealtimeNotice(message);
+      if (listRealtimeNoticeTimeoutRef.current) window.clearTimeout(listRealtimeNoticeTimeoutRef.current);
+      listRealtimeNoticeTimeoutRef.current = window.setTimeout(() => setListRealtimeNotice(null), 4_000);
+    };
+    const handlePurchaseItemChanged = (payload: ListPurchaseItemChangedPayload) => {
+      if (payload.listId !== id) return;
+
+      void queryClient.refetchQueries({ queryKey: ["active-purchases"], type: "active" });
+      const actorId = payload.byUserId ?? payload.by?.userId;
+      if (actorId === user?.id) return;
+
+      const productName = payload.item?.productName ?? "Um produto";
+      const actionMessage =
+        payload.action === "created"
+          ? `${productName} foi adicionado ao carrinho.`
+          : payload.action === "updated"
+            ? `${productName} foi atualizado no carrinho.`
+            : "Um produto foi removido do carrinho.";
+      showListRealtimeNotice(payload.by?.name ? `${payload.by.name}: ${actionMessage}` : actionMessage);
+    };
     const events = [
       "listItemUpdated",
       "itemAssigned",
@@ -761,27 +899,36 @@ export function ListDetailPage() {
 
     socket.on("connect", () => socket.emit("joinList", { listId: id }));
     events.forEach((event) => socket.on(event, refreshList));
+    socket.on("purchaseItemChanged", handlePurchaseItemChanged);
 
     return () => {
       socket.emit("leaveList", { listId: id });
       events.forEach((event) => socket.off(event, refreshList));
+      socket.off("purchaseItemChanged", handlePurchaseItemChanged);
       socket.disconnect();
     };
-  }, [id, queryClient, token]);
+  }, [id, queryClient, token, user?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (listRealtimeNoticeTimeoutRef.current) window.clearTimeout(listRealtimeNoticeTimeoutRef.current);
+    };
+  }, []);
 
   if (list.isLoading) return <LoadingState />;
   if (list.isError || !list.data) return <ScreenContainer title="Lista"><ErrorState /></ScreenContainer>;
 
-  const neededItems = list.data.items.filter((item) => item.status === "pending");
-  const atHomeItems = list.data.items.filter((item) => item.status === "at_home");
-  const notNeededItems = list.data.items.filter((item) => item.status === "not_needed");
-  const acceptedMembers = list.data.members?.filter((member) => member.status === "accepted") ?? [];
-  const isOwner = list.data.userId === user?.id;
-  const pendingMembers = list.data.members?.filter((member) => member.status === "invited") ?? [];
+  const currentList = normalizeMarketList(list.data);
+  const neededItems = currentList.items.filter((item) => item.status === "pending");
+  const atHomeItems = currentList.items.filter((item) => item.status === "at_home");
+  const notNeededItems = currentList.items.filter((item) => item.status === "not_needed");
+  const acceptedMembers = currentList.members?.filter((member) => member.status === "accepted") ?? [];
+  const isOwner = currentList.userId === user?.id;
+  const pendingMembers = currentList.members?.filter((member) => member.status === "invited") ?? [];
   const collaborators = acceptedMembers.filter((member) => member.role !== "owner");
-  const sectors = [...new Set(list.data.items.map((item) => item.category?.trim() || "Sem setor"))];
+  const sectors = [...new Set(currentList.items.map((item) => item.category?.trim() || "Sem setor"))];
   const normalizedSearch = itemSearch.trim().toLocaleLowerCase("pt-BR");
-  const filteredItems = list.data.items.filter((item) => {
+  const filteredItems = currentList.items.filter((item) => {
     const matchesSearch =
       !normalizedSearch ||
       item.productName.toLocaleLowerCase("pt-BR").includes(normalizedSearch) ||
@@ -792,7 +939,7 @@ export function ListDetailPage() {
   const groupedItems = groupItemsByCategory(filteredItems);
   const activeShareLink =
     shareLink.data ??
-    list.data.invites?.find(
+    currentList.invites?.find(
       (invite) => !invite.inviteEmail && invite.status === "pending" && new Date(invite.expiresAt) > new Date(),
     );
   const shareUrl = activeShareLink ? `${window.location.origin}/shared/${activeShareLink.inviteToken}` : "";
@@ -806,16 +953,31 @@ export function ListDetailPage() {
     });
   }
 
+  function handleStartPurchaseFromList() {
+    if (activePurchase && activePurchase.sourceListId !== id) {
+      setReplacePurchaseOpen(true);
+      return;
+    }
+
+    start.mutate({ sourceListId: id });
+  }
+
   return (
-    <ScreenContainer title={list.data.name} subtitle={list.data.description ?? undefined}>
+    <ScreenContainer title={currentList.name} subtitle={currentList.description ?? undefined}>
       <div className="grid grid-cols-[1fr_auto] gap-2">
-        <AppButton icon={<ShoppingCart className="h-5 w-5" />} onClick={() => start.mutate()} loading={start.isPending} loadingLabel="Iniciando">
+        <AppButton icon={<ShoppingCart className="h-5 w-5" />} onClick={handleStartPurchaseFromList} loading={start.isPending} loadingLabel="Iniciando">
           Comprar
         </AppButton>
         <AppButton className="w-14 px-0" variant="secondary" icon={<Menu className="h-5 w-5" />} onClick={() => setActionsOpen(true)} aria-label="Abrir ações da lista">
           <span className="sr-only">Ações</span>
         </AppButton>
       </div>
+      {listRealtimeNotice ? (
+        <div className="mt-3 flex items-center gap-2 rounded-xl border border-mint/20 bg-mint/10 p-3 text-sm font-bold text-mint shadow-sm" role="status" aria-live="polite">
+          <ShoppingCart className="h-4 w-4 flex-none" />
+          <span>{listRealtimeNotice}</span>
+        </div>
+      ) : null}
 
       <ListActionsDrawer
         open={actionsOpen}
@@ -867,7 +1029,7 @@ export function ListDetailPage() {
             }}
             onShare={async () => {
               if (navigator.share) {
-                await navigator.share({ title: list.data.name, text: `Solicite acesso à lista ${list.data.name}`, url: shareUrl });
+                await navigator.share({ title: currentList.name, text: `Solicite acesso à lista ${currentList.name}`, url: shareUrl });
               } else {
                 await navigator.clipboard.writeText(shareUrl);
                 setShareFeedback("Link copiado.");
@@ -927,8 +1089,8 @@ export function ListDetailPage() {
         </div>
       </div>
       <div className="space-y-3">
-        {!list.data.items.length ? <EmptyState title="Adicione produtos ao carrinho para começar sua compra." /> : null}
-        {list.data.items.length && !filteredItems.length ? <EmptyState title="Nenhum item corresponde aos filtros selecionados." /> : null}
+        {!currentList.items.length ? <EmptyState title="Adicione produtos ao carrinho para começar sua compra." /> : null}
+        {currentList.items.length && !filteredItems.length ? <EmptyState title="Nenhum item corresponde aos filtros selecionados." /> : null}
         {groupedItems.map((group) => (
           <section key={group.category} className="space-y-2">
             <button
@@ -997,6 +1159,14 @@ export function ListDetailPage() {
         onConfirm={() => remove.mutate()}
         confirmLoading={remove.isPending}
       />
+      <ConfirmDialog
+        open={replacePurchaseOpen}
+        title="Trocar compra ativa"
+        description="Existe outra compra em andamento. Para iniciar esta lista, a compra ativa atual será cancelada."
+        onCancel={() => setReplacePurchaseOpen(false)}
+        onConfirm={() => start.mutate({ sourceListId: id, cancelActive: true })}
+        confirmLoading={start.isPending}
+      />
     </ScreenContainer>
   );
 }
@@ -1033,7 +1203,7 @@ export function CreateEditListPage() {
     mutationFn: (values: ListForm) =>
       isEdit ? api<MarketList>(`/lists/${id}`, { method: "PUT", body: values }) : api<MarketList>("/lists", { method: "POST", body: values }),
     onSuccess: (saved) => {
-      queryClient.setQueryData(["list", saved.id], saved);
+      queryClient.setQueryData<MarketList>(["list", saved.id], (current) => mergeMarketList(current, saved));
       queryClient.setQueryData<MarketList[]>(["lists"], (current) => (isEdit ? updateListsCache(current, saved) : addListCache(current, saved)));
       navigate(`/app/lists/${saved.id}`);
     },
@@ -1596,7 +1766,7 @@ export function StartPurchasePage() {
           <MarketListCard
             key={list.id}
             list={list}
-            onClick={() => start.mutate({ sourceListId: list.id })}
+            onClick={() => start.mutate({ sourceListId: list.id, cancelActive: Boolean(activePurchase && activePurchase.sourceListId !== list.id) })}
             loading={start.isPending && start.variables?.sourceListId === list.id}
             disabled={start.isPending && start.variables?.sourceListId !== list.id}
           />
@@ -1610,11 +1780,15 @@ export function StartPurchasePage() {
 export function ActivePurchasePage() {
   const routeParams = useParams();
   const [params] = useSearchParams();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [purchaseSearch, setPurchaseSearch] = useState("");
+  const [purchaseView, setPurchaseView] = useState<PurchaseViewFilter>("list");
+  const [realtimeNotice, setRealtimeNotice] = useState<string | null>(null);
   const [expandedPurchaseCategories, setExpandedPurchaseCategories] = useState<Set<string>>(() => new Set());
+  const realtimeNoticeTimeoutRef = useRef<number | undefined>(undefined);
+  const realtimeRefetchTimeoutRef = useRef<number | undefined>(undefined);
   const purchaseId = routeParams.purchaseId ?? params.get("purchaseId");
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   const purchase = useMemo(() => active.data?.find((entry) => entry.id === purchaseId) ?? active.data?.[0], [active.data, purchaseId]);
@@ -1631,18 +1805,73 @@ export function ActivePurchasePage() {
     if (!purchase?.id || !token) return;
 
     const socket = createRealtimeSocket(token);
-    const refreshPurchase = () => {
-      void queryClient.invalidateQueries({ queryKey: ["active-purchases"] });
+    const schedulePurchaseRefetch = () => {
+      if (realtimeRefetchTimeoutRef.current) window.clearTimeout(realtimeRefetchTimeoutRef.current);
+      realtimeRefetchTimeoutRef.current = window.setTimeout(() => {
+        void queryClient.refetchQueries({ queryKey: ["active-purchases"], type: "active" });
+      }, 350);
+    };
+    const notifyIfFromAnotherUser = (payload: PurchaseItemRealtimePayload, message: string) => {
+      const actorId = payload.byUserId ?? payload.by?.userId;
+      if (!actorId || actorId === user?.id) return;
+
+      const actorName = payload.by?.name;
+      setRealtimeNotice(actorName ? `${actorName}: ${message}` : message);
+      if (realtimeNoticeTimeoutRef.current) window.clearTimeout(realtimeNoticeTimeoutRef.current);
+      realtimeNoticeTimeoutRef.current = window.setTimeout(() => setRealtimeNotice(null), 4_000);
+    };
+    const refreshPurchase = (payload?: PurchaseItemRealtimePayload) => {
+      if (!payload || payload.purchaseId === purchase.id) schedulePurchaseRefetch();
+    };
+    const handlePurchaseItemCreated = (payload: PurchaseItemRealtimePayload) => {
+      if (payload.purchaseId !== purchase.id || !payload.item) return;
+      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => upsertRealtimePurchaseItemCache(current, purchase.id, payload.item!));
+      notifyIfFromAnotherUser(payload, `${payload.item.productName} foi adicionado ao carrinho.`);
+      schedulePurchaseRefetch();
+    };
+    const handlePurchaseItemUpdated = (payload: PurchaseItemRealtimePayload) => {
+      if (payload.purchaseId !== purchase.id || !payload.item) return;
+      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => upsertRealtimePurchaseItemCache(current, purchase.id, payload.item!));
+      notifyIfFromAnotherUser(payload, `${payload.item.productName} foi atualizado no carrinho.`);
+      schedulePurchaseRefetch();
+    };
+    const handlePurchaseItemDeleted = (payload: PurchaseItemRealtimePayload) => {
+      if (payload.purchaseId !== purchase.id || !payload.itemId) return;
+      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => removeRealtimePurchaseItemCache(current, purchase.id, payload.itemId!));
+      notifyIfFromAnotherUser(payload, "Um item foi removido do carrinho.");
+      schedulePurchaseRefetch();
+    };
+    const handlePurchaseTotalUpdated = (payload: PurchaseItemRealtimePayload) => {
+      if (payload.purchaseId !== purchase.id) return;
+      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) =>
+        updateRealtimePurchaseTotalCache(current, purchase.id, payload.subtotalCalculated, payload.status),
+      );
+      schedulePurchaseRefetch();
     };
     socket.on("connect", () => socket.emit("joinPurchase", { purchaseId: purchase.id }));
     socket.on("purchaseItemsSynced", refreshPurchase);
+    socket.on("purchaseItemCreated", handlePurchaseItemCreated);
+    socket.on("purchaseItemUpdated", handlePurchaseItemUpdated);
+    socket.on("purchaseItemDeleted", handlePurchaseItemDeleted);
+    socket.on("purchaseTotalUpdated", handlePurchaseTotalUpdated);
 
     return () => {
       socket.emit("leavePurchase", { purchaseId: purchase.id });
       socket.off("purchaseItemsSynced", refreshPurchase);
+      socket.off("purchaseItemCreated", handlePurchaseItemCreated);
+      socket.off("purchaseItemUpdated", handlePurchaseItemUpdated);
+      socket.off("purchaseItemDeleted", handlePurchaseItemDeleted);
+      socket.off("purchaseTotalUpdated", handlePurchaseTotalUpdated);
       socket.disconnect();
+      if (realtimeRefetchTimeoutRef.current) window.clearTimeout(realtimeRefetchTimeoutRef.current);
     };
-  }, [purchase?.id, queryClient, token]);
+  }, [purchase?.id, queryClient, token, user?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (realtimeNoticeTimeoutRef.current) window.clearTimeout(realtimeNoticeTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     setPurchaseSearch("");
@@ -1659,8 +1888,9 @@ export function ActivePurchasePage() {
   }
   const cartItemsCount = purchase.items.filter((item) => Number(item.pricePaid ?? 0) > 0).length;
   const cartItemsLabel = `${cartItemsCount} ${cartItemsCount === 1 ? "produto" : "produtos"} no carrinho`;
+  const visiblePurchaseItems = purchaseView === "cart" ? purchase.items.filter((item) => Number(item.pricePaid ?? 0) > 0) : purchase.items;
   const normalizedPurchaseSearch = purchaseSearch.trim().toLocaleLowerCase("pt-BR");
-  const filteredPurchaseItems = purchase.items.filter(
+  const filteredPurchaseItems = visiblePurchaseItems.filter(
     (item) =>
       !normalizedPurchaseSearch ||
       item.productName.toLocaleLowerCase("pt-BR").includes(normalizedPurchaseSearch) ||
@@ -1713,6 +1943,35 @@ export function ActivePurchasePage() {
         </AppButton>
       </div>
 
+      <div className="mt-4 grid grid-cols-2 gap-2 rounded-[22px] border border-line bg-white p-2 shadow-sm" role="tablist" aria-label="Alternar entre lista e carrinho">
+        <button
+          type="button"
+          className={[
+            "rounded-2xl px-3 py-3 text-left transition",
+            purchaseView === "list" ? "bg-mint text-white shadow-soft" : "bg-transparent text-ink hover:bg-paper",
+          ].join(" ")}
+          onClick={() => setPurchaseView("list")}
+          role="tab"
+          aria-selected={purchaseView === "list"}
+        >
+          <span className="block text-xs font-semibold opacity-75">Lista</span>
+          <span className="mt-0.5 block text-lg font-black">{purchase.items.length}</span>
+        </button>
+        <button
+          type="button"
+          className={[
+            "rounded-2xl px-3 py-3 text-left transition",
+            purchaseView === "cart" ? "bg-mint text-white shadow-soft" : "bg-transparent text-ink hover:bg-paper",
+          ].join(" ")}
+          onClick={() => setPurchaseView("cart")}
+          role="tab"
+          aria-selected={purchaseView === "cart"}
+        >
+          <span className="block text-xs font-semibold opacity-75">Carrinho</span>
+          <span className="mt-0.5 block text-lg font-black">{cartItemsCount}</span>
+        </button>
+      </div>
+
       {outbox.pendingCount > 0 ? (
         <div className="mt-3 rounded-xl border border-line bg-white p-3 text-sm font-semibold text-ink shadow-sm">
           {outbox.isSyncing ? "Sincronizando alterações do carrinho..." : `${outbox.pendingCount} alteração(ões) aguardando sinal.`}
@@ -1721,8 +1980,14 @@ export function ActivePurchasePage() {
           </button>
         </div>
       ) : null}
+      {realtimeNotice ? (
+        <div className="mt-3 flex items-center gap-2 rounded-xl border border-mint/20 bg-mint/10 p-3 text-sm font-bold text-mint shadow-sm" role="status" aria-live="polite">
+          <Check className="h-4 w-4 flex-none" />
+          <span>{realtimeNotice}</span>
+        </div>
+      ) : null}
 
-      <SectionHeader title="Carrinho" />
+      <SectionHeader title={purchaseView === "cart" ? "Carrinho" : "Lista"} />
       <div className="mb-4 rounded-[22px] border border-line bg-white p-3 shadow-sm">
         <SearchBar
           placeholder="Buscar produto, marca ou categoria"
@@ -1730,7 +1995,7 @@ export function ActivePurchasePage() {
           onChange={(event) => setPurchaseSearch(event.target.value)}
         />
       </div>
-      {cartItemsCount === 0 ? (
+      {purchaseView === "cart" && cartItemsCount === 0 ? (
         <div className="mb-4 rounded-[24px] border border-line bg-white p-5 shadow-sm">
           <p className="text-base font-black tracking-[-0.02em] text-ink">Seu carrinho ainda está vazio.</p>
           <p className="mt-1 text-sm leading-6 text-ink/60">Adicione produtos conforme for comprando.</p>
@@ -1740,7 +2005,8 @@ export function ActivePurchasePage() {
         </div>
       ) : null}
       <div className="space-y-3">
-        {purchase.items.length && !filteredPurchaseItems.length ? <EmptyState title="Nenhum produto encontrado." /> : null}
+        {purchaseView === "list" && !purchase.items.length ? <EmptyState title="A lista desta compra está vazia." /> : null}
+        {visiblePurchaseItems.length > 0 && !filteredPurchaseItems.length ? <EmptyState title="Nenhum produto encontrado." /> : null}
         {groupedPurchaseItems.map((group) => {
           const expanded = Boolean(normalizedPurchaseSearch) || expandedPurchaseCategories.has(group.category);
           const categoryId = `purchase-category-${group.category.replace(/\W+/g, "-").toLowerCase()}`;
@@ -1830,7 +2096,7 @@ export function AddEditCartItemPage() {
       category: editingItem.category ?? "",
       quantity: editingItem.quantity,
       unit: editingItem.unit,
-      pricePaid: editingItem.pricePaid,
+      pricePaid: pricePerUnitFromItem(editingItem),
       notes: editingItem.notes ?? "",
     });
   }, [editingItem, form]);
@@ -1844,7 +2110,7 @@ export function AddEditCartItemPage() {
     onMutate: async (values) => {
       await queryClient.cancelQueries({ queryKey: ["active-purchases"] });
       const previousActivePurchases = queryClient.getQueryData<Purchase[]>(["active-purchases"]);
-      const item = optimisticCartItem(values, itemId ?? undefined);
+      const item = optimisticCartItem(values, itemId ?? undefined, editingItem);
 
       queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => patchPurchaseItemCache(current, purchaseId, item, itemId ?? undefined));
       navigate(`/app/purchase/${purchaseId}`);
@@ -1873,6 +2139,10 @@ export function AddEditCartItemPage() {
   const sheetTitle = itemId ? "Editar item" : "Adicionar item";
   const submitLabel = itemId ? "Atualizar item" : "Adicionar ao carrinho";
   const closeSheet = () => navigate(purchaseId ? `/app/purchase/${purchaseId}` : "/app/purchase/start");
+  const watchedQuantity = decimalValue(form.watch("quantity"), 0);
+  const watchedUnitPrice = decimalValue(form.watch("pricePaid"), 0);
+  const watchedUnit = form.watch("unit");
+  const estimatedItemTotal = roundMoney(watchedQuantity * watchedUnitPrice);
 
   return (
     <main className="fixed inset-0 z-50 flex items-end bg-ink/35 px-3 pb-0 pt-8 backdrop-blur-sm sm:items-center sm:p-4">
@@ -1893,7 +2163,13 @@ export function AddEditCartItemPage() {
           </button>
         </header>
 
-        <form className="space-y-3" onSubmit={form.handleSubmit((values) => save.mutate({ ...values, productName: productName.trim() }))}>
+        <form
+          className="space-y-3"
+          onSubmit={form.handleSubmit((values) => {
+            const trimmedProductName = productName.trim() || values.productName.trim();
+            save.mutate(toPurchaseItemPayload(values, trimmedProductName));
+          })}
+        >
           <input type="hidden" {...form.register("brand")} />
           <input type="hidden" {...form.register("category")} />
           <ProductSearchInput
@@ -1913,7 +2189,14 @@ export function AddEditCartItemPage() {
             <QuantityInput label="Quantidade" error={form.formState.errors.quantity?.message} {...form.register("quantity")} />
             <UnitSelect label="Unidade" {...form.register("unit")} />
           </div>
-          <MoneyInput label="Preço pago" error={form.formState.errors.pricePaid?.message} {...form.register("pricePaid")} />
+          <MoneyInput label="Preço unitário" error={form.formState.errors.pricePaid?.message} {...form.register("pricePaid")} />
+          <div className="rounded-2xl border border-line bg-white p-3 text-sm shadow-sm">
+            <p className="font-semibold text-ink/60">Total deste item</p>
+            <p className="mt-1 text-xl font-black tracking-[-0.03em] text-ink">{formatBRL(estimatedItemTotal)}</p>
+            <p className="mt-1 text-xs text-ink/50">
+              {watchedQuantity || 0} {unitLabels[watchedUnit]} × {formatBRL(watchedUnitPrice || 0)}
+            </p>
+          </div>
           <AppInput label="Observação opcional" {...form.register("notes")} />
           <AppButton
             type="submit"

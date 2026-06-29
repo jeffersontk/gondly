@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./App";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { AdProvider } from "./lib/ads";
 import { AuthProvider } from "./lib/auth";
 import { installOfflineQueueSync } from "./lib/offlineQueue";
@@ -22,7 +23,9 @@ async function bootstrap() {
         <AuthProvider>
           <BrowserRouter>
             <AdProvider>
-              <App />
+              <ErrorBoundary>
+                <App />
+              </ErrorBoundary>
             </AdProvider>
           </BrowserRouter>
         </AuthProvider>
