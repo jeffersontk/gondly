@@ -5,6 +5,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsEmail,
   IsEnum,
   IsNumber,
@@ -62,6 +63,10 @@ export class CreateListItemDto {
   @IsString()
   @MaxLength(500)
   notes?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  important?: boolean;
 }
 
 export class UpdateListItemDto extends PartialType(CreateListItemDto) {}
@@ -78,6 +83,11 @@ export class ImportListItemsDto {
 export class SetListItemStateDto {
   @IsEnum(ListItemStatus)
   status!: ListItemStatus;
+}
+
+export class SetListItemImportantDto {
+  @IsBoolean()
+  important!: boolean;
 }
 
 export class CreateInviteDto {

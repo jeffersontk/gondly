@@ -1,0 +1,2 @@
+ALTER TABLE "MarketListItem" ADD COLUMN "important" BOOLEAN NOT NULL DEFAULT false;
+

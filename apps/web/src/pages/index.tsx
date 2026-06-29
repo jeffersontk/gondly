@@ -26,7 +26,9 @@ import {
   RefreshCcw,
   ScanLine,
   Share2,
+  SlidersHorizontal,
   ShoppingCart,
+  Star,
   Store,
   Tags,
   TrendingUp,
@@ -286,7 +288,7 @@ function isQueueableWriteError(error: unknown) {
 
 function updateListItemCache(list: MarketList | undefined, item: MarketListItem) {
   if (!list) return list;
-  return { ...list, items: list.items.map((entry) => (entry.id === item.id ? item : entry)) };
+  return { ...list, items: list.items.map((entry) => (entry.id === item.id ? { ...item, important: Boolean(item.important) } : entry)) };
 }
 
 function removeListItemCache(list: MarketList | undefined, itemId: string) {
@@ -296,13 +298,13 @@ function removeListItemCache(list: MarketList | undefined, itemId: string) {
 
 function addListItemCache(list: MarketList | undefined, item: MarketListItem) {
   if (!list) return list;
-  return { ...list, items: [item, ...list.items.filter((entry) => entry.id !== item.id)] };
+  return { ...list, items: [{ ...item, important: Boolean(item.important) }, ...list.items.filter((entry) => entry.id !== item.id)] };
 }
 
 function normalizeMarketList(list: MarketList): MarketList {
   return {
     ...list,
-    items: list.items ?? [],
+    items: (list.items ?? []).map((item) => ({ ...item, important: Boolean(item.important) })),
     members: list.members ?? [],
     invites: list.invites ?? [],
   };
@@ -355,6 +357,7 @@ function groupItemsByCategory<T extends { category?: string | null }>(items: T[]
 }
 
 type ListStatusFilter = "all" | ListItemStatus;
+type ListSortFilter = "default" | "important" | "name_asc" | "name_desc" | "sector" | "status";
 type PurchaseViewFilter = "list" | "cart";
 type RealtimeActor = { userId?: string; name?: string };
 type PurchaseItemRealtimePayload = {
@@ -378,6 +381,22 @@ type ListPurchaseItemChangedPayload = {
 
 function matchesListStatus(item: MarketListItem, status: ListStatusFilter) {
   return status === "all" || item.status === status;
+}
+
+function sortListItems(items: MarketListItem[], sort: ListSortFilter) {
+  const collator = new Intl.Collator("pt-BR", { sensitivity: "base", numeric: true });
+  const statusOrder: Record<ListItemStatus, number> = { pending: 0, at_home: 1, not_needed: 2 };
+  const originalIndex = new Map(items.map((item, index) => [item.id, index]));
+  const originalOrder = (left: MarketListItem, right: MarketListItem) => (originalIndex.get(left.id) ?? 0) - (originalIndex.get(right.id) ?? 0);
+
+  return [...items].sort((left, right) => {
+    if (sort === "important") return Number(right.important) - Number(left.important) || originalOrder(left, right);
+    if (sort === "name_asc") return collator.compare(left.productName, right.productName) || originalOrder(left, right);
+    if (sort === "name_desc") return collator.compare(right.productName, left.productName) || originalOrder(left, right);
+    if (sort === "sector") return collator.compare(left.category?.trim() || "Sem setor", right.category?.trim() || "Sem setor") || collator.compare(left.productName, right.productName);
+    if (sort === "status") return statusOrder[left.status] - statusOrder[right.status] || collator.compare(left.productName, right.productName);
+    return originalOrder(left, right);
+  });
 }
 
 function upsertById<T extends { id: string }>(items: T[] | undefined, nextItem: T) {
@@ -695,12 +714,14 @@ export function ListDetailPage() {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [importPreview, setImportPreview] = useState<ParsedShoppingList | null>(null);
   const [importParsing, setImportParsing] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [itemSearch, setItemSearch] = useState("");
   const [sectorFilter, setSectorFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<ListStatusFilter>("all");
+  const [sortFilter, setSortFilter] = useState<ListSortFilter>("default");
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
   const [listRealtimeNotice, setListRealtimeNotice] = useState<string | null>(null);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(() => new Set());
@@ -742,6 +763,13 @@ export function ListDetailPage() {
     onSuccess: (item) => {
       queryClient.setQueryData<MarketList>(["list", id], (current) => updateListItemCache(current, item));
       void queryClient.invalidateQueries({ queryKey: ["active-purchases"] });
+    },
+  });
+  const setItemImportant = useMutation({
+    mutationFn: ({ itemId, important }: { itemId: string; important: boolean }) =>
+      api<MarketListItem>(`/lists/${id}/items/${itemId}/important`, { method: "PATCH", body: { important } }),
+    onSuccess: (item) => {
+      queryClient.setQueryData<MarketList>(["list", id], (current) => updateListItemCache(current, item));
     },
   });
   const start = useMutation({
@@ -880,17 +908,20 @@ export function ListDetailPage() {
   const isOwner = currentList.userId === user?.id;
   const pendingMembers = currentList.members?.filter((member) => member.status === "invited") ?? [];
   const collaborators = acceptedMembers.filter((member) => member.role !== "owner");
-  const sectors = [...new Set(currentList.items.map((item) => item.category?.trim() || "Sem setor"))];
+  const sectors = [...new Set(currentList.items.map((item) => item.category?.trim() || "Sem setor"))].sort((left, right) => left.localeCompare(right, "pt-BR"));
   const normalizedSearch = itemSearch.trim().toLocaleLowerCase("pt-BR");
   const filteredItems = currentList.items.filter((item) => {
     const matchesSearch =
       !normalizedSearch ||
       item.productName.toLocaleLowerCase("pt-BR").includes(normalizedSearch) ||
-      item.brand?.toLocaleLowerCase("pt-BR").includes(normalizedSearch);
+      item.brand?.toLocaleLowerCase("pt-BR").includes(normalizedSearch) ||
+      item.category?.toLocaleLowerCase("pt-BR").includes(normalizedSearch);
     const matchesSector = sectorFilter === "all" || (item.category?.trim() || "Sem setor") === sectorFilter;
     return matchesSearch && matchesSector && matchesListStatus(item, statusFilter);
   });
-  const groupedItems = groupItemsByCategory(filteredItems);
+  const sortedItems = sortListItems(filteredItems, sortFilter);
+  const groupedItems = groupItemsByCategory(sortedItems);
+  const activeFiltersCount = Number(Boolean(normalizedSearch)) + Number(sectorFilter !== "all") + Number(statusFilter !== "all") + Number(sortFilter !== "default");
   const activeShareLink =
     shareLink.data ??
     currentList.invites?.find(
@@ -966,6 +997,27 @@ export function ListDetailPage() {
         }}
       />
 
+      <ListFiltersDrawer
+        open={filtersOpen}
+        sectors={sectors}
+        itemSearch={itemSearch}
+        sectorFilter={sectorFilter}
+        statusFilter={statusFilter}
+        sortFilter={sortFilter}
+        activeFiltersCount={activeFiltersCount}
+        onClose={() => setFiltersOpen(false)}
+        onSearchChange={setItemSearch}
+        onSectorChange={setSectorFilter}
+        onStatusChange={setStatusFilter}
+        onSortChange={setSortFilter}
+        onClear={() => {
+          setItemSearch("");
+          setSectorFilter("all");
+          setStatusFilter("all");
+          setSortFilter("default");
+        }}
+      />
+
       {showShare && isOwner ? (
         <div className="mt-4">
           <ListSharingPanel
@@ -1020,28 +1072,39 @@ export function ListDetailPage() {
         <PriceCard label="Não precisa" value={notNeededItems.length} />
       </div>
 
-      <SectionHeader title="Itens" action={<AppButton variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={() => navigate(`/app/lists/${id}/edit`)}>Adicionar</AppButton>} />
-      <div className="mb-5 space-y-3 rounded-2xl border border-line bg-white p-3.5 shadow-sm">
-        <SearchBar placeholder="Buscar produto ou marca" value={itemSearch} onChange={(event) => setItemSearch(event.target.value)} />
-        <div className="grid grid-cols-2 gap-2">
-          <label className="block">
-            <span className="mb-1 flex items-center gap-1 text-xs font-semibold text-ink/60"><Tags className="h-3.5 w-3.5" /> Setor</span>
-            <select className="h-11 w-full rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none focus:border-mint" value={sectorFilter} onChange={(event) => setSectorFilter(event.target.value)}>
-              <option value="all">Todos</option>
-              {sectors.map((sector) => <option key={sector} value={sector}>{sector}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="mb-1 flex items-center gap-1 text-xs font-semibold text-ink/60"><Filter className="h-3.5 w-3.5" /> Status</span>
-            <select className="h-11 w-full rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none focus:border-mint" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as ListStatusFilter)}>
-              <option value="all">Todos</option>
-              <option value="pending">Não tenho em casa</option>
-              <option value="at_home">Tenho em casa</option>
-              <option value="not_needed">Não precisa esse mês</option>
-            </select>
-          </label>
+      <SectionHeader
+        title="Itens"
+        action={
+          <div className="flex items-center gap-2">
+            <AppButton className="h-10 px-3" variant="secondary" icon={<SlidersHorizontal className="h-4 w-4" />} onClick={() => setFiltersOpen(true)}>
+              <span className="flex items-center gap-1.5">
+                Filtrar
+                {activeFiltersCount ? <span className="rounded-full bg-mint px-1.5 py-0.5 text-[10px] font-black text-white">{activeFiltersCount}</span> : null}
+              </span>
+            </AppButton>
+            <AppButton className="h-10 px-3" variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={() => navigate(`/app/lists/${id}/edit`)}>
+              Adicionar
+            </AppButton>
+          </div>
+        }
+      />
+      {activeFiltersCount ? (
+        <div className="mb-3 flex items-center justify-between rounded-2xl border border-line bg-white px-3 py-2 text-xs font-semibold text-ink/60 shadow-sm">
+          <span>{activeFiltersCount} filtro(s) ativo(s)</span>
+          <button
+            type="button"
+            className="font-black text-mint"
+            onClick={() => {
+              setItemSearch("");
+              setSectorFilter("all");
+              setStatusFilter("all");
+              setSortFilter("default");
+            }}
+          >
+            Limpar
+          </button>
         </div>
-      </div>
+      ) : null}
       <div className="space-y-3">
         {!currentList.items.length ? <EmptyState title="Adicione produtos ao carrinho para começar sua compra." /> : null}
         {currentList.items.length && !filteredItems.length ? <EmptyState title="Nenhum item corresponde aos filtros selecionados." /> : null}
@@ -1072,6 +1135,23 @@ export function ListDetailPage() {
                         <div className="min-w-0 flex-1">
                           <ListItemRow item={item} />
                         </div>
+                        <button
+                          type="button"
+                          className={[
+                            "grid h-auto w-11 place-items-center rounded-xl transition disabled:cursor-not-allowed disabled:opacity-50",
+                            item.important ? "bg-amber-50 text-amber-500 hover:bg-amber-100" : "bg-paper text-ink/35 hover:bg-line hover:text-ink/60",
+                          ].join(" ")}
+                          onClick={() => setItemImportant.mutate({ itemId: item.id, important: !item.important })}
+                          disabled={setItemImportant.isPending && setItemImportant.variables?.itemId === item.id}
+                          aria-pressed={item.important}
+                          aria-label={item.important ? `Remover ${item.productName} dos importantes` : `Marcar ${item.productName} como importante`}
+                        >
+                          {setItemImportant.isPending && setItemImportant.variables?.itemId === item.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Star className={["h-4 w-4", item.important ? "fill-current" : ""].join(" ")} />
+                          )}
+                        </button>
                         <button
                           type="button"
                           className="grid h-auto w-11 place-items-center rounded-xl bg-paper text-ink transition hover:bg-line disabled:cursor-not-allowed disabled:opacity-50"
@@ -1363,6 +1443,112 @@ function ListActionsDrawer({
               Excluir lista
             </AppButton>
           ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ListFiltersDrawer({
+  open,
+  sectors,
+  itemSearch,
+  sectorFilter,
+  statusFilter,
+  sortFilter,
+  activeFiltersCount,
+  onClose,
+  onSearchChange,
+  onSectorChange,
+  onStatusChange,
+  onSortChange,
+  onClear,
+}: {
+  open: boolean;
+  sectors: string[];
+  itemSearch: string;
+  sectorFilter: string;
+  statusFilter: ListStatusFilter;
+  sortFilter: ListSortFilter;
+  activeFiltersCount: number;
+  onClose: () => void;
+  onSearchChange: (value: string) => void;
+  onSectorChange: (value: string) => void;
+  onStatusChange: (value: ListStatusFilter) => void;
+  onSortChange: (value: ListSortFilter) => void;
+  onClear: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose, open]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-labelledby="list-filters-title">
+      <button type="button" className="absolute inset-0 bg-ink/45 backdrop-blur-[2px]" onClick={onClose} aria-label="Fechar filtros" />
+      <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-xl rounded-t-3xl border-x border-t border-line bg-white px-4 pb-[calc(20px+env(safe-area-inset-bottom))] pt-3 shadow-lift">
+        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-line" />
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p id="list-filters-title" className="text-lg font-bold tracking-tight text-ink">Filtros da lista</p>
+            <p className="text-xs font-medium text-ink/60">Busque, filtre por setor/status e defina a ordem.</p>
+          </div>
+          <button type="button" className="grid h-10 w-10 flex-none place-items-center rounded-xl border border-line bg-white text-ink shadow-sm" onClick={onClose} aria-label="Fechar">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          <SearchBar placeholder="Buscar produto, marca ou setor" value={itemSearch} onChange={(event) => onSearchChange(event.target.value)} />
+          <label className="block">
+            <span className="mb-1 flex items-center gap-1 text-xs font-semibold text-ink/60"><Tags className="h-3.5 w-3.5" /> Setor</span>
+            <select className="h-11 w-full rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none focus:border-mint" value={sectorFilter} onChange={(event) => onSectorChange(event.target.value)}>
+              <option value="all">Todos</option>
+              {sectors.map((sector) => <option key={sector} value={sector}>{sector}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 flex items-center gap-1 text-xs font-semibold text-ink/60"><Filter className="h-3.5 w-3.5" /> Status</span>
+            <select className="h-11 w-full rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none focus:border-mint" value={statusFilter} onChange={(event) => onStatusChange(event.target.value as ListStatusFilter)}>
+              <option value="all">Todos</option>
+              <option value="pending">Não tenho em casa</option>
+              <option value="at_home">Tenho em casa</option>
+              <option value="not_needed">Não precisa esse mês</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 flex items-center gap-1 text-xs font-semibold text-ink/60"><SlidersHorizontal className="h-3.5 w-3.5" /> Ordenação</span>
+            <select className="h-11 w-full rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none focus:border-mint" value={sortFilter} onChange={(event) => onSortChange(event.target.value as ListSortFilter)}>
+              <option value="default">Padrão da lista</option>
+              <option value="important">Importantes primeiro</option>
+              <option value="name_asc">Nome A-Z</option>
+              <option value="name_desc">Nome Z-A</option>
+              <option value="sector">Setor</option>
+              <option value="status">Status</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="mt-4 grid grid-cols-[1fr_1.25fr] gap-2">
+          <AppButton variant="secondary" onClick={onClear} disabled={!activeFiltersCount}>
+            Limpar
+          </AppButton>
+          <AppButton onClick={onClose}>
+            Aplicar filtros
+          </AppButton>
         </div>
       </div>
     </div>

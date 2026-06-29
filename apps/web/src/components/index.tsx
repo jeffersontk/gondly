@@ -12,6 +12,7 @@ import {
   Plus,
   Search,
   ShoppingBasket,
+  Star,
   Store,
   Users,
   X,
@@ -602,9 +603,12 @@ export function ListItemRow({ item }: { item: MarketListItem }) {
         {item.status === "not_needed" ? <X className="h-4 w-4" /> : <Check className="h-4 w-4" />}
       </div>
       <div className="min-w-0 flex-1">
-        <p className={cls("truncate text-sm font-bold", isReduced ? "text-muted" : "text-ink", item.status === "not_needed" && "line-through")}>
-          {item.productName}
-        </p>
+        <div className="flex min-w-0 items-center gap-1.5">
+          {item.important ? <Star className="h-3.5 w-3.5 flex-none fill-amber-400 text-amber-400" /> : null}
+          <p className={cls("truncate text-sm font-bold", isReduced ? "text-muted" : "text-ink", item.status === "not_needed" && "line-through")}>
+            {item.productName}
+          </p>
+        </div>
         <p className={cls("mt-0.5 text-xs", isReduced ? "text-muted" : "text-ink/60")}>
           {item.expectedQuantity ?? 1} {unitLabels[item.unit]} · {listItemStatusLabels[item.status]}
         </p>

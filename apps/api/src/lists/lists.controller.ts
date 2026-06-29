@@ -7,6 +7,7 @@ import {
   CreateListDto,
   CreateListItemDto,
   ImportListItemsDto,
+  SetListItemImportantDto,
   SetListItemStateDto,
   UpdateListDto,
   UpdateListItemDto,
@@ -88,5 +89,15 @@ export class ListsController {
     @Body() dto: SetListItemStateDto,
   ) {
     return this.listsService.setItemState(user.id, id, itemId, dto.status);
+  }
+
+  @Patch(":id/items/:itemId/important")
+  setItemImportant(
+    @CurrentUser() user: JwtUser,
+    @Param("id") id: string,
+    @Param("itemId") itemId: string,
+    @Body() dto: SetListItemImportantDto,
+  ) {
+    return this.listsService.setItemImportant(user.id, id, itemId, dto.important);
   }
 }

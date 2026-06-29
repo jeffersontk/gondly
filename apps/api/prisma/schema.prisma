@@ -190,6 +190,7 @@ model MarketListItem {
   expectedQuantity  Float?
   unit              Unit           @default(un)
   checked           Boolean        @default(false)
+  important         Boolean        @default(false)
   status            ListItemStatus @default(pending)
   assignedToUserId  String?
   assignedAt        DateTime?

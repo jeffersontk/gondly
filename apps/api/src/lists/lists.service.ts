@@ -94,6 +94,7 @@ export class ListsService {
           expectedQuantity: item.expectedQuantity,
           unit: item.unit,
           notes: item.notes,
+          important: item.important,
         })),
       });
 
@@ -115,6 +116,7 @@ export class ListsService {
         expectedQuantity: dto.expectedQuantity,
         unit: dto.unit,
         notes: dto.notes,
+        important: dto.important ?? false,
       },
     });
 
@@ -176,6 +178,7 @@ export class ListsService {
           expectedQuantity: item.expectedQuantity,
           unit: item.unit,
           notes: item.notes,
+          important: item.important ?? false,
         })),
       });
 
@@ -236,6 +239,19 @@ export class ListsService {
 
     await this.syncItemWithActivePurchases(userId, listId, updated);
     this.realtime.emitToList(listId, "listItemUpdated", { listId, item: updated, action: "state_changed", byUserId: userId });
+    return updated;
+  }
+
+  async setItemImportant(userId: string, listId: string, itemId: string, important: boolean) {
+    await this.assertCanEdit(userId, listId);
+    await this.assertItemInList(listId, itemId);
+
+    const updated = await this.prisma.marketListItem.update({
+      where: { id: itemId },
+      data: { important },
+    });
+
+    this.realtime.emitToList(listId, "listItemUpdated", { listId, item: updated, action: "important_changed", byUserId: userId });
     return updated;
   }
 

@@ -86,6 +86,7 @@ export type MarketListItem = {
   expectedQuantity?: number | null;
   unit: Unit;
   checked: boolean;
+  important: boolean;
   status: ListItemStatus;
   assignedToUserId?: string | null;
   purchasedByUserId?: string | null;
