@@ -303,9 +303,10 @@ type ScreenContainerProps = {
   children: ReactNode;
   showBack?: boolean;
   backTo?: string | false;
+  headerAction?: ReactNode;
 };
 
-export function ScreenContainer({ title, subtitle, children, showBack, backTo }: ScreenContainerProps) {
+export function ScreenContainer({ title, subtitle, children, showBack, backTo, headerAction }: ScreenContainerProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const shouldShowBack = backTo !== false && (showBack ?? shouldShowScreenBack(location.pathname));
@@ -323,7 +324,7 @@ export function ScreenContainer({ title, subtitle, children, showBack, backTo }:
   return (
     <main className="safe-bottom mx-auto min-h-screen w-full max-w-xl px-4 pb-6 pt-6 sm:px-6">
       {title ? (
-        <header className="mb-6 flex items-start gap-3">
+        <header className="mb-5 flex items-start gap-3">
           {shouldShowBack ? (
             <button
               type="button"
@@ -338,6 +339,7 @@ export function ScreenContainer({ title, subtitle, children, showBack, backTo }:
             <h1 className="break-words text-2xl font-extrabold tracking-[-0.035em] text-ink">{title}</h1>
             {subtitle ? <p className="mt-1 break-words text-sm leading-5 text-ink/60">{subtitle}</p> : null}
           </div>
+          {headerAction ? <div className="flex-none">{headerAction}</div> : null}
         </header>
       ) : null}
       {children}

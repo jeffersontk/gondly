@@ -560,15 +560,11 @@ function LandingFeature({ icon, title, description }: { icon: ReactNode; title: 
 }
 
 function LandingAppPreview() {
-  const items = [
-    { name: "Arroz integral", meta: "2 kg", price: "R$ 18,90", done: true },
-    { name: "Leite", meta: "6 un", price: "R$ 29,94", done: true },
-    { name: "Banana", meta: "1,3 kg", price: "R$ 9,68", done: false },
-  ];
-
   return (
-    <div className="relative mx-auto min-h-[520px] w-full max-w-[430px]" aria-hidden="true">
-      <div className="absolute left-0 top-12 hidden w-44 rounded-xl border border-line bg-white p-3 shadow-soft sm:block">
+    <div className="relative mx-auto flex min-h-[520px] w-full max-w-[520px] items-center justify-center lg:min-h-[620px]" aria-hidden="true">
+      <div className="absolute inset-x-10 bottom-12 top-16 rounded-full bg-mint/10 blur-3xl" />
+
+      <div className="absolute left-0 top-20 z-0 hidden w-44 rounded-xl border border-line bg-white/95 p-3 shadow-soft backdrop-blur sm:block">
         <div className="flex items-center gap-2">
           <span className="grid h-8 w-8 place-items-center rounded-xl bg-sky/12 text-sky">
             <BarChart3 className="h-4 w-4" />
@@ -580,7 +576,7 @@ function LandingAppPreview() {
         </div>
       </div>
 
-      <div className="absolute bottom-16 right-0 hidden w-48 rounded-xl border border-line bg-white p-3 shadow-soft sm:block">
+      <div className="absolute bottom-20 right-0 z-0 hidden w-48 rounded-xl border border-line bg-white/95 p-3 shadow-soft backdrop-blur sm:block">
         <div className="flex items-center gap-2">
           <span className="grid h-8 w-8 place-items-center rounded-xl bg-tomato/12 text-tomato">
             <RefreshCcw className="h-4 w-4" />
@@ -592,56 +588,14 @@ function LandingAppPreview() {
         </div>
       </div>
 
-      <div className="relative mx-auto w-[284px] rounded-[34px] border-[10px] border-ink bg-ink shadow-lift">
-        <div className="absolute left-1/2 top-0 z-10 h-5 w-24 -translate-x-1/2 rounded-b-[16px] bg-ink" />
-        <div className="aspect-[9/17] overflow-hidden rounded-[24px] bg-paper p-4">
-          <div className="flex items-center justify-between pt-4">
-            <div>
-              <p className="text-xs font-semibold text-ink/45">Hoje</p>
-              <p className="text-xl font-black text-ink">Compra ativa</p>
-            </div>
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-mint text-white">
-              <ShoppingCart className="h-5 w-5" />
-            </span>
-          </div>
-
-          <div className="mt-4 rounded-xl bg-ink p-4 text-white">
-            <p className="text-xs font-semibold text-white/55">Total estimado</p>
-            <p className="mt-1 text-3xl font-black">R$ 84,30</p>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/15">
-              <div className="h-full w-[68%] rounded-full bg-leaf" />
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-2">
-            {items.map((item) => (
-              <div key={item.name} className="flex items-center gap-3 rounded-xl bg-white p-3 shadow-soft">
-                <span className={["grid h-8 w-8 place-items-center rounded-xl border", item.done ? "border-mint bg-mint text-white" : "border-line bg-white text-transparent"].join(" ")}>
-                  <Check className="h-4 w-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-black text-ink">{item.name}</span>
-                  <span className="block text-xs font-semibold text-ink/45">{item.meta}</span>
-                </span>
-                <span className="text-xs font-black text-ink">{item.price}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <div className="rounded-xl bg-sky/12 p-3 text-sky">
-              <Package className="h-4 w-4" />
-              <p className="mt-2 text-lg font-black">18</p>
-              <p className="text-xs font-semibold">itens</p>
-            </div>
-            <div className="rounded-xl bg-tomato/12 p-3 text-tomato">
-              <Store className="h-4 w-4" />
-              <p className="mt-2 text-lg font-black">4</p>
-              <p className="text-xs font-semibold">mercados</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <img
+        src="/gondly-mockup.png"
+        alt=""
+        width="1024"
+        height="1535"
+        className="relative z-10 w-[min(82vw,380px)] max-w-full select-none drop-shadow-[0_28px_55px_rgba(15,23,42,0.18)] lg:w-[430px]"
+        decoding="async"
+      />
     </div>
   );
 }
@@ -1786,7 +1740,9 @@ export function ActivePurchasePage() {
   const [purchaseSearch, setPurchaseSearch] = useState("");
   const [purchaseView, setPurchaseView] = useState<PurchaseViewFilter>("list");
   const [realtimeNotice, setRealtimeNotice] = useState<string | null>(null);
+  const [showStickySummary, setShowStickySummary] = useState(false);
   const [expandedPurchaseCategories, setExpandedPurchaseCategories] = useState<Set<string>>(() => new Set());
+  const totalCardRef = useRef<HTMLDivElement | null>(null);
   const realtimeNoticeTimeoutRef = useRef<number | undefined>(undefined);
   const realtimeRefetchTimeoutRef = useRef<number | undefined>(undefined);
   const purchaseId = routeParams.purchaseId ?? params.get("purchaseId");
@@ -1876,6 +1832,17 @@ export function ActivePurchasePage() {
   useEffect(() => {
     setPurchaseSearch("");
     setExpandedPurchaseCategories(new Set());
+    setShowStickySummary(false);
+  }, [purchase?.id]);
+
+  useEffect(() => {
+    const node = totalCardRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(([entry]) => setShowStickySummary(!entry.isIntersecting), { threshold: 0.15 });
+    observer.observe(node);
+
+    return () => observer.disconnect();
   }, [purchase?.id]);
 
   if (active.isLoading) return <LoadingState />;
@@ -1909,27 +1876,64 @@ export function ActivePurchasePage() {
   }
 
   const purchaseTitle = purchase.sourceList?.name ?? "Compra sem lista";
+  const cartItemsShortLabel = `${cartItemsCount} ${cartItemsCount === 1 ? "item" : "itens"}`;
 
   return (
-    <ScreenContainer title={purchaseTitle} subtitle={`Compra ativa · ${cartItemsLabel}`}>
-      <div className="rounded-[28px] bg-ink p-5 text-white shadow-[0_22px_52px_rgba(15,23,42,0.20)]">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-xs font-black uppercase tracking-[0.12em] text-white/55">Total atual</p>
-            <p className="mt-2 text-4xl font-black tracking-[-0.06em]">{formatBRL(purchase.subtotalCalculated)}</p>
-            <p className="mt-2 text-sm font-semibold text-white/90">{cartItemsLabel}</p>
-          </div>
-          <div className="grid h-14 w-14 flex-none place-items-center rounded-2xl bg-mint text-white shadow-[0_14px_32px_rgba(79,70,229,0.38)]">
-            <ShoppingCart className="h-7 w-7" />
+    <ScreenContainer
+      title={purchaseTitle}
+      subtitle={`Compra ativa · ${cartItemsLabel}`}
+      headerAction={
+        <button
+          type="button"
+          className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-mint px-3 text-xs font-black text-white shadow-soft transition hover:bg-mint/90 active:scale-[0.98]"
+          onClick={() => navigate(`/app/purchase/${purchase.id}/item`)}
+        >
+          <Plus className="h-4 w-4" />
+          Item
+        </button>
+      }
+    >
+      {showStickySummary ? (
+        <div className="fixed inset-x-0 top-0 z-40 border-b border-line bg-white/95 pt-[env(safe-area-inset-top)] shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl">
+          <div className="mx-auto flex w-full max-w-xl items-center gap-2 px-4 py-2.5">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-black text-ink">{purchaseTitle}</p>
+              <p className="mt-0.5 truncate text-[11px] font-semibold text-ink/60">
+                {formatBRL(purchase.subtotalCalculated)} · {cartItemsShortLabel}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="inline-flex h-9 flex-none items-center justify-center rounded-xl bg-mint px-3 text-xs font-black text-white shadow-soft transition hover:bg-mint/90 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => navigate(`/app/purchase/${purchase.id}/finish`)}
+              disabled={outbox.pendingCount > 0}
+            >
+              Finalizar
+            </button>
           </div>
         </div>
-        <p className="mt-4 flex items-center gap-2 text-xs font-medium text-white/60">
+      ) : null}
+
+      <div ref={totalCardRef} className="rounded-3xl bg-ink p-4 text-white shadow-[0_18px_46px_rgba(15,23,42,0.18)]">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-black uppercase tracking-[0.12em] text-white/55">Total atual</p>
+            <p className="mt-1.5 text-3xl font-black tracking-[-0.055em]">{formatBRL(purchase.subtotalCalculated)}</p>
+          </div>
+          <div className="flex flex-none items-center gap-2">
+            <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-white">{cartItemsShortLabel}</span>
+            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-mint text-white shadow-[0_14px_30px_rgba(79,70,229,0.34)]">
+              <ShoppingCart className="h-5 w-5" />
+            </div>
+          </div>
+        </div>
+        <p className="mt-3 flex items-center gap-2 text-xs font-medium text-white/60">
           <span className="grid h-5 w-5 place-items-center rounded-full border border-white/20 text-[11px] font-black">i</span>
           Estimativa antes do caixa
         </p>
       </div>
 
-      <div className="mt-4 grid grid-cols-[1.35fr_1fr] gap-3">
+      <div className="mt-3 grid grid-cols-[1.45fr_1fr] gap-2">
         <AppButton
           variant="primary"
           icon={<Check className="h-4 w-4" />}
@@ -1943,33 +1947,45 @@ export function ActivePurchasePage() {
         </AppButton>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 rounded-[22px] border border-line bg-white p-2 shadow-sm" role="tablist" aria-label="Alternar entre lista e carrinho">
+      <div className="mt-3 grid grid-cols-2 gap-1.5 rounded-2xl border border-line bg-white p-1.5 shadow-sm" role="tablist" aria-label="Alternar entre lista e carrinho">
         <button
           type="button"
           className={[
-            "rounded-2xl px-3 py-3 text-left transition",
-            purchaseView === "list" ? "bg-mint text-white shadow-soft" : "bg-transparent text-ink hover:bg-paper",
+            "flex h-11 items-center justify-between gap-2 rounded-xl px-3 text-sm font-black transition",
+            purchaseView === "list" ? "bg-mint text-white shadow-soft" : "bg-white text-ink hover:bg-paper",
           ].join(" ")}
           onClick={() => setPurchaseView("list")}
           role="tab"
           aria-selected={purchaseView === "list"}
         >
-          <span className="block text-xs font-semibold opacity-75">Lista</span>
-          <span className="mt-0.5 block text-lg font-black">{purchase.items.length}</span>
+          <span>Lista</span>
+          <span className={["rounded-full px-2 py-0.5 text-[11px] font-black", purchaseView === "list" ? "bg-white/15 text-white" : "bg-paper text-ink/60"].join(" ")}>
+            {purchase.items.length}
+          </span>
         </button>
         <button
           type="button"
           className={[
-            "rounded-2xl px-3 py-3 text-left transition",
-            purchaseView === "cart" ? "bg-mint text-white shadow-soft" : "bg-transparent text-ink hover:bg-paper",
+            "flex h-11 items-center justify-between gap-2 rounded-xl px-3 text-sm font-black transition",
+            purchaseView === "cart" ? "bg-mint text-white shadow-soft" : "bg-white text-ink hover:bg-paper",
           ].join(" ")}
           onClick={() => setPurchaseView("cart")}
           role="tab"
           aria-selected={purchaseView === "cart"}
         >
-          <span className="block text-xs font-semibold opacity-75">Carrinho</span>
-          <span className="mt-0.5 block text-lg font-black">{cartItemsCount}</span>
+          <span>Carrinho</span>
+          <span className={["rounded-full px-2 py-0.5 text-[11px] font-black", purchaseView === "cart" ? "bg-white/15 text-white" : "bg-paper text-ink/60"].join(" ")}>
+            {cartItemsCount}
+          </span>
         </button>
+      </div>
+
+      <div className="mt-3 rounded-2xl border border-line bg-white p-2 shadow-sm">
+        <SearchBar
+          placeholder="Buscar produto, marca ou categoria"
+          value={purchaseSearch}
+          onChange={(event) => setPurchaseSearch(event.target.value)}
+        />
       </div>
 
       {outbox.pendingCount > 0 ? (
@@ -1987,16 +2003,8 @@ export function ActivePurchasePage() {
         </div>
       ) : null}
 
-      <SectionHeader title={purchaseView === "cart" ? "Carrinho" : "Lista"} />
-      <div className="mb-4 rounded-[22px] border border-line bg-white p-3 shadow-sm">
-        <SearchBar
-          placeholder="Buscar produto, marca ou categoria"
-          value={purchaseSearch}
-          onChange={(event) => setPurchaseSearch(event.target.value)}
-        />
-      </div>
       {purchaseView === "cart" && cartItemsCount === 0 ? (
-        <div className="mb-4 rounded-[24px] border border-line bg-white p-5 shadow-sm">
+        <div className="mt-3 rounded-2xl border border-line bg-white p-4 shadow-sm">
           <p className="text-base font-black tracking-[-0.02em] text-ink">Seu carrinho ainda está vazio.</p>
           <p className="mt-1 text-sm leading-6 text-ink/60">Adicione produtos conforme for comprando.</p>
           <AppButton className="mt-4" icon={<Plus className="h-4 w-4" />} onClick={() => navigate(`/app/purchase/${purchase.id}/item`)}>
@@ -2004,7 +2012,8 @@ export function ActivePurchasePage() {
           </AppButton>
         </div>
       ) : null}
-      <div className="space-y-3">
+
+      <div className="mt-3 space-y-2.5">
         {purchaseView === "list" && !purchase.items.length ? <EmptyState title="A lista desta compra está vazia." /> : null}
         {visiblePurchaseItems.length > 0 && !filteredPurchaseItems.length ? <EmptyState title="Nenhum produto encontrado." /> : null}
         {groupedPurchaseItems.map((group) => {
@@ -2015,30 +2024,33 @@ export function ActivePurchasePage() {
             <section
               key={group.category}
               className={[
-                "overflow-hidden rounded-[22px] border shadow-sm transition",
-                expanded ? "border-[#C7D2FE] bg-[#EEF2FF]" : "border-line bg-white",
+                "overflow-hidden rounded-2xl border bg-white shadow-sm transition",
+                expanded ? "border-[#C7D2FE] ring-1 ring-[#C7D2FE]/70" : "border-line",
               ].join(" ")}
             >
               <button
                 type="button"
-                className="flex w-full items-center justify-between px-4 py-3.5 text-left text-ink transition"
+                className={[
+                  "flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left text-ink transition",
+                  expanded ? "bg-[#EEF2FF]" : "bg-white hover:bg-paper",
+                ].join(" ")}
                 onClick={() => togglePurchaseCategory(group.category)}
                 aria-expanded={expanded}
                 aria-controls={categoryId}
               >
-                <span className="flex min-w-0 items-center gap-2 text-base font-black">
+                <span className="flex min-w-0 items-center gap-2 text-sm font-black">
                   <Tags className="h-4 w-4 flex-none text-mint" />
                   <span className="truncate">{group.category}</span>
                 </span>
                 <span className="flex flex-none items-center gap-2">
-                  <span className="rounded-full bg-mint/10 px-2.5 py-1 text-xs font-black text-mint">{group.items.length}</span>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-mint shadow-sm">{group.items.length}</span>
                   {expanded ? <ChevronDown className="h-4 w-4 text-ink/60" /> : <ChevronRight className="h-4 w-4 text-ink/45" />}
                 </span>
               </button>
               {expanded ? (
-                <div id={categoryId} className="space-y-2 p-2 pt-0">
+                <div id={categoryId} className="divide-y divide-line/80 border-t border-line bg-white">
                   {group.items.map((item) => (
-                    <PurchaseItemCard key={item.id} item={item} action={<CartItemActions purchaseId={purchase.id} item={item} />} />
+                    <ActivePurchaseItemRow key={item.id} purchaseId={purchase.id} item={item} />
                   ))}
                 </div>
               ) : null}
@@ -2046,27 +2058,44 @@ export function ActivePurchasePage() {
           );
         })}
       </div>
-      <FloatingActionButton label="Item" onClick={() => navigate(`/app/purchase/${purchase.id}/item`)} />
     </ScreenContainer>
   );
 }
 
-function CartItemActions({ purchaseId, item }: { purchaseId: string; item: PurchaseItem }) {
+function ActivePurchaseItemRow({ purchaseId, item }: { purchaseId: string; item: PurchaseItem }) {
   const navigate = useNavigate();
+  const isPending = item.id.startsWith("local-");
+  const pricePaid = Number(item.pricePaid ?? 0);
+  const unitPrice = pricePerUnitFromItem(item);
   const added = Number(item.pricePaid ?? 0) > 0;
+  const itemMeta = `${item.quantity} ${unitLabels[item.unit]} · ${added ? `Preço pago: ${formatBRL(unitPrice)} / ${unitLabels[item.unit]}` : "Último preço: --"}`;
 
   return (
     <button
       type="button"
-      className={[
-        "inline-flex h-10 flex-none items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-black transition active:scale-[0.98]",
-        added ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-mint/10 text-mint hover:bg-mint/15",
-      ].join(" ")}
+      className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition hover:bg-paper/80 active:bg-paper"
       onClick={() => navigate(`/app/purchase/${purchaseId}/item?itemId=${item.id}`)}
-      aria-label={added ? "Editar item adicionado" : "Adicionar item ao carrinho"}
+      aria-label={added ? `Editar ${item.productName} no carrinho` : `Adicionar ${item.productName} ao carrinho`}
     >
-      {added ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-      <span>{added ? "Adicionado" : "Adicionar"}</span>
+      <span className="min-w-0">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm font-black tracking-[-0.01em] text-ink">{item.productName}</span>
+          {isPending ? <span className="rounded-full bg-mint/10 px-2 py-0.5 text-[10px] font-black text-mint">Pendente</span> : null}
+        </span>
+        <span className="mt-0.5 block truncate text-xs font-medium text-ink/55">{itemMeta}</span>
+      </span>
+      <span className="flex flex-none flex-col items-end gap-1">
+        <span
+          className={[
+            "inline-flex h-9 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-black transition",
+            added ? "bg-emerald-50 text-emerald-700" : "border border-mint/35 bg-white text-mint shadow-sm",
+          ].join(" ")}
+        >
+          {added ? <Check className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+          {added ? "Adicionado" : "Adicionar"}
+        </span>
+        {added ? <span className="pr-1 text-xs font-black text-ink">{formatBRL(pricePaid)}</span> : null}
+      </span>
     </button>
   );
 }
@@ -2079,6 +2108,7 @@ export function AddEditCartItemPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [productName, setProductName] = useState("");
+  const [creatingCartSector, setCreatingCartSector] = useState(false);
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   const purchase = active.data?.find((entry) => entry.id === purchaseId);
   const editingItem = purchase?.items.find((item) => item.id === itemId);
@@ -2089,6 +2119,7 @@ export function AddEditCartItemPage() {
   useEffect(() => {
     if (!editingItem) return;
     setProductName(editingItem.productName);
+    setCreatingCartSector(false);
     form.reset({
       productId: editingItem.productId ?? undefined,
       productName: editingItem.productName,
@@ -2142,6 +2173,16 @@ export function AddEditCartItemPage() {
   const watchedQuantity = decimalValue(form.watch("quantity"), 0);
   const watchedUnitPrice = decimalValue(form.watch("pricePaid"), 0);
   const watchedUnit = form.watch("unit");
+  const selectedCartSector = form.watch("category") ?? "";
+  const cartSectors = useMemo(() => {
+    const sectors = new Set(
+      purchase?.items
+        .map((item) => item.category?.trim())
+        .filter((category): category is string => Boolean(category)) ?? [],
+    );
+    if (selectedCartSector.trim()) sectors.add(selectedCartSector.trim());
+    return [...sectors].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [purchase?.items, selectedCartSector]);
   const estimatedItemTotal = roundMoney(watchedQuantity * watchedUnitPrice);
 
   return (
@@ -2167,11 +2208,10 @@ export function AddEditCartItemPage() {
           className="space-y-3"
           onSubmit={form.handleSubmit((values) => {
             const trimmedProductName = productName.trim() || values.productName.trim();
-            save.mutate(toPurchaseItemPayload(values, trimmedProductName));
+            save.mutate(toPurchaseItemPayload({ ...values, category: values.category?.trim() }, trimmedProductName));
           })}
         >
           <input type="hidden" {...form.register("brand")} />
-          <input type="hidden" {...form.register("category")} />
           <ProductSearchInput
             value={productName}
             onChange={(value) => {
@@ -2185,6 +2225,38 @@ export function AddEditCartItemPage() {
               form.setValue("unit", product.defaultUnit);
             }}
           />
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-semibold text-ink">Setor</span>
+            <select
+              className="h-12 w-full rounded-xl border border-line bg-white px-4 text-base text-ink shadow-sm outline-none transition focus:border-mint focus:ring-4 focus:ring-mint/10"
+              value={creatingCartSector ? "__new__" : selectedCartSector}
+              disabled={save.isPending}
+              onChange={(event) => {
+                if (event.target.value === "__new__") {
+                  setCreatingCartSector(true);
+                  form.setValue("category", "");
+                  return;
+                }
+                setCreatingCartSector(false);
+                form.setValue("category", event.target.value);
+              }}
+            >
+              <option value="__new__">+ Criar novo setor</option>
+              <option value="">Sem setor</option>
+              {cartSectors.map((sector) => (
+                <option key={sector} value={sector}>{sector}</option>
+              ))}
+            </select>
+          </label>
+          {creatingCartSector ? (
+            <AppInput
+              label="Nome do novo setor"
+              placeholder="Ex.: Bebidas"
+              autoFocus
+              disabled={save.isPending}
+              {...form.register("category")}
+            />
+          ) : null}
           <div className="grid grid-cols-[1fr_120px] gap-2">
             <QuantityInput label="Quantidade" error={form.formState.errors.quantity?.message} {...form.register("quantity")} />
             <UnitSelect label="Unidade" {...form.register("unit")} />
