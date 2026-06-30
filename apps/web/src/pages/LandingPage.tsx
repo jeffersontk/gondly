@@ -97,10 +97,10 @@ function LandingFeature({ icon, title, description }: { icon: ReactNode; title: 
 
 function LandingAppPreview() {
   return (
-    <div className="relative mx-auto flex min-h-[520px] w-full max-w-[520px] items-center justify-center lg:min-h-[620px]" aria-hidden="true">
-      <div className="absolute inset-x-10 bottom-12 top-16 rounded-full bg-mint/10 blur-3xl" />
+    <div className="relative mx-auto flex min-h-[390px] w-full max-w-[420px] items-center justify-center lg:min-h-[470px]" aria-hidden="true">
+      <div className="absolute inset-x-10 bottom-12 top-16 z-0 rounded-full bg-mint/10 blur-3xl" />
 
-      <div className="absolute left-0 top-20 z-0 hidden w-44 rounded-xl border border-line bg-white/95 p-3 shadow-soft backdrop-blur sm:block">
+      <div className="absolute left-0 top-16 z-20 hidden w-44 rounded-xl border border-line bg-white/95 p-3 shadow-soft backdrop-blur sm:block">
         <div className="flex items-center gap-2">
           <span className="grid h-8 w-8 place-items-center rounded-xl bg-sky/12 text-sky">
             <BarChart3 className="h-4 w-4" />
@@ -112,7 +112,7 @@ function LandingAppPreview() {
         </div>
       </div>
 
-      <div className="absolute bottom-20 right-0 z-0 hidden w-48 rounded-xl border border-line bg-white/95 p-3 shadow-soft backdrop-blur sm:block">
+      <div className="absolute bottom-16 right-0 z-20 hidden w-48 rounded-xl border border-line bg-white/95 p-3 shadow-soft backdrop-blur sm:block">
         <div className="flex items-center gap-2">
           <span className="grid h-8 w-8 place-items-center rounded-xl bg-tomato/12 text-tomato">
             <RefreshCcw className="h-4 w-4" />
@@ -124,14 +124,14 @@ function LandingAppPreview() {
         </div>
       </div>
 
-      <picture>
+      <picture className="relative z-10">
         <source srcSet="/gondly-mockup.webp" type="image/webp" />
         <img
           src="/gondly-mockup.png"
           alt=""
           width="895"
           height="1756"
-          className="relative z-10 w-[min(82vw,380px)] max-w-full select-none drop-shadow-[0_28px_55px_rgba(15,23,42,0.18)] lg:w-[430px]"
+          className="w-[min(58vw,266px)] max-w-full select-none drop-shadow-[0_22px_44px_rgba(15,23,42,0.16)] lg:w-[300px]"
           decoding="async"
         />
       </picture>
