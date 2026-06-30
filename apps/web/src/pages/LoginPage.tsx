@@ -1,16 +1,16 @@
 import { useEffect, useRef } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { LandingPage } from "./LandingPage";
+
+const HOME_ROUTE = "/app/home";
 
 export function LoginPage() {
   const { loginWithGoogleToken } = useAuth();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const signupButtonRef = useRef<HTMLDivElement | null>(null);
   const signinButtonRef = useRef<HTMLDivElement | null>(null);
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
-  const redirectAfterLogin = searchParams.get("redirect") || "/app/home";
 
   useEffect(() => {
     if (!clientId || (!signupButtonRef.current && !signinButtonRef.current)) return;
@@ -20,14 +20,18 @@ export function LoginPage() {
     script.defer = true;
     script.onload = () => {
       window.google?.accounts.id.initialize({
-          client_id: clientId,
-          callback: async (response: { credential: string }) => {
-            await loginWithGoogleToken(response.credential);
-            navigate(redirectAfterLogin);
+        client_id: clientId,
+        callback: async (response: { credential: string }) => {
+          await loginWithGoogleToken(response.credential);
+          navigate(HOME_ROUTE, { replace: true });
         },
       });
 
-      const renderGoogleButton = (element: HTMLElement | null, text: "signin_with" | "signup_with", width: number) => {
+      const renderGoogleButton = (
+        element: HTMLElement | null,
+        text: "signin_with" | "signup_with",
+        width: number,
+      ) => {
         if (!element) return;
         element.innerHTML = "";
         window.google?.accounts.id.renderButton(element, {
@@ -49,7 +53,7 @@ export function LoginPage() {
     return () => {
       script.remove();
     };
-  }, [clientId, loginWithGoogleToken, navigate, redirectAfterLogin]);
+  }, [clientId, loginWithGoogleToken, navigate]);
 
   return <LandingPage clientId={clientId} signinButtonRef={signinButtonRef} signupButtonRef={signupButtonRef} />;
 }

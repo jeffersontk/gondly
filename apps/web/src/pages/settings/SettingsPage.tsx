@@ -23,7 +23,7 @@ export function SettingsPage() {
   }
 
   return (
-    <ScreenContainer title="Ajustes">
+    <ScreenContainer title="Ajustes" backTo="/app/home">
       <div className="rounded-xl bg-white p-4 shadow-soft">
         <div className="flex items-center gap-3">
           <MemberAvatar user={(user as User) ?? { name: "U" }} />

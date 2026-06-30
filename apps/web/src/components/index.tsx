@@ -313,13 +313,18 @@ export function ScreenContainer({ title, subtitle, children, showBack, backTo, h
   const shouldShowBack = backTo !== false && (showBack ?? shouldShowScreenBack(location.pathname));
 
   function handleBack() {
+    if (typeof backTo === "string") {
+      navigate(backTo, { replace: true });
+      return;
+    }
+
     const historyState = window.history.state as { idx?: number } | null;
     if (typeof historyState?.idx === "number" && historyState.idx > 0) {
       navigate(-1);
       return;
     }
 
-    navigate(typeof backTo === "string" ? backTo : getScreenBackFallback(location.pathname), { replace: true });
+    navigate(getScreenBackFallback(location.pathname), { replace: true });
   }
 
   return (

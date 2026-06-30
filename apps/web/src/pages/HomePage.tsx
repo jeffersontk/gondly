@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, BarChart3, ChevronRight, CircleDollarSign, History, Loader2, Package, Plus, ShoppingCart, Sparkles, Store, TrendingUp } from "lucide-react";
@@ -7,18 +7,27 @@ import { AdSlot } from "../lib/ads";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { DashboardReport, MarketList, Purchase } from "../types";
-import { formatBRL, setActivePurchaseCache } from "./shared";
+import { formatBRL, addListCache, setActivePurchaseCache } from "./shared";
+import { PurchaseTitleDialog } from "./purchase/PurchaseTitleDialog";
 
 export function HomePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [purchaseTitleDialogOpen, setPurchaseTitleDialogOpen] = useState(false);
   const dashboard = useQuery({ queryKey: ["dashboard"], queryFn: () => api<DashboardReport>("/reports/dashboard") });
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   const lists = useQuery({ queryKey: ["lists"], queryFn: () => api<MarketList[]>("/lists") });
   const startPurchase = useMutation({
-    mutationFn: () => api<Purchase>("/purchases/start", { method: "POST", body: {} }),
-    onSuccess: (purchase) => {
+    mutationFn: async ({ title }: { title: string }) => {
+      const list = await api<MarketList>("/lists", { method: "POST", body: { name: title } });
+      const purchase = await api<Purchase>("/purchases/start", { method: "POST", body: { sourceListId: list.id } });
+      return { list, purchase };
+    },
+    onSuccess: ({ list, purchase }) => {
+      setPurchaseTitleDialogOpen(false);
+      queryClient.setQueryData<MarketList>(["list", list.id], list);
+      queryClient.setQueryData<MarketList[]>(["lists"], (current) => addListCache(current, list));
       queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => setActivePurchaseCache(current, purchase));
       navigate(`/app/purchase/${purchase.id}`);
     },
@@ -98,7 +107,7 @@ export function HomePage() {
               <button
                 type="button"
                 className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-black text-mint shadow-soft transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70"
-                onClick={() => startPurchase.mutate()}
+                onClick={() => setPurchaseTitleDialogOpen(true)}
                 disabled={startPurchase.isPending}
               >
                 {startPurchase.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
@@ -190,6 +199,14 @@ export function HomePage() {
       </section>
 
       <AdSlot className="mt-5" />
+      <PurchaseTitleDialog
+        open={purchaseTitleDialogOpen}
+        loading={startPurchase.isPending}
+        onClose={() => {
+          if (!startPurchase.isPending) setPurchaseTitleDialogOpen(false);
+        }}
+        onConfirm={(title) => startPurchase.mutate({ title })}
+      />
     </ScreenContainer>
   );
 }

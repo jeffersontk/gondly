@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "nest start --watch",
+    "dev": "prisma generate && nest start --watch",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "test": "node --require ts-node/register --test \"test/**/*.spec.ts\"",

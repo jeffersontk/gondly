@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShoppingCart } from "lucide-react";
@@ -5,20 +6,44 @@ import { AppButton, EmptyState, MarketListCard, ScreenContainer, SectionHeader }
 import { api } from "../../lib/api";
 import { discardQueuedPurchaseChanges } from "../../lib/offlineQueue";
 import type { MarketList, Purchase } from "../../types";
-import { setActivePurchaseCache } from "../shared";
+import { addListCache, setActivePurchaseCache } from "../shared";
+import { PurchaseTitleDialog } from "./PurchaseTitleDialog";
+
+type StartPurchaseInput = {
+  sourceListId?: string;
+  cancelActive?: boolean;
+  title?: string;
+};
 
 export function StartPurchasePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [titleDialogRequest, setTitleDialogRequest] = useState<{ cancelActive?: boolean } | null>(null);
   const lists = useQuery({ queryKey: ["lists"], queryFn: () => api<MarketList[]>("/lists") });
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   const activePurchase = active.data?.[0];
   const start = useMutation({
-    mutationFn: (payload: { sourceListId?: string; cancelActive?: boolean } = {}) =>
-      api<Purchase>("/purchases/start", { method: "POST", body: payload }),
-    onSuccess: (purchase, variables) => {
+    mutationFn: async (payload: StartPurchaseInput = {}) => {
+      if (payload.title) {
+        const list = await api<MarketList>("/lists", { method: "POST", body: { name: payload.title } });
+        const purchase = await api<Purchase>("/purchases/start", {
+          method: "POST",
+          body: { sourceListId: list.id, cancelActive: payload.cancelActive },
+        });
+        return { list, purchase };
+      }
+
+      const purchase = await api<Purchase>("/purchases/start", { method: "POST", body: payload });
+      return { purchase };
+    },
+    onSuccess: ({ list, purchase }, variables) => {
+      setTitleDialogRequest(null);
       if (variables.cancelActive && activePurchase) {
         void discardQueuedPurchaseChanges(activePurchase.id);
+      }
+      if (list) {
+        queryClient.setQueryData<MarketList>(["list", list.id], list);
+        queryClient.setQueryData<MarketList[]>(["lists"], (current) => addListCache(current, list));
       }
       queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => setActivePurchaseCache(current, purchase));
       navigate(`/app/purchase/${purchase.id}`);
@@ -37,8 +62,8 @@ export function StartPurchasePage() {
             </AppButton>
             <AppButton
               variant="danger"
-              onClick={() => start.mutate({ cancelActive: true })}
-              loading={start.isPending && Boolean(start.variables?.cancelActive)}
+              onClick={() => setTitleDialogRequest({ cancelActive: true })}
+              loading={start.isPending && Boolean(start.variables?.cancelActive && start.variables?.title)}
               loadingLabel="Iniciando"
               disabled={start.isPending && !start.variables?.cancelActive}
             >
@@ -50,8 +75,8 @@ export function StartPurchasePage() {
       <AppButton
         full
         icon={<ShoppingCart className="h-5 w-5" />}
-        onClick={() => start.mutate({})}
-        loading={start.isPending && !start.variables?.sourceListId && !start.variables?.cancelActive}
+        onClick={() => setTitleDialogRequest({})}
+        loading={start.isPending && Boolean(start.variables?.title && !start.variables?.cancelActive)}
         loadingLabel="Iniciando"
         disabled={start.isPending && Boolean(start.variables?.sourceListId || start.variables?.cancelActive)}
       >
@@ -70,6 +95,14 @@ export function StartPurchasePage() {
         ))}
         {!lists.isLoading && !lists.data?.length ? <EmptyState title="Você ainda não tem listas. Crie sua primeira lista de mercado." /> : null}
       </div>
+      <PurchaseTitleDialog
+        open={Boolean(titleDialogRequest)}
+        loading={start.isPending && Boolean(start.variables?.title)}
+        onClose={() => {
+          if (!start.isPending) setTitleDialogRequest(null);
+        }}
+        onConfirm={(title) => start.mutate({ ...(titleDialogRequest ?? {}), title })}
+      />
     </ScreenContainer>
   );
 }
