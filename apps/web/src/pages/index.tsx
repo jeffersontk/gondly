@@ -6,10 +6,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   Archive,
+  ArrowRight,
   BarChart3,
   Check,
   ChevronDown,
   ChevronRight,
+  CircleDollarSign,
   Copy,
   Edit,
   FileText,
@@ -28,6 +30,7 @@ import {
   Share2,
   SlidersHorizontal,
   ShoppingCart,
+  Sparkles,
   Star,
   Store,
   Tags,
@@ -51,6 +54,7 @@ import {
   queuePurchaseItemUpsert,
   syncOutbox,
   useOutboxStatus,
+  type PurchaseItemPayload,
 } from "../lib/offlineQueue";
 import {
   AppButton,
@@ -157,21 +161,70 @@ function roundMoney(value: number) {
   return Math.round(value * 100) / 100;
 }
 
-function toPurchaseItemPayload(values: CartItemForm, productName: string): CartItemForm {
+type PriceInputMode = "unit" | "kg" | "total";
+
+function isWeightUnit(unit: Unit) {
+  return unit === "g" || unit === "kg";
+}
+
+function calculatePurchaseItemTotal(quantity: number, unit: Unit, priceInput: number, priceInputMode: PriceInputMode) {
+  if (priceInputMode === "total") return roundMoney(priceInput);
+  if (priceInputMode === "kg") {
+    const quantityInKg = unit === "g" ? quantity / 1000 : quantity;
+    return roundMoney(quantityInKg * priceInput);
+  }
+  return roundMoney(quantity * priceInput);
+}
+
+function priceInputFromItem(item: PurchaseItem): { pricePaid: number; priceInputMode: PriceInputMode } {
+  const quantity = Number(item.quantity ?? 0);
+  const totalPaid = Number(item.pricePaid ?? 0);
+
+  if (isWeightUnit(item.unit)) {
+    const normalizedPrice = item.unitPriceNormalized != null ? Number(item.unitPriceNormalized) : null;
+    if (normalizedPrice != null && Number.isFinite(normalizedPrice)) {
+      return { pricePaid: roundMoney(normalizedPrice), priceInputMode: "kg" };
+    }
+
+    const quantityInKg = item.unit === "g" ? quantity / 1000 : quantity;
+    if (quantityInKg > 0) return { pricePaid: roundMoney(totalPaid / quantityInKg), priceInputMode: "kg" };
+    return { pricePaid: totalPaid, priceInputMode: "kg" };
+  }
+
+  if (quantity > 0) return { pricePaid: roundMoney(totalPaid / quantity), priceInputMode: "unit" };
+  return { pricePaid: totalPaid, priceInputMode: "total" };
+}
+
+function purchaseItemPriceDescription(item: PurchaseItem) {
+  const totalPaid = Number(item.pricePaid ?? 0);
+  const quantityLabel = `${item.quantity} ${unitLabels[item.unit]}`;
+  if (totalPaid <= 0) return `${quantityLabel} · Último preço: --`;
+
+  const normalizedPrice = item.unitPriceNormalized != null ? Number(item.unitPriceNormalized) : null;
+  if (normalizedPrice != null && Number.isFinite(normalizedPrice) && item.normalizedUnitLabel) {
+    return `${quantityLabel} · ${formatBRL(normalizedPrice)}/${item.normalizedUnitLabel} · Total ${formatBRL(totalPaid)}`;
+  }
+
+  const quantity = Number(item.quantity ?? 0);
+  const unitPrice = quantity > 0 ? roundMoney(totalPaid / quantity) : totalPaid;
+  return `${quantityLabel} · ${formatBRL(unitPrice)} / ${unitLabels[item.unit]} · Total ${formatBRL(totalPaid)}`;
+}
+
+function toPurchaseItemPayload(values: CartItemForm, productName: string): PurchaseItemPayload {
+  const pricePaid = calculatePurchaseItemTotal(Number(values.quantity ?? 0), values.unit, Number(values.pricePaid ?? 0), values.priceInputMode);
   return {
-    ...values,
+    productId: values.productId,
     productName,
-    pricePaid: roundMoney(Number(values.quantity ?? 0) * Number(values.pricePaid ?? 0)),
+    brand: values.brand,
+    category: values.category,
+    quantity: values.quantity,
+    unit: values.unit,
+    pricePaid,
+    notes: values.notes,
   };
 }
 
-function pricePerUnitFromItem(item: PurchaseItem) {
-  const quantity = Number(item.quantity ?? 0);
-  if (quantity <= 0) return Number(item.pricePaid ?? 0);
-  return roundMoney(Number(item.pricePaid ?? 0) / quantity);
-}
-
-function optimisticCartItem(values: CartItemForm, id?: string, currentItem?: PurchaseItem): PurchaseItem {
+function optimisticCartItem(values: PurchaseItemPayload, id?: string, currentItem?: PurchaseItem): PurchaseItem {
   return {
     id: id ?? createLocalItemId(),
     sourceListItemId: currentItem?.sourceListItemId ?? null,
@@ -430,6 +483,7 @@ const cartItemSchema = z.object({
   category: z.string().optional(),
   quantity: positiveDecimalNumber("Quantidade deve ser maior que zero"),
   unit: z.enum(units),
+  priceInputMode: z.enum(["unit", "kg", "total"]).default("unit"),
   pricePaid: decimalNumber("Preco deve ser maior ou igual a zero"),
   notes: z.string().optional(),
 });
@@ -625,6 +679,7 @@ export function HomePage() {
   const queryClient = useQueryClient();
   const dashboard = useQuery({ queryKey: ["dashboard"], queryFn: () => api<DashboardReport>("/reports/dashboard") });
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
+  const lists = useQuery({ queryKey: ["lists"], queryFn: () => api<MarketList[]>("/lists") });
   const startPurchase = useMutation({
     mutationFn: () => api<Purchase>("/purchases/start", { method: "POST", body: {} }),
     onSuccess: (purchase) => {
@@ -637,46 +692,168 @@ export function HomePage() {
   if (dashboard.isError) return <ScreenContainer title="Gondly"><ErrorState /></ScreenContainer>;
 
   const data = dashboard.data;
+  const activePurchase = active.data?.[0];
+  const activePurchaseTitle = activePurchase?.sourceList?.name ?? "Compra sem lista";
+  const activeCartItems = activePurchase?.items.filter((item) => Number(item.pricePaid ?? 0) > 0).length ?? 0;
+  const activeCartItemsLabel = `${activeCartItems} ${activeCartItems === 1 ? "item" : "itens"} no carrinho`;
+  const firstName = user?.name?.trim().split(/\s+/)[0] || "bem-vindo";
+  const hasLists = Boolean(lists.data?.length);
+  const lastPurchaseDate = formatShortDate(data?.lastPurchase?.completedAt ?? data?.lastPurchase?.startedAt);
+  const lastPurchaseAmount = data?.lastPurchase ? data.lastPurchase.finalPaidAmount ?? data.lastPurchase.subtotalCalculated : 0;
 
   return (
-    <ScreenContainer title="Gondly" subtitle={user?.name}>
-      <div className="grid grid-cols-2 gap-3">
-        <SummaryCard label="Gasto no mes" value={formatBRL(data?.totalSpentMonth ?? 0)} />
-        <SummaryCard label="Compras" value={data?.monthPurchasesCount ?? 0} tone="sky" />
-        <SummaryCard label="Mercado" value={data?.favoriteMarket ?? "-"} tone="leaf" />
-        <SummaryCard label="Economia" value={formatBRL(data?.estimatedSavings ?? 0)} tone="tomato" />
-      </div>
+    <ScreenContainer>
+      <header className="mb-5 pr-12">
+        <p className="text-3xl font-black tracking-[-0.055em] text-ink">Gondly</p>
+        <div className="mt-7">
+          <h1 className="text-3xl font-black tracking-[-0.045em] text-ink">Olá, {firstName}</h1>
+          <p className="mt-1 text-base font-medium text-ink/60">Organize, compare e economize.</p>
+        </div>
+      </header>
 
-      <SectionHeader title="Atalhos" />
-      <div className="grid grid-cols-2 gap-3">
-        <Shortcut to="/app/lists/new" icon={<Plus className="h-5 w-5" />} label="Nova lista" />
-        <Shortcut to="/app/history" icon={<History className="h-5 w-5" />} label="Historico" />
-        <Shortcut to="/app/compare" icon={<BarChart3 className="h-5 w-5" />} label="Precos" />
-        <Shortcut to="/app/markets" icon={<Package className="h-5 w-5" />} label="Mercados" />
-      </div>
+      <section className="rounded-[28px] bg-mint p-5 text-white shadow-[0_18px_44px_rgba(79,70,229,0.28)]">
+        {active.isLoading ? (
+          <div className="flex items-center gap-3">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <div>
+              <p className="text-sm font-semibold text-white/70">Compra</p>
+              <p className="text-xl font-black tracking-[-0.03em]">Verificando compra ativa...</p>
+            </div>
+          </div>
+        ) : activePurchase ? (
+          <>
+            <div className="flex items-start justify-between gap-3">
+              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/12 text-white">
+                <ShoppingCart className="h-6 w-6" />
+              </span>
+              <span className="grid h-12 w-12 place-items-center rounded-2xl border border-white/20 bg-white/10 text-white">
+                <Package className="h-5 w-5" />
+              </span>
+            </div>
+            <div className="mt-4">
+              <p className="text-sm font-semibold text-white/70">Compra em andamento</p>
+              <h2 className="mt-1 truncate text-2xl font-black tracking-[-0.04em]">{activePurchaseTitle}</h2>
+              <p className="mt-2 text-base font-semibold text-white/80">
+                {formatBRL(activePurchase.subtotalCalculated)} · {activeCartItemsLabel}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-black text-mint shadow-soft transition active:scale-[0.99]"
+              onClick={() => navigate(`/app/purchase/${activePurchase.id}`)}
+            >
+              Continuar compra
+              <ArrowRight className="h-5 w-5" />
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="flex items-start justify-between gap-3">
+              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/12 text-white">
+                <ShoppingCart className="h-6 w-6" />
+              </span>
+              <span className="grid h-12 w-12 place-items-center rounded-2xl border border-white/20 bg-white/10 text-white">
+                <Plus className="h-5 w-5" />
+              </span>
+            </div>
+            <h2 className="mt-4 text-2xl font-black tracking-[-0.04em]">Nova compra</h2>
+            <p className="mt-2 text-sm leading-6 text-white/78">Registre os preços enquanto compra e compare depois.</p>
+            <div className="mt-5 grid gap-2">
+              <button
+                type="button"
+                className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-black text-mint shadow-soft transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70"
+                onClick={() => startPurchase.mutate()}
+                disabled={startPurchase.isPending}
+              >
+                {startPurchase.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
+                Iniciar compra
+              </button>
+              {hasLists ? (
+                <button
+                  type="button"
+                  className="h-12 rounded-2xl border border-white/20 bg-white/10 px-4 text-sm font-black text-white transition active:scale-[0.99]"
+                  onClick={() => navigate("/app/purchase/start")}
+                >
+                  Usar lista existente
+                </button>
+              ) : null}
+            </div>
+          </>
+        )}
+      </section>
 
-      <SectionHeader title="Compra" />
-      {active.data?.length ? (
-        <AppButton full icon={<ShoppingCart className="h-5 w-5" />} onClick={() => navigate(`/app/purchase/${active.data[0].id}`)}>
-          Continuar compra
-        </AppButton>
-      ) : (
-        <StartPurchasePanel onStart={() => startPurchase.mutate()} loading={startPurchase.isPending} />
-      )}
+      <section className="mt-4 rounded-[24px] border border-line bg-white p-4 shadow-sm">
+        <h2 className="text-base font-black tracking-[-0.02em] text-ink">Resumo do mês</h2>
+        <div className="mt-3 grid grid-cols-2 overflow-hidden rounded-2xl border border-line">
+          <HomeMetric icon={<CircleDollarSign className="h-5 w-5" />} label="Gasto no mês" value={formatBRL(data?.totalSpentMonth ?? 0)} />
+          <HomeMetric icon={<Package className="h-5 w-5" />} label="Compras" value={data?.monthPurchasesCount ?? 0} />
+          <HomeMetric icon={<Store className="h-5 w-5" />} label="Mercado" value={data?.favoriteMarket ?? "-"} />
+          <HomeMetric icon={<TrendingUp className="h-5 w-5" />} label="Economia" value={formatBRL(data?.estimatedSavings ?? 0)} />
+        </div>
+      </section>
 
-      <SectionHeader title="Ultima compra" />
-      {data?.lastPurchase ? (
-        <button onClick={() => navigate(`/app/history/${data.lastPurchase?.id}`)} className="w-full rounded-2xl border border-line bg-white p-4 text-left shadow-sm transition hover:border-mint/25 hover:shadow-soft">
-          <p className="text-sm font-bold text-ink">{data.lastPurchase.market?.name ?? "Mercado"}</p>
-          <p className="mt-1 text-xs font-medium text-ink/60">{formatBRL(data.lastPurchase.finalPaidAmount ?? data.lastPurchase.subtotalCalculated)}</p>
+      <section className="mt-5">
+        <h2 className="mb-3 text-base font-black tracking-[-0.02em] text-ink">Atalhos</h2>
+        <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
+          <HomeShortcut to="/app/lists/new" icon={<Plus className="h-5 w-5" />} label="Nova lista" />
+          <HomeShortcut to="/app/compare" icon={<BarChart3 className="h-5 w-5" />} label="Comparar preços" />
+          <HomeShortcut to="/app/markets" icon={<Store className="h-5 w-5" />} label="Mercados" />
+          <HomeShortcut to="/app/history" icon={<History className="h-5 w-5" />} label="Histórico" />
+        </div>
+      </section>
+
+      <section className="mt-5">
+        <h2 className="mb-3 text-base font-black tracking-[-0.02em] text-ink">Última compra</h2>
+        {data?.lastPurchase ? (
+          <button
+            type="button"
+            onClick={() => navigate(`/app/history/${data.lastPurchase?.id}`)}
+            className="flex w-full items-center gap-3 rounded-2xl border border-line bg-white p-4 text-left shadow-sm transition hover:border-mint/25 hover:shadow-soft active:scale-[0.99]"
+          >
+            <span className="grid h-12 w-12 flex-none place-items-center rounded-2xl bg-mint/10 text-mint">
+              <Store className="h-6 w-6" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-lg font-black tracking-[-0.03em] text-ink">{data.lastPurchase.market?.name ?? "Mercado"}</span>
+              <span className="mt-0.5 block text-sm font-semibold text-ink/55">
+                {formatBRL(lastPurchaseAmount)}{lastPurchaseDate ? ` · ${lastPurchaseDate}` : ""}
+              </span>
+            </span>
+            <span className="inline-flex flex-none items-center gap-1 text-sm font-black text-mint">
+              Ver detalhes
+              <ChevronRight className="h-5 w-5" />
+            </span>
+          </button>
+        ) : (
+          <div className="rounded-2xl border border-line bg-white p-4 text-sm font-semibold text-ink/55 shadow-sm">
+            Nenhuma compra registrada ainda.
+          </div>
+        )}
+      </section>
+
+      <section className="mt-5 rounded-[24px] border border-mint/20 bg-mint/5 p-4 shadow-sm">
+        <div className="flex gap-3">
+          <span className="grid h-12 w-12 flex-none place-items-center rounded-2xl bg-mint text-white shadow-soft">
+            <Sparkles className="h-6 w-6" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-base font-black tracking-[-0.02em] text-mint">Comparação inteligente</h2>
+            <p className="mt-1 text-sm leading-6 text-ink/60">
+              Quando você repetir itens, o Gondly mostra qual mercado saiu mais barato com base nas suas compras anteriores.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-mint/20 bg-white text-sm font-black text-mint shadow-sm transition active:scale-[0.99]"
+          onClick={() => navigate("/app/compare")}
+        >
+          Comparar preços
+          <ArrowRight className="h-4 w-4" />
         </button>
-      ) : (
-        <EmptyState title="Nenhuma compra registrada ainda." />
-      )}
+      </section>
 
-      <div className="mt-4">
-        <AdSlot />
-      </div>
+      <AdSlot className="mt-5" />
     </ScreenContainer>
   );
 }
@@ -2252,9 +2429,8 @@ function ActivePurchaseItemRow({ purchaseId, item }: { purchaseId: string; item:
   const navigate = useNavigate();
   const isPending = item.id.startsWith("local-");
   const pricePaid = Number(item.pricePaid ?? 0);
-  const unitPrice = pricePerUnitFromItem(item);
   const added = Number(item.pricePaid ?? 0) > 0;
-  const itemMeta = `${item.quantity} ${unitLabels[item.unit]} · ${added ? `Preço pago: ${formatBRL(unitPrice)} / ${unitLabels[item.unit]}` : "Último preço: --"}`;
+  const itemMeta = purchaseItemPriceDescription(item);
 
   return (
     <button
@@ -2295,15 +2471,17 @@ export function AddEditCartItemPage() {
   const queryClient = useQueryClient();
   const [productName, setProductName] = useState("");
   const [creatingCartSector, setCreatingCartSector] = useState(false);
+  const previousCartUnitRef = useRef<Unit | undefined>(undefined);
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   const purchase = active.data?.find((entry) => entry.id === purchaseId);
   const editingItem = purchase?.items.find((item) => item.id === itemId);
   const form = useForm<CartItemForm>({
     resolver: zodResolver(cartItemSchema),
-    defaultValues: { productName: "", quantity: 1, unit: "un", pricePaid: 0 },
+    defaultValues: { productName: "", quantity: 1, unit: "un", priceInputMode: "unit", pricePaid: 0 },
   });
   useEffect(() => {
     if (!editingItem) return;
+    const priceInput = priceInputFromItem(editingItem);
     setProductName(editingItem.productName);
     setCreatingCartSector(false);
     form.reset({
@@ -2313,12 +2491,13 @@ export function AddEditCartItemPage() {
       category: editingItem.category ?? "",
       quantity: editingItem.quantity,
       unit: editingItem.unit,
-      pricePaid: pricePerUnitFromItem(editingItem),
+      priceInputMode: priceInput.priceInputMode,
+      pricePaid: priceInput.pricePaid,
       notes: editingItem.notes ?? "",
     });
   }, [editingItem, form]);
   const save = useMutation({
-    mutationFn: (values: CartItemForm) => {
+    mutationFn: (values: PurchaseItemPayload) => {
       if (isLocalId(itemId)) throw new Error("Item pendente de sincronização.");
       return itemId
         ? api<Purchase>(`/purchases/${purchaseId}/items/${itemId}`, { method: "PUT", body: values })
@@ -2359,6 +2538,8 @@ export function AddEditCartItemPage() {
   const watchedQuantity = decimalValue(form.watch("quantity"), 0);
   const watchedUnitPrice = decimalValue(form.watch("pricePaid"), 0);
   const watchedUnit = form.watch("unit");
+  const watchedPriceInputMode = form.watch("priceInputMode");
+  const supportsKgPrice = isWeightUnit(watchedUnit);
   const selectedCartSector = form.watch("category") ?? "";
   const cartSectors = useMemo(() => {
     const sectors = new Set(
@@ -2369,7 +2550,35 @@ export function AddEditCartItemPage() {
     if (selectedCartSector.trim()) sectors.add(selectedCartSector.trim());
     return [...sectors].sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [purchase?.items, selectedCartSector]);
-  const estimatedItemTotal = roundMoney(watchedQuantity * watchedUnitPrice);
+  useEffect(() => {
+    if (previousCartUnitRef.current === watchedUnit) return;
+    previousCartUnitRef.current = watchedUnit;
+
+    if (supportsKgPrice && form.getValues("priceInputMode") === "unit") {
+      form.setValue("priceInputMode", "kg");
+      return;
+    }
+
+    if (!supportsKgPrice && form.getValues("priceInputMode") === "kg") {
+      form.setValue("priceInputMode", "unit");
+    }
+  }, [form, supportsKgPrice, watchedUnit]);
+
+  const estimatedItemTotal = calculatePurchaseItemTotal(watchedQuantity, watchedUnit, watchedUnitPrice, watchedPriceInputMode);
+  const quantityInKg = watchedUnit === "g" ? watchedQuantity / 1000 : watchedUnit === "kg" ? watchedQuantity : null;
+  const estimatedPricePerKg = quantityInKg && quantityInKg > 0 ? roundMoney(estimatedItemTotal / quantityInKg) : null;
+  const priceInputLabel =
+    watchedPriceInputMode === "kg"
+      ? "Preço por kg"
+      : watchedPriceInputMode === "total"
+        ? "Total pago no item"
+        : `Preço por ${unitLabels[watchedUnit]}`;
+  const priceFormula =
+    watchedPriceInputMode === "total"
+      ? "Usando o total pago informado."
+      : watchedPriceInputMode === "kg"
+        ? `${watchedQuantity || 0} ${unitLabels[watchedUnit]} com ${formatBRL(watchedUnitPrice || 0)}/kg`
+        : `${watchedQuantity || 0} ${unitLabels[watchedUnit]} × ${formatBRL(watchedUnitPrice || 0)}`;
 
   return (
     <main className="fixed inset-0 z-50 flex items-end bg-ink/35 px-3 pb-0 pt-8 backdrop-blur-sm sm:items-center sm:p-4">
@@ -2447,13 +2656,29 @@ export function AddEditCartItemPage() {
             <QuantityInput label="Quantidade" error={form.formState.errors.quantity?.message} {...form.register("quantity")} />
             <UnitSelect label="Unidade" {...form.register("unit")} />
           </div>
-          <MoneyInput label="Preço unitário" error={form.formState.errors.pricePaid?.message} {...form.register("pricePaid")} />
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-semibold text-ink">Tipo de preço</span>
+            <select
+              className="h-12 w-full rounded-xl border border-line bg-white px-4 text-base text-ink shadow-sm outline-none transition focus:border-mint focus:ring-4 focus:ring-mint/10"
+              {...form.register("priceInputMode")}
+            >
+              <option value="unit">Preço unitário</option>
+              {supportsKgPrice ? <option value="kg">Preço por kg</option> : null}
+              <option value="total">Total pago</option>
+            </select>
+          </label>
+          <MoneyInput label={priceInputLabel} error={form.formState.errors.pricePaid?.message} {...form.register("pricePaid")} />
           <div className="rounded-2xl border border-line bg-white p-3 text-sm shadow-sm">
             <p className="font-semibold text-ink/60">Total deste item</p>
             <p className="mt-1 text-xl font-black tracking-[-0.03em] text-ink">{formatBRL(estimatedItemTotal)}</p>
             <p className="mt-1 text-xs text-ink/50">
-              {watchedQuantity || 0} {unitLabels[watchedUnit]} × {formatBRL(watchedUnitPrice || 0)}
+              {priceFormula}
             </p>
+            {estimatedPricePerKg != null ? (
+              <p className="mt-2 rounded-xl bg-mint/10 px-3 py-2 text-xs font-black text-mint">
+                Preço por kg: {formatBRL(estimatedPricePerKg)}
+              </p>
+            ) : null}
           </div>
           <AppInput label="Observação opcional" {...form.register("notes")} />
           <AppButton
@@ -3063,13 +3288,34 @@ function BillingReturnPage({ title, description, successLabel }: { title: string
   );
 }
 
-function Shortcut({ to, icon, label }: { to: string; icon: ReactNode; label: string }) {
+function HomeMetric({ icon, label, value }: { icon: ReactNode; label: string; value: ReactNode }) {
   return (
-    <Link to={to} className="flex h-24 flex-col justify-between rounded-2xl border border-line bg-white p-4 text-ink shadow-sm transition duration-200 hover:border-mint/25 hover:shadow-soft active:scale-[0.99]">
-      <span className="grid h-9 w-9 place-items-center rounded-xl bg-mint/10 text-mint">{icon}</span>
-      <span className="text-sm font-bold">{label}</span>
+    <div className="min-w-0 border-b border-r border-line p-3.5 even:border-r-0 [&:nth-last-child(-n+2)]:border-b-0">
+      <div className="flex items-center gap-3">
+        <span className="grid h-9 w-9 flex-none place-items-center rounded-2xl bg-mint/10 text-mint">{icon}</span>
+        <span className="min-w-0">
+          <span className="block truncate text-xs font-semibold text-ink/55">{label}</span>
+          <span className="mt-0.5 block truncate text-base font-black tracking-[-0.03em] text-ink">{value}</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function HomeShortcut({ to, icon, label }: { to: string; icon: ReactNode; label: string }) {
+  return (
+    <Link to={to} className="flex min-h-20 items-center gap-3 border-b border-r border-line p-4 text-ink transition hover:bg-paper active:bg-paper even:border-r-0 [&:nth-last-child(-n+2)]:border-b-0">
+      <span className="grid h-11 w-11 flex-none place-items-center rounded-2xl bg-mint/10 text-mint">{icon}</span>
+      <span className="min-w-0 truncate text-sm font-black tracking-[-0.015em]">{label}</span>
     </Link>
   );
+}
+
+function formatShortDate(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", "");
 }
 
 function formatBRL(value: number) {

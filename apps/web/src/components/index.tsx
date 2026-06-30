@@ -417,7 +417,13 @@ export function PurchaseItemCard({ item, action }: { item: PurchaseItem; action?
   const isPending = item.id.startsWith("local-");
   const pricePaid = Number(item.pricePaid ?? 0);
   const hasPrice = pricePaid > 0;
-  const unitPrice = item.quantity > 0 ? pricePaid / item.quantity : pricePaid;
+  const normalizedPrice = item.unitPriceNormalized != null ? Number(item.unitPriceNormalized) : null;
+  const priceDescription =
+    hasPrice && normalizedPrice != null && Number.isFinite(normalizedPrice) && item.normalizedUnitLabel
+      ? `${formatBRL(normalizedPrice)}/${item.normalizedUnitLabel} · Total ${formatBRL(pricePaid)}`
+      : hasPrice
+        ? `${formatBRL(item.quantity > 0 ? pricePaid / item.quantity : pricePaid)} / ${unitLabels[item.unit]} · Total ${formatBRL(pricePaid)}`
+        : "Último preço: --";
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-white p-3.5 shadow-sm transition hover:border-mint/25 hover:shadow-soft">
@@ -427,7 +433,7 @@ export function PurchaseItemCard({ item, action }: { item: PurchaseItem; action?
           {isPending ? <span className="rounded-full bg-mint/10 px-2 py-0.5 text-[11px] font-bold text-mint">Pendente</span> : null}
         </div>
         <p className="mt-0.5 text-xs text-ink/60">
-          {item.quantity} {unitLabels[item.unit]} · {hasPrice ? `${formatBRL(unitPrice)} / ${unitLabels[item.unit]} · Total ${formatBRL(pricePaid)}` : "Último preço: --"}
+          {item.quantity} {unitLabels[item.unit]} · {priceDescription}
         </p>
       </div>
       {action}
