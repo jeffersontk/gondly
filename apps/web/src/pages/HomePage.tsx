@@ -1,0 +1,225 @@
+import { type ReactNode } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowRight, BarChart3, ChevronRight, CircleDollarSign, History, Loader2, Package, Plus, ShoppingCart, Sparkles, Store, TrendingUp } from "lucide-react";
+import { AppButton, EmptyState, ErrorState, LoadingState, ScreenContainer } from "../components";
+import { AdSlot } from "../lib/ads";
+import { api } from "../lib/api";
+import { useAuth } from "../lib/auth";
+import type { DashboardReport, MarketList, Purchase } from "../types";
+import { formatBRL, setActivePurchaseCache } from "./shared";
+
+export function HomePage() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const dashboard = useQuery({ queryKey: ["dashboard"], queryFn: () => api<DashboardReport>("/reports/dashboard") });
+  const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
+  const lists = useQuery({ queryKey: ["lists"], queryFn: () => api<MarketList[]>("/lists") });
+  const startPurchase = useMutation({
+    mutationFn: () => api<Purchase>("/purchases/start", { method: "POST", body: {} }),
+    onSuccess: (purchase) => {
+      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => setActivePurchaseCache(current, purchase));
+      navigate(`/app/purchase/${purchase.id}`);
+    },
+  });
+
+  if (dashboard.isLoading) return <LoadingState />;
+  if (dashboard.isError) return <ScreenContainer title="Gondly"><ErrorState /></ScreenContainer>;
+
+  const data = dashboard.data;
+  const activePurchase = active.data?.[0];
+  const activePurchaseTitle = activePurchase?.sourceList?.name ?? "Compra sem lista";
+  const activeCartItems = activePurchase?.items.filter((item) => Number(item.pricePaid ?? 0) > 0).length ?? 0;
+  const activeCartItemsLabel = `${activeCartItems} ${activeCartItems === 1 ? "item" : "itens"} no carrinho`;
+  const firstName = user?.name?.trim().split(/\s+/)[0] || "bem-vindo";
+  const hasLists = Boolean(lists.data?.length);
+  const lastPurchaseDate = formatShortDate(data?.lastPurchase?.completedAt ?? data?.lastPurchase?.startedAt);
+  const lastPurchaseAmount = data?.lastPurchase ? data.lastPurchase.finalPaidAmount ?? data.lastPurchase.subtotalCalculated : 0;
+
+  return (
+    <ScreenContainer>
+      <header className="mb-5 pr-12">
+        <p className="text-3xl font-black tracking-[-0.055em] text-ink">Gondly</p>
+        <div className="mt-7">
+          <h1 className="text-3xl font-black tracking-[-0.045em] text-ink">Olá, {firstName}</h1>
+          <p className="mt-1 text-base font-medium text-ink/60">Organize, compare e economize.</p>
+        </div>
+      </header>
+
+      <section className="rounded-[28px] bg-mint p-5 text-white shadow-[0_18px_44px_rgba(79,70,229,0.28)]">
+        {active.isLoading ? (
+          <div className="flex items-center gap-3">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <div>
+              <p className="text-sm font-semibold text-white/70">Compra</p>
+              <p className="text-xl font-black tracking-[-0.03em]">Verificando compra ativa...</p>
+            </div>
+          </div>
+        ) : activePurchase ? (
+          <>
+            <div className="flex items-start justify-between gap-3">
+              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/12 text-white">
+                <ShoppingCart className="h-6 w-6" />
+              </span>
+              <span className="grid h-12 w-12 place-items-center rounded-2xl border border-white/20 bg-white/10 text-white">
+                <Package className="h-5 w-5" />
+              </span>
+            </div>
+            <div className="mt-4">
+              <p className="text-sm font-semibold text-white/70">Compra em andamento</p>
+              <h2 className="mt-1 truncate text-2xl font-black tracking-[-0.04em]">{activePurchaseTitle}</h2>
+              <p className="mt-2 text-base font-semibold text-white/80">
+                {formatBRL(activePurchase.subtotalCalculated)} · {activeCartItemsLabel}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-black text-mint shadow-soft transition active:scale-[0.99]"
+              onClick={() => navigate(`/app/purchase/${activePurchase.id}`)}
+            >
+              Continuar compra
+              <ArrowRight className="h-5 w-5" />
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="flex items-start justify-between gap-3">
+              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/12 text-white">
+                <ShoppingCart className="h-6 w-6" />
+              </span>
+              <span className="grid h-12 w-12 place-items-center rounded-2xl border border-white/20 bg-white/10 text-white">
+                <Plus className="h-5 w-5" />
+              </span>
+            </div>
+            <h2 className="mt-4 text-2xl font-black tracking-[-0.04em]">Nova compra</h2>
+            <p className="mt-2 text-sm leading-6 text-white/78">Registre os preços enquanto compra e compare depois.</p>
+            <div className="mt-5 grid gap-2">
+              <button
+                type="button"
+                className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-black text-mint shadow-soft transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70"
+                onClick={() => startPurchase.mutate()}
+                disabled={startPurchase.isPending}
+              >
+                {startPurchase.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
+                Iniciar compra
+              </button>
+              {hasLists ? (
+                <button
+                  type="button"
+                  className="h-12 rounded-2xl border border-white/20 bg-white/10 px-4 text-sm font-black text-white transition active:scale-[0.99]"
+                  onClick={() => navigate("/app/purchase/start")}
+                >
+                  Usar lista existente
+                </button>
+              ) : null}
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="mt-4 rounded-[24px] border border-line bg-white p-4 shadow-sm">
+        <h2 className="text-base font-black tracking-[-0.02em] text-ink">Resumo do mês</h2>
+        <div className="mt-3 grid grid-cols-2 overflow-hidden rounded-2xl border border-line">
+          <HomeMetric icon={<CircleDollarSign className="h-5 w-5" />} label="Gasto no mês" value={formatBRL(data?.totalSpentMonth ?? 0)} />
+          <HomeMetric icon={<Package className="h-5 w-5" />} label="Compras" value={data?.monthPurchasesCount ?? 0} />
+          <HomeMetric icon={<Store className="h-5 w-5" />} label="Mercado" value={data?.favoriteMarket ?? "-"} />
+          <HomeMetric icon={<TrendingUp className="h-5 w-5" />} label="Economia" value={formatBRL(data?.estimatedSavings ?? 0)} />
+        </div>
+      </section>
+
+      <section className="mt-5">
+        <h2 className="mb-3 text-base font-black tracking-[-0.02em] text-ink">Atalhos</h2>
+        <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
+          <HomeShortcut to="/app/lists/new" icon={<Plus className="h-5 w-5" />} label="Nova lista" />
+          <HomeShortcut to="/app/compare" icon={<BarChart3 className="h-5 w-5" />} label="Comparar preços" />
+          <HomeShortcut to="/app/markets" icon={<Store className="h-5 w-5" />} label="Mercados" />
+          <HomeShortcut to="/app/history" icon={<History className="h-5 w-5" />} label="Histórico" />
+        </div>
+      </section>
+
+      <section className="mt-5">
+        <h2 className="mb-3 text-base font-black tracking-[-0.02em] text-ink">Última compra</h2>
+        {data?.lastPurchase ? (
+          <button
+            type="button"
+            onClick={() => navigate(`/app/history/${data.lastPurchase?.id}`)}
+            className="flex w-full items-center gap-3 rounded-2xl border border-line bg-white p-4 text-left shadow-sm transition hover:border-mint/25 hover:shadow-soft active:scale-[0.99]"
+          >
+            <span className="grid h-12 w-12 flex-none place-items-center rounded-2xl bg-mint/10 text-mint">
+              <Store className="h-6 w-6" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-lg font-black tracking-[-0.03em] text-ink">{data.lastPurchase.market?.name ?? "Mercado"}</span>
+              <span className="mt-0.5 block text-sm font-semibold text-ink/55">
+                {formatBRL(lastPurchaseAmount)}{lastPurchaseDate ? ` · ${lastPurchaseDate}` : ""}
+              </span>
+            </span>
+            <span className="inline-flex flex-none items-center gap-1 text-sm font-black text-mint">
+              Ver detalhes
+              <ChevronRight className="h-5 w-5" />
+            </span>
+          </button>
+        ) : (
+          <div className="rounded-2xl border border-line bg-white p-4 text-sm font-semibold text-ink/55 shadow-sm">
+            Nenhuma compra registrada ainda.
+          </div>
+        )}
+      </section>
+
+      <section className="mt-5 rounded-[24px] border border-mint/20 bg-mint/5 p-4 shadow-sm">
+        <div className="flex gap-3">
+          <span className="grid h-12 w-12 flex-none place-items-center rounded-2xl bg-mint text-white shadow-soft">
+            <Sparkles className="h-6 w-6" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-base font-black tracking-[-0.02em] text-mint">Comparação inteligente</h2>
+            <p className="mt-1 text-sm leading-6 text-ink/60">
+              Quando você repetir itens, o Gondly mostra qual mercado saiu mais barato com base nas suas compras anteriores.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-mint/20 bg-white text-sm font-black text-mint shadow-sm transition active:scale-[0.99]"
+          onClick={() => navigate("/app/compare")}
+        >
+          Comparar preços
+          <ArrowRight className="h-4 w-4" />
+        </button>
+      </section>
+
+      <AdSlot className="mt-5" />
+    </ScreenContainer>
+  );
+}
+
+function HomeMetric({ icon, label, value }: { icon: ReactNode; label: string; value: ReactNode }) {
+  return (
+    <div className="min-w-0 border-b border-r border-line p-3.5 even:border-r-0 [&:nth-last-child(-n+2)]:border-b-0">
+      <div className="flex items-center gap-3">
+        <span className="grid h-9 w-9 flex-none place-items-center rounded-2xl bg-mint/10 text-mint">{icon}</span>
+        <span className="min-w-0">
+          <span className="block truncate text-xs font-semibold text-ink/55">{label}</span>
+          <span className="mt-0.5 block truncate text-base font-black tracking-[-0.03em] text-ink">{value}</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function HomeShortcut({ to, icon, label }: { to: string; icon: ReactNode; label: string }) {
+  return (
+    <Link to={to} className="flex min-h-20 items-center gap-3 border-b border-r border-line p-4 text-ink transition hover:bg-paper active:bg-paper even:border-r-0 [&:nth-last-child(-n+2)]:border-b-0">
+      <span className="grid h-11 w-11 flex-none place-items-center rounded-2xl bg-mint/10 text-mint">{icon}</span>
+      <span className="min-w-0 truncate text-sm font-black tracking-[-0.015em]">{label}</span>
+    </Link>
+  );
+}
+
+function formatShortDate(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", "");
+}

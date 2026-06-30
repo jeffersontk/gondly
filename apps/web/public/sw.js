@@ -1,5 +1,12 @@
-const CACHE_NAME = "gondly-cache-v3";
-const APP_SHELL = ["/", "/manifest.webmanifest", "/icons/gondly-icon.png", "/gondly-logo.png"];
+const CACHE_NAME = "gondly-cache-v4";
+const APP_SHELL = ["/", "/manifest.webmanifest", "/icons/gondly-icon-192x192.png", "/icons/apple-touch-icon.png", "/gondly-logo-small.webp"];
+const STATIC_PUBLIC_ASSETS = new Set([
+  "/manifest.webmanifest",
+  "/gondly-logo-small.webp",
+  "/gondly-logo-small.png",
+  "/gondly-logo.webp",
+  "/gondly-mockup.webp",
+]);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
@@ -72,8 +79,7 @@ function isStaticAsset(request) {
   return (
     url.pathname.startsWith("/assets/") ||
     url.pathname.startsWith("/icons/") ||
-    url.pathname === "/gondly-logo.png" ||
-    url.pathname === "/manifest.webmanifest"
+    STATIC_PUBLIC_ASSETS.has(url.pathname)
   );
 }
 
