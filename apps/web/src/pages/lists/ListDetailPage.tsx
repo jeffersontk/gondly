@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Loader2, Menu, Plus, ShoppingCart, SlidersHorizontal, Star, Tags, Trash2 } from "lucide-react";
@@ -7,7 +7,7 @@ import { AppButton, ConfirmDialog, EmptyState, ErrorState, ListItemRow, LoadingS
 import { AdSlot } from "../../lib/ads";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
-import { parseShoppingListFile, type ParsedShoppingList } from "../../lib/listImport";
+import type { ParsedShoppingList } from "../../lib/listImport";
 import { discardQueuedPurchaseChanges } from "../../lib/offlineQueue";
 import { createRealtimeSocket } from "../../lib/realtime";
 import type { ListInvite, MarketList, MarketListItem, Purchase } from "../../types";
@@ -28,8 +28,13 @@ import {
 } from "../shared";
 import { ListActionsDrawer } from "./ListActionsDrawer";
 import { ListFiltersDrawer } from "./ListFiltersDrawer";
-import { ListImportPanel } from "./ListImportPanel";
 import { ListSharingPanel } from "./SharedListMembers";
+
+const ListImportPanel = lazy(() =>
+  import("./ListImportPanel").then((module) => ({
+    default: module.ListImportPanel,
+  })),
+);
 
 export function ListDetailPage() {
   const { id = "" } = useParams();
@@ -130,6 +135,7 @@ export function ListDetailPage() {
     setImportError(null);
     setImportPreview(null);
     try {
+      const { parseShoppingListFile } = await import("../../lib/listImport");
       setImportPreview(await parseShoppingListFile(file));
     } catch (error) {
       setImportError(error instanceof Error ? error.message : "Não foi possível ler o arquivo.");
@@ -375,20 +381,22 @@ export function ListDetailPage() {
 
       {showImport ? (
         <div className="mt-4">
-          <ListImportPanel
-            preview={importPreview}
-            parsing={importParsing}
-            importing={importItems.isPending}
-            error={importError}
-            onFile={handleImportFile}
-            onClear={() => {
-              setImportPreview(null);
-              setImportError(null);
-            }}
-            onImport={() => {
-              if (importPreview) importItems.mutate(importPreview);
-            }}
-          />
+          <Suspense fallback={<ImportPanelFallback />}>
+            <ListImportPanel
+              preview={importPreview}
+              parsing={importParsing}
+              importing={importItems.isPending}
+              error={importError}
+              onFile={handleImportFile}
+              onClear={() => {
+                setImportPreview(null);
+                setImportError(null);
+              }}
+              onImport={() => {
+                if (importPreview) importItems.mutate(importPreview);
+              }}
+            />
+          </Suspense>
         </div>
       ) : null}
 
@@ -528,5 +536,14 @@ export function ListDetailPage() {
         confirmLoading={start.isPending}
       />
     </ScreenContainer>
+  );
+}
+
+function ImportPanelFallback() {
+  return (
+    <div className="rounded-xl border border-line bg-white p-4 shadow-soft">
+      <div className="h-4 w-36 rounded-full bg-paper" />
+      <div className="mt-3 h-11 rounded-xl bg-paper" />
+    </div>
   );
 }

@@ -144,7 +144,7 @@ const SettingsPage = lazy(() =>
 
 export function App() {
   return (
-    <Suspense fallback={<LoadingState />}>
+    <Suspense fallback={<RouteLoadingFallback />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route
@@ -247,6 +247,17 @@ export function App() {
         <Route path="*" element={<Navigate to="/app/home" replace />} />
       </Routes>
     </Suspense>
+  );
+}
+
+function RouteLoadingFallback() {
+  return (
+    <main className="mx-auto min-h-screen w-full max-w-xl px-4 pt-6">
+      <div className="h-8 w-28 rounded-full bg-white shadow-sm" />
+      <div className="mt-8 h-6 w-40 rounded-full bg-white shadow-sm" />
+      <div className="mt-3 h-4 w-56 rounded-full bg-white shadow-sm" />
+      <div className="mt-6 h-32 rounded-2xl bg-white shadow-sm" />
+    </main>
   );
 }
 
