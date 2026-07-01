@@ -152,16 +152,17 @@ function GoogleAuthButton({
   return (
     <div
       className={[
-        "relative overflow-hidden rounded-full shadow-soft",
+        "relative overflow-hidden rounded-full bg-white shadow-soft",
         className,
       ].join(" ")}
-      onClick={() => trackEvent("click_cta_access_app", { source, method: "google" })}
+      aria-label={label}
+      onClickCapture={() => trackEvent("click_cta_access_app", { source, method: "google" })}
     >
-      <div className="flex h-full min-h-[inherit] w-full items-center justify-center gap-2 rounded-full border border-line bg-white px-4 text-sm font-semibold text-ink">
+      <div className="pointer-events-none absolute inset-0 flex h-full min-h-[inherit] w-full items-center justify-center gap-2 rounded-full border border-line bg-white px-4 text-sm font-semibold text-ink">
         <span className="text-base font-black text-[#4285F4]">G</span>
         <span>{label}</span>
       </div>
-      <div ref={buttonRef} className="absolute inset-0 z-10 opacity-0" />
+      <div ref={buttonRef} className="relative z-10 flex min-h-[inherit] w-full items-center justify-center" />
     </div>
   );
 }

@@ -4,6 +4,50 @@ import { useAuth } from "../lib/auth";
 import { LandingPage } from "./LandingPage";
 
 const HOME_ROUTE = "/app/home";
+const GOOGLE_SCRIPT_ID = "google-identity-services";
+const GOOGLE_SCRIPT_SRC = "https://accounts.google.com/gsi/client";
+
+function loadGoogleIdentityScript() {
+  return new Promise<void>((resolve, reject) => {
+    if (window.google?.accounts.id) {
+      resolve();
+      return;
+    }
+
+    const existingScript = document.getElementById(GOOGLE_SCRIPT_ID) as HTMLScriptElement | null;
+    if (existingScript) {
+      if (existingScript.dataset.ready === "true") {
+        reject(new Error("Google Identity script loaded without API."));
+        return;
+      }
+      existingScript.addEventListener("load", () => resolve(), { once: true });
+      existingScript.addEventListener(
+        "error",
+        () => {
+          existingScript.remove();
+          reject(new Error("Google Identity script failed to load."));
+        },
+        { once: true },
+      );
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = GOOGLE_SCRIPT_ID;
+    script.src = GOOGLE_SCRIPT_SRC;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      script.dataset.ready = "true";
+      resolve();
+    };
+    script.onerror = () => {
+      script.remove();
+      reject(new Error("Google Identity script failed to load."));
+    };
+    document.head.appendChild(script);
+  });
+}
 
 export function LoginPage() {
   const { loginWithGoogleToken } = useAuth();
@@ -14,11 +58,10 @@ export function LoginPage() {
 
   useEffect(() => {
     if (!clientId || (!signupButtonRef.current && !signinButtonRef.current)) return;
-    const script = document.createElement("script");
-    script.src = "https://accounts.google.com/gsi/client";
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
+    let cancelled = false;
+
+    const renderGoogleButtons = () => {
+      if (cancelled) return;
       window.google?.accounts.id.initialize({
         client_id: clientId,
         callback: async (response: { credential: string }) => {
@@ -49,9 +92,13 @@ export function LoginPage() {
       renderGoogleButton(signinButtonRef.current, "signin_with", 198);
       renderGoogleButton(signupButtonRef.current, "signup_with", 260);
     };
-    document.head.appendChild(script);
+
+    void loadGoogleIdentityScript().then(renderGoogleButtons).catch(() => undefined);
+
     return () => {
-      script.remove();
+      cancelled = true;
+      signinButtonRef.current?.replaceChildren();
+      signupButtonRef.current?.replaceChildren();
     };
   }, [clientId, loginWithGoogleToken, navigate]);
 
