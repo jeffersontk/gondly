@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, Plus } from "lucide-react";
 import type { Unit } from "@gondly/types";
 import { AppButton, AppInput, ProductSearchInput, QuantityInput, ScreenContainer, SectionHeader, UnitSelect, unitLabels } from "../../components";
+import { sanitizeAnalyticsCategory, trackEvent } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import type { MarketList, MarketListItem } from "../../types";
 import { ItemFeedback } from "../../components/ItemFeedback";
@@ -45,6 +46,9 @@ export function CreateEditListPage() {
     onSuccess: (saved) => {
       queryClient.setQueryData<MarketList>(["list", saved.id], (current) => mergeMarketList(current, saved));
       queryClient.setQueryData<MarketList[]>(["lists"], (current) => (isEdit ? updateListsCache(current, saved) : addListCache(current, saved)));
+      if (!isEdit) {
+        trackEvent("create_list", { list_id: saved.id, source: "lists", items_count: saved.items.length });
+      }
       navigate(`/app/lists/${saved.id}`);
     },
   });
@@ -60,6 +64,13 @@ export function CreateEditListPage() {
       itemForm.reset({ productName: "", category: item.category ?? "", expectedQuantity: 1, unit: "un" });
       setCreatingSector(false);
       queryClient.setQueryData<MarketList>(["list", id], (current) => addListItemCache(current, item));
+      trackEvent("add_item_to_list", {
+        list_id: id,
+        source: "list_edit",
+        category: sanitizeAnalyticsCategory(item.category),
+        unit: item.unit,
+        quantity: item.expectedQuantity ?? 1,
+      });
     },
     onError: () => {
       setItemFeedback({ tone: "error", message: "Não foi possível adicionar o item. Tente novamente." });

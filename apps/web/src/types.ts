@@ -189,6 +189,6 @@ export type InsightsReport = {
 
 export type ProductPriceDetailsReport = {
   history: unknown[];
-  markets: Array<{ marketName: string; averagePrice: number }>;
-  best: { marketName: string; averagePrice: number } | null;
+  markets: Array<{ marketId: string; marketName: string; averagePrice: number }>;
+  best: { marketId: string; marketName: string; averagePrice: number } | null;
 };

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, BarChart3, ChevronRight, CircleDollarSign, History, Loader2, Package, Plus, ShoppingCart, Sparkles, Store, TrendingUp } from "lucide-react";
 import { AppButton, EmptyState, ErrorState, LoadingState, ScreenContainer } from "../components";
 import { AdSlot } from "../lib/ads";
+import { trackEvent } from "../lib/analytics";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { DashboardReport, MarketList, Purchase } from "../types";
@@ -29,6 +30,14 @@ export function HomePage() {
       queryClient.setQueryData<MarketList>(["list", list.id], list);
       queryClient.setQueryData<MarketList[]>(["lists"], (current) => addListCache(current, list));
       queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => setActivePurchaseCache(current, purchase));
+      trackEvent("create_list", { list_id: list.id, source: "home_start_purchase", items_count: list.items.length });
+      trackEvent("start_purchase", {
+        purchase_id: purchase.id,
+        source: "home",
+        has_source_list: true,
+        items_count: purchase.items.length,
+        cart_items_count: purchase.items.filter((item) => Number(item.pricePaid ?? 0) > 0).length,
+      });
       navigate(`/app/purchase/${purchase.id}`);
     },
   });
@@ -85,7 +94,15 @@ export function HomePage() {
             <button
               type="button"
               className="mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-black text-mint shadow-soft transition active:scale-[0.99]"
-              onClick={() => navigate(`/app/purchase/${activePurchase.id}`)}
+              onClick={() => {
+                trackEvent("continue_purchase", {
+                  purchase_id: activePurchase.id,
+                  source: "home",
+                  items_count: activePurchase.items.length,
+                  cart_items_count: activeCartItems,
+                });
+                navigate(`/app/purchase/${activePurchase.id}`);
+              }}
             >
               Continuar compra
               <ArrowRight className="h-5 w-5" />
@@ -117,7 +134,10 @@ export function HomePage() {
                 <button
                   type="button"
                   className="h-12 rounded-2xl border border-white/20 bg-white/10 px-4 text-sm font-black text-white transition active:scale-[0.99]"
-                  onClick={() => navigate("/app/purchase/start")}
+                  onClick={() => {
+                    trackEvent("continue_purchase", { source: "home_existing_list" });
+                    navigate("/app/purchase/start");
+                  }}
                 >
                   Usar lista existente
                 </button>
@@ -140,8 +160,18 @@ export function HomePage() {
       <section className="mt-5">
         <h2 className="mb-3 text-base font-black tracking-[-0.02em] text-ink">Atalhos</h2>
         <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
-          <HomeShortcut to="/app/lists/new" icon={<Plus className="h-5 w-5" />} label="Nova lista" />
-          <HomeShortcut to="/app/compare" icon={<BarChart3 className="h-5 w-5" />} label="Comparar preços" />
+          <HomeShortcut
+            to="/app/lists/new"
+            icon={<Plus className="h-5 w-5" />}
+            label="Nova lista"
+            onClick={() => trackEvent("click_create_list_shortcut", { source: "home" })}
+          />
+          <HomeShortcut
+            to="/app/compare"
+            icon={<BarChart3 className="h-5 w-5" />}
+            label="Comparar preços"
+            onClick={() => trackEvent("click_compare_shortcut", { source: "home" })}
+          />
           <HomeShortcut to="/app/markets" icon={<Store className="h-5 w-5" />} label="Mercados" />
           <HomeShortcut to="/app/history" icon={<History className="h-5 w-5" />} label="Histórico" />
         </div>
@@ -191,7 +221,10 @@ export function HomePage() {
         <button
           type="button"
           className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-mint/20 bg-white text-sm font-black text-mint shadow-sm transition active:scale-[0.99]"
-          onClick={() => navigate("/app/compare")}
+          onClick={() => {
+            trackEvent("click_compare_shortcut", { source: "home_comparison_card" });
+            navigate("/app/compare");
+          }}
         >
           Comparar preços
           <ArrowRight className="h-4 w-4" />
@@ -225,9 +258,9 @@ function HomeMetric({ icon, label, value }: { icon: ReactNode; label: string; va
   );
 }
 
-function HomeShortcut({ to, icon, label }: { to: string; icon: ReactNode; label: string }) {
+function HomeShortcut({ to, icon, label, onClick }: { to: string; icon: ReactNode; label: string; onClick?: () => void }) {
   return (
-    <Link to={to} className="flex min-h-20 items-center gap-3 border-b border-r border-line p-4 text-ink transition hover:bg-paper active:bg-paper even:border-r-0 [&:nth-last-child(-n+2)]:border-b-0">
+    <Link to={to} onClick={onClick} className="flex min-h-20 items-center gap-3 border-b border-r border-line p-4 text-ink transition hover:bg-paper active:bg-paper even:border-r-0 [&:nth-last-child(-n+2)]:border-b-0">
       <span className="grid h-11 w-11 flex-none place-items-center rounded-2xl bg-mint/10 text-mint">{icon}</span>
       <span className="min-w-0 truncate text-sm font-black tracking-[-0.015em]">{label}</span>
     </Link>

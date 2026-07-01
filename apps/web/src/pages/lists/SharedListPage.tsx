@@ -1,9 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, UserPlus } from "lucide-react";
 import { AppButton, ErrorState, LoadingState, MemberAvatar, ScreenContainer } from "../../components";
 import { ItemFeedback } from "../../components/ItemFeedback";
+import { trackEvent } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import type { MarketList, ShareLinkInfo } from "../../types";
 
@@ -11,6 +12,7 @@ export function SharedListPage() {
   const { token = "" } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const acceptedTrackedRef = useRef(false);
   const info = useQuery({
     queryKey: ["share-link", token],
     queryFn: () => api<ShareLinkInfo>(`/lists/share-links/${token}`),
@@ -23,11 +25,18 @@ export function SharedListPage() {
       queryClient.setQueryData<ShareLinkInfo>(["share-link", token], (current) =>
         current ? { ...current, accessStatus: result.status } : current,
       );
+      if (result.status === "accepted" || result.status === "owner") {
+        trackEvent("accept_list_invite", { list_id: result.listId, method: "share_link", role: result.status });
+      }
     },
   });
 
   useEffect(() => {
     if (info.data?.accessStatus !== "accepted" && info.data?.accessStatus !== "owner") return;
+    if (!acceptedTrackedRef.current) {
+      acceptedTrackedRef.current = true;
+      trackEvent("accept_list_invite", { list_id: info.data.listId, method: "share_link", role: info.data.accessStatus });
+    }
 
     let cancelled = false;
     const listId = info.data.listId;

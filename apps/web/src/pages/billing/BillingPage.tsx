@@ -1,10 +1,9 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import { AppButton, MonetizationBadge, ScreenContainer } from "../../components";
+import { trackEvent } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import { useAds } from "../../lib/ads";
-import { useAuth } from "../../lib/auth";
 import { formatBRL } from "../shared";
 
 export function BillingPage() {
@@ -14,6 +13,12 @@ export function BillingPage() {
   const checkout = useMutation({
     mutationFn: () => api<{ checkoutUrl: string; purchaseId: string }>("/billing/remove-ads/checkout", { method: "POST" }),
     onSuccess: (response) => {
+      trackEvent("begin_remove_ads_checkout", {
+        purchase_id: response.purchaseId,
+        value: offer?.price ?? 19.9,
+        currency: offer?.currency ?? "BRL",
+        provider: "mercado_pago",
+      });
       window.location.href = response.checkoutUrl;
     },
   });
@@ -40,7 +45,20 @@ export function BillingPage() {
             <p className="mt-2 text-sm text-ink/60">Use o Gondly com uma experiencia mais limpa. Pague uma vez e nao veja mais anuncios.</p>
             <p className="mt-4 text-2xl font-black text-mint">{formatBRL(offer?.price ?? 19.9)}</p>
             <p className="mt-2 text-xs text-ink/50">Este pagamento remove apenas os anuncios. Recursos futuros poderao ser vendidos separadamente.</p>
-            <AppButton className="mt-4" full onClick={() => checkout.mutate()} loading={checkout.isPending} loadingLabel="Abrindo checkout">
+            <AppButton
+              className="mt-4"
+              full
+              onClick={() => {
+                trackEvent("click_remove_ads", {
+                  value: offer?.price ?? 19.9,
+                  currency: offer?.currency ?? "BRL",
+                  provider: "mercado_pago",
+                });
+                checkout.mutate();
+              }}
+              loading={checkout.isPending}
+              loadingLabel="Abrindo checkout"
+            >
               {`Remover anuncios por ${formatBRL(offer?.price ?? 19.9)}`}
             </AppButton>
           </div>

@@ -1,7 +1,9 @@
+import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { RefreshCcw } from "lucide-react";
 import { AppButton, ErrorState, LoadingState, PurchaseItemCard, ScreenContainer, SectionHeader, SummaryCard } from "../../components";
+import { trackEvent } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import type { MarketList, Purchase } from "../../types";
 import { formatBRL } from "../shared";
@@ -14,6 +16,17 @@ export function PurchaseDetailPage() {
     mutationFn: () => api<MarketList>(`/purchases/${id}/duplicate-as-list`, { method: "POST" }),
     onSuccess: (list) => navigate(`/app/lists/${list.id}`),
   });
+
+  useEffect(() => {
+    if (!purchase.data) return;
+    trackEvent("view_purchase_detail", {
+      purchase_id: purchase.data.id,
+      market_id: purchase.data.marketId,
+      items_count: purchase.data.items.length,
+      subtotal_calculated: purchase.data.subtotalCalculated,
+      final_paid_amount: purchase.data.finalPaidAmount,
+    });
+  }, [purchase.data?.id]);
 
   if (purchase.isLoading) return <LoadingState />;
   if (!purchase.data) return <ScreenContainer title="Compra"><ErrorState /></ScreenContainer>;

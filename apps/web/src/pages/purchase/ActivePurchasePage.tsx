@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronRight, Plus, ShoppingCart, Tags, X } from "lucide-react";
 import { AppButton, EmptyState, LoadingState, ScreenContainer, SearchBar } from "../../components";
+import { trackEvent, trackSafeSearch } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { discardQueuedPurchaseChanges, useOutboxStatus } from "../../lib/offlineQueue";
@@ -18,6 +19,7 @@ import {
   removeRealtimePurchaseItemCache,
   updateRealtimePurchaseTotalCache,
   upsertRealtimePurchaseItemCache,
+  useDebouncedValue,
 } from "../shared";
 
 export function ActivePurchasePage() {
@@ -31,6 +33,7 @@ export function ActivePurchasePage() {
   const [realtimeNotice, setRealtimeNotice] = useState<string | null>(null);
   const [showStickySummary, setShowStickySummary] = useState(false);
   const [expandedPurchaseCategories, setExpandedPurchaseCategories] = useState<Set<string>>(() => new Set());
+  const debouncedPurchaseSearch = useDebouncedValue(purchaseSearch);
   const totalCardRef = useRef<HTMLDivElement | null>(null);
   const realtimeNoticeTimeoutRef = useRef<number | undefined>(undefined);
   const realtimeRefetchTimeoutRef = useRef<number | undefined>(undefined);
@@ -43,6 +46,12 @@ export function ActivePurchasePage() {
     onSuccess: (cancelled) => {
       void discardQueuedPurchaseChanges(cancelled.id);
       queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => removeActivePurchaseCache(current, cancelled.id));
+      trackEvent("cancel_purchase", {
+        purchase_id: cancelled.id,
+        source: "active_purchase",
+        items_count: cancelled.items.length,
+        cart_items_count: cancelled.items.filter((item) => Number(item.pricePaid ?? 0) > 0).length,
+      });
     },
   });
 
@@ -123,6 +132,10 @@ export function ActivePurchasePage() {
     setExpandedPurchaseCategories(new Set());
     setShowStickySummary(false);
   }, [purchase?.id]);
+
+  useEffect(() => {
+    trackSafeSearch("purchase", debouncedPurchaseSearch);
+  }, [debouncedPurchaseSearch]);
 
   useEffect(() => {
     const node = totalCardRef.current;

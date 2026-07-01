@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ShoppingCart, X } from "lucide-react";
 import type { Unit } from "@gondly/types";
 import { AppButton, AppInput, MoneyInput, ProductSearchInput, QuantityInput, UnitSelect, unitLabels } from "../../components";
+import { sanitizeAnalyticsCategory, trackEvent } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import { isLocalId, queuePurchaseItemUpsert, syncOutbox, type PurchaseItemPayload } from "../../lib/offlineQueue";
 import type { Purchase } from "../../types";
@@ -75,8 +76,16 @@ export function AddEditCartItemPage() {
       navigate(`/app/purchase/${purchaseId}`);
       return { previousActivePurchases, optimisticItemId: item.id.startsWith("local-") ? item.id : undefined };
     },
-    onSuccess: (saved, _values, context) => {
+    onSuccess: (saved, values, context) => {
       queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => reconcilePurchaseCache(current, saved, context?.optimisticItemId));
+      trackEvent(itemId ? "update_cart_item" : "add_to_cart", {
+        purchase_id: saved.id,
+        source: "cart_item_form",
+        unit: values.unit,
+        category: sanitizeAnalyticsCategory(values.category),
+        quantity: values.quantity,
+        price_paid: values.pricePaid,
+      });
     },
     onError: async (error, values, context) => {
       if (isQueueableWriteError(error) || isLocalId(itemId)) {

@@ -1,15 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { DateRangeFilter, EmptyState, LoadingState, ScreenContainer, SearchBar } from "../../components";
 import { AdSlot } from "../../lib/ads";
+import { trackSafeSearch } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import type { Purchase } from "../../types";
-import { formatBRL } from "../shared";
+import { formatBRL, useDebouncedValue } from "../shared";
 
 export function PurchaseHistoryPage() {
   const navigate = useNavigate();
   const [q, setQ] = useState("");
+  const debouncedQ = useDebouncedValue(q);
   const { data = [], isLoading } = useQuery({ queryKey: ["purchases"], queryFn: () => api<Purchase[]>("/purchases") });
   const completed = data
     .filter((purchase) => purchase.status === "completed")
@@ -18,6 +20,10 @@ export function PurchaseHistoryPage() {
       if (!term) return true;
       return purchase.market?.name.toLowerCase().includes(term) || purchase.items.some((item) => item.productName.toLowerCase().includes(term));
     });
+
+  useEffect(() => {
+    trackSafeSearch("history", debouncedQ);
+  }, [debouncedQ]);
 
   return (
     <ScreenContainer title="Histórico">

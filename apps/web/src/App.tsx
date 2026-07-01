@@ -19,6 +19,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import { AppButton, LoadingState } from "./components";
+import { trackEvent, usePageTracking } from "./lib/analytics";
 import { useAuth } from "./lib/auth";
 const LoginPage = lazy(() =>
   import("./pages/LoginPage").then((module) => ({ default: module.LoginPage })),
@@ -143,6 +144,8 @@ const SettingsPage = lazy(() =>
 );
 
 export function App() {
+  usePageTracking();
+
   return (
     <Suspense fallback={<RouteLoadingFallback />}>
       <Routes>
@@ -292,18 +295,25 @@ function AppChrome() {
       event.preventDefault();
       setDeferredPrompt(event);
     };
+    const handleAppInstalled = () => {
+      trackEvent("app_installed", { source: "browser" });
+      setDeferredPrompt(null);
+    };
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
     window.addEventListener("beforeinstallprompt", handleBeforeInstall);
+    window.addEventListener("appinstalled", handleAppInstalled);
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
+      window.removeEventListener("appinstalled", handleAppInstalled);
     };
   }, []);
 
   async function promptInstall() {
+    trackEvent("click_install_pwa", { source: "install_prompt" });
     const prompt = deferredPrompt as Event & { prompt?: () => Promise<void> };
     await prompt.prompt?.();
     setDeferredPrompt(null);

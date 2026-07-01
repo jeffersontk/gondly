@@ -1,10 +1,21 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppButton, ScreenContainer } from "../../components";
+import { trackEvent } from "../../lib/analytics";
 import { useAds } from "../../lib/ads";
 import { useAuth } from "../../lib/auth";
 
-export function BillingReturnPage({ title, description, successLabel }: { title: string; description: string; successLabel?: string }) {
+export function BillingReturnPage({
+  title,
+  description,
+  successLabel,
+  analyticsEvent,
+}: {
+  title: string;
+  description: string;
+  successLabel?: string;
+  analyticsEvent?: "remove_ads_purchase_success" | "remove_ads_purchase_pending";
+}) {
   const navigate = useNavigate();
   const { hasNoAds, refreshBillingStatus } = useAds();
   const { refreshUser } = useAuth();
@@ -23,6 +34,13 @@ export function BillingReturnPage({ title, description, successLabel }: { title:
   useEffect(() => {
     void refresh();
   }, []);
+
+  useEffect(() => {
+    if (!analyticsEvent) return;
+    trackEvent(analyticsEvent, {
+      provider: "mercado_pago",
+    });
+  }, [analyticsEvent]);
 
   return (
     <ScreenContainer title={title}>

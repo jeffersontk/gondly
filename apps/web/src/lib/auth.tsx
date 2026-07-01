@@ -1,4 +1,5 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { trackEvent } from "./analytics";
 import { api, getCachedApiRecord, storeToken } from "./api";
 import { clearHttpCache, clearOutbox } from "./db";
 import { clearPersistedQueryCache, queryClient } from "./queryClient";
@@ -7,6 +8,7 @@ import type { User } from "../types";
 type LoginResponse = {
   accessToken: string;
   user: User;
+  isNewUser?: boolean;
 };
 
 type AuthContextValue = {
@@ -46,6 +48,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     skipNextTokenRefresh.current = true;
     setToken(response.accessToken);
     setUser(response.user);
+    const method = idToken.startsWith("dev:") ? "dev" : "google";
+    trackEvent("login", { method });
+    if (response.isNewUser) {
+      trackEvent("sign_up", { method });
+    }
   }
 
   async function refreshUser() {

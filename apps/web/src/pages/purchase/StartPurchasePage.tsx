@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShoppingCart } from "lucide-react";
 import { AppButton, EmptyState, MarketListCard, ScreenContainer, SectionHeader } from "../../components";
+import { trackEvent } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import { discardQueuedPurchaseChanges } from "../../lib/offlineQueue";
 import type { MarketList, Purchase } from "../../types";
@@ -44,8 +45,16 @@ export function StartPurchasePage() {
       if (list) {
         queryClient.setQueryData<MarketList>(["list", list.id], list);
         queryClient.setQueryData<MarketList[]>(["lists"], (current) => addListCache(current, list));
+        trackEvent("create_list", { list_id: list.id, source: "purchase_start", items_count: list.items.length });
       }
       queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => setActivePurchaseCache(current, purchase));
+      trackEvent("start_purchase", {
+        purchase_id: purchase.id,
+        source: list ? "purchase_start_new_list" : "purchase_start_existing_list",
+        has_source_list: Boolean(purchase.sourceListId),
+        items_count: purchase.items.length,
+        cart_items_count: purchase.items.filter((item) => Number(item.pricePaid ?? 0) > 0).length,
+      });
       navigate(`/app/purchase/${purchase.id}`);
     },
   });
@@ -57,7 +66,18 @@ export function StartPurchasePage() {
           <p className="text-sm font-black text-ink">Compra ativa encontrada</p>
           <p className="mt-1 text-xs text-ink/55">{activePurchase.items.length} itens no carrinho</p>
           <div className="mt-3 grid grid-cols-2 gap-2">
-            <AppButton variant="secondary" onClick={() => navigate(`/app/purchase/${activePurchase.id}`)}>
+            <AppButton
+              variant="secondary"
+              onClick={() => {
+                trackEvent("continue_purchase", {
+                  purchase_id: activePurchase.id,
+                  source: "purchase_start",
+                  items_count: activePurchase.items.length,
+                  cart_items_count: activePurchase.items.filter((item) => Number(item.pricePaid ?? 0) > 0).length,
+                });
+                navigate(`/app/purchase/${activePurchase.id}`);
+              }}
+            >
               Continuar
             </AppButton>
             <AppButton

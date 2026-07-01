@@ -29,6 +29,7 @@ export class AuthService {
     const existingByGoogleId = await this.prisma.user.findFirst({
       where: { OR: [{ googleId: profile.googleId }, { email: profile.email }] },
     });
+    const isNewUser = !existingByGoogleId;
 
     const user = existingByGoogleId
       ? await this.prisma.user.update({
@@ -60,6 +61,7 @@ export class AuthService {
 
     return {
       accessToken,
+      isNewUser,
       user: {
         id: user.id,
         name: user.name,

@@ -1,4 +1,4 @@
-import type { RefObject, ReactNode } from "react";
+import { useEffect, type RefObject, type ReactNode } from "react";
 import {
   BarChart3,
   ListChecks,
@@ -9,6 +9,7 @@ import {
   Store,
   TrendingUp,
 } from "lucide-react";
+import { trackEvent } from "../lib/analytics";
 
 type LandingPageProps = {
   clientId?: string;
@@ -21,6 +22,10 @@ export function LandingPage({
   signinButtonRef,
   signupButtonRef,
 }: LandingPageProps) {
+  useEffect(() => {
+    trackEvent("view_landing", { source: "login_page" });
+  }, []);
+
   return (
     <main className="min-h-screen overflow-x-hidden bg-paper text-ink">
       <section className="relative mx-auto flex min-h-[88svh] w-full max-w-7xl flex-col px-5 pb-10 pt-5 sm:px-8 lg:px-10">
@@ -40,6 +45,7 @@ export function LandingPage({
               buttonRef={signinButtonRef}
               label="Entrar com Google"
               className="min-h-10 w-[198px]"
+              source="header"
             />
           ) : (
             <span className="rounded-full border border-tomato/20 px-3 py-2 text-xs font-black text-tomato shadow-soft">
@@ -67,6 +73,7 @@ export function LandingPage({
                   buttonRef={signupButtonRef}
                   label="Inscrever-se com Google"
                   className="min-h-11 w-[260px]"
+                  source="hero"
                 />
               ) : (
                 <div className="flex min-h-11 w-full max-w-[280px] items-center justify-center rounded-full border border-tomato/20  px-4 text-sm font-semibold text-tomato shadow-soft">
@@ -135,10 +142,12 @@ function GoogleAuthButton({
   buttonRef,
   label,
   className,
+  source,
 }: {
   buttonRef: RefObject<HTMLDivElement>;
   label: string;
   className: string;
+  source: "header" | "hero";
 }) {
   return (
     <div
@@ -146,6 +155,7 @@ function GoogleAuthButton({
         "relative overflow-hidden rounded-full shadow-soft",
         className,
       ].join(" ")}
+      onClick={() => trackEvent("click_cta_access_app", { source, method: "google" })}
     >
       <div className="flex h-full min-h-[inherit] w-full items-center justify-center gap-2 rounded-full border border-line bg-white px-4 text-sm font-semibold text-ink">
         <span className="text-base font-black text-[#4285F4]">G</span>

@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AppButton, AppInput, LoadingState, MarketSelect, MoneyInput, ScreenContainer } from "../../components";
 import { ItemFeedback } from "../../components/ItemFeedback";
+import { trackEvent } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import { useOutboxStatus } from "../../lib/offlineQueue";
 import type { Market, Purchase } from "../../types";
@@ -31,6 +32,15 @@ export function FinishPurchasePage() {
       queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => removeActivePurchaseCache(current, saved.id));
       queryClient.setQueryData(["purchase", saved.id], saved);
       queryClient.setQueryData<Purchase[]>(["purchases"], (current) => (current ? [saved, ...current.filter((purchase) => purchase.id !== saved.id)] : current));
+      trackEvent("finish_purchase", {
+        purchase_id: saved.id,
+        market_id: saved.marketId,
+        items_count: saved.items.length,
+        cart_items_count: saved.items.filter((item) => Number(item.pricePaid ?? 0) > 0).length,
+        subtotal_calculated: saved.subtotalCalculated,
+        final_paid_amount: saved.finalPaidAmount,
+        discount_amount: saved.discountAmount,
+      });
       navigate(`/app/history/${saved.id}`);
     },
   });

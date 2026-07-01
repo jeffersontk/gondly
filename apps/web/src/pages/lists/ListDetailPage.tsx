@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, Loader2, Menu, Plus, ShoppingCart, SlidersHo
 import type { ListItemStatus } from "@gondly/types";
 import { AppButton, ConfirmDialog, EmptyState, ErrorState, ListItemRow, LoadingState, PriceCard, ScreenContainer, SectionHeader } from "../../components";
 import { AdSlot } from "../../lib/ads";
+import { trackEvent, trackSafeSearch } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import type { ParsedShoppingList } from "../../lib/listImport";
@@ -25,6 +26,7 @@ import {
   sortListItems,
   updateListItemCache,
   updateListsCache,
+  useDebouncedValue,
 } from "../shared";
 import { ListActionsDrawer } from "./ListActionsDrawer";
 import { ListFiltersDrawer } from "./ListFiltersDrawer";
@@ -57,6 +59,7 @@ export function ListDetailPage() {
   const [listRealtimeNotice, setListRealtimeNotice] = useState<string | null>(null);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(() => new Set());
   const [replacePurchaseOpen, setReplacePurchaseOpen] = useState(false);
+  const debouncedItemSearch = useDebouncedValue(itemSearch);
   const listRealtimeNoticeTimeoutRef = useRef<number | undefined>(undefined);
   const list = useQuery({ queryKey: ["list", id], queryFn: () => api<MarketList>(`/lists/${id}`), enabled: Boolean(id) });
   const activePurchases = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
@@ -77,6 +80,11 @@ export function ListDetailPage() {
     mutationFn: () => api<MarketList>(`/lists/${id}/duplicate`, { method: "POST" }),
     onSuccess: (copy) => {
       queryClient.setQueryData<MarketList[]>(["lists"], (current) => addListCache(current, copy));
+      trackEvent("duplicate_list", {
+        list_id: id,
+        source: "list_detail",
+        items_count: copy.items.length,
+      });
       navigate(`/app/lists/${copy.id}`);
     },
   });
@@ -112,6 +120,13 @@ export function ListDetailPage() {
       }
       queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => setActivePurchaseCache(current, purchase));
       setReplacePurchaseOpen(false);
+      trackEvent("start_purchase", {
+        purchase_id: purchase.id,
+        source: "list_detail",
+        has_source_list: true,
+        items_count: purchase.items.length,
+        cart_items_count: purchase.items.filter((item) => Number(item.pricePaid ?? 0) > 0).length,
+      });
       navigate(`/app/purchase/${purchase.id}`);
     },
   });
@@ -124,6 +139,11 @@ export function ListDetailPage() {
       setImportPreview(null);
       setImportError(null);
       setShowImport(false);
+      trackEvent("add_item_to_list", {
+        list_id: id,
+        source: "import",
+        items_count: imported.items.length,
+      });
     },
     onError: () => {
       setImportError("Não foi possível importar os itens. Tente novamente.");
@@ -156,6 +176,7 @@ export function ListDetailPage() {
           : current,
       );
       setShareFeedback("Link de compartilhamento pronto.");
+      trackEvent("share_list", { list_id: id, method: "link", source: "list_detail" });
     },
   });
   const approveMember = useMutation({
@@ -228,6 +249,10 @@ export function ListDetailPage() {
       if (listRealtimeNoticeTimeoutRef.current) window.clearTimeout(listRealtimeNoticeTimeoutRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    trackSafeSearch("lists", debouncedItemSearch);
+  }, [debouncedItemSearch]);
 
   if (list.isLoading) return <LoadingState />;
   if (list.isError || !list.data) return <ScreenContainer title="Lista"><ErrorState /></ScreenContainer>;
