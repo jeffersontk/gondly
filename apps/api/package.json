@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "prisma generate && nest start --watch",
+    "dev": "npm run build --workspace @gondly/utils && prisma generate && nest start --watch",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
+    "pretest": "npm run build --workspace @gondly/utils",
     "test": "node --require ts-node/register --test \"test/**/*.spec.ts\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
@@ -15,6 +16,7 @@
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
+    "@gondly/utils": "0.1.0",
     "@nestjs/common": "^11.1.27",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.1.27",

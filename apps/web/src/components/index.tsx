@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import type { Unit } from "@gondly/types";
+import { calculateNormalizedPrice, formatBRL as formatSharedBRL, formatPricePerUnitLabel, roundMoney } from "@gondly/utils";
 import { api } from "../lib/api";
 import type { Market, MarketList, MarketListItem, Product, PurchaseItem, User } from "../types";
 
@@ -423,11 +424,14 @@ export function PurchaseItemCard({ item, action }: { item: PurchaseItem; action?
   const pricePaid = Number(item.pricePaid ?? 0);
   const hasPrice = pricePaid > 0;
   const normalizedPrice = item.unitPriceNormalized != null ? Number(item.unitPriceNormalized) : null;
+  const calculatedNormalized = hasPrice ? calculateNormalizedPrice(item.quantity, item.unit, pricePaid) : null;
   const priceDescription =
     hasPrice && normalizedPrice != null && Number.isFinite(normalizedPrice) && item.normalizedUnitLabel
-      ? `${formatBRL(normalizedPrice)}/${item.normalizedUnitLabel} · Total ${formatBRL(pricePaid)}`
+      ? `${formatPricePerUnitLabel(normalizedPrice, item.normalizedUnitLabel)} · Total ${formatBRL(pricePaid)}`
+      : hasPrice && calculatedNormalized?.unitPriceNormalized != null && calculatedNormalized.normalizedUnitLabel
+        ? `${formatPricePerUnitLabel(calculatedNormalized.unitPriceNormalized, calculatedNormalized.normalizedUnitLabel)} · Total ${formatBRL(pricePaid)}`
       : hasPrice
-        ? `${formatBRL(item.quantity > 0 ? pricePaid / item.quantity : pricePaid)} / ${unitLabels[item.unit]} · Total ${formatBRL(pricePaid)}`
+        ? `${formatBRL(item.quantity > 0 ? roundMoney(pricePaid / item.quantity) : pricePaid)} / ${unitLabels[item.unit]} · Total ${formatBRL(pricePaid)}`
         : "Último preço: --";
 
   return (
@@ -647,5 +651,5 @@ export function StartPurchasePanel({ onStart, loading }: { onStart: () => void; 
 }
 
 function formatBRL(value: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+  return formatSharedBRL(value);
 }

@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
+import { roundMoney } from "@gondly/utils";
 import { PrismaService } from "../prisma/prisma.service";
 import { toNumber } from "../common/utils/money";
-import { roundMoney } from "../common/utils/normalize-price";
 import { CreateMarketDto, UpdateMarketDto } from "./dto";
 
 @Injectable()

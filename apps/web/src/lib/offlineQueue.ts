@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Unit } from "@gondly/types";
+import { roundMoney } from "@gondly/utils";
 import { ApiError, api, getStoredToken, isNetworkFailure } from "./api";
 import { outboxDelete, outboxGetAll, outboxPut } from "./db";
 import { queryClient } from "./queryClient";
@@ -248,8 +249,4 @@ function reconcilePurchaseCache(purchases: Purchase[] | undefined, nextPurchase:
       subtotalCalculated: roundMoney(items.reduce((sum, entry) => sum + Number(entry.pricePaid ?? 0), 0)),
     };
   });
-}
-
-function roundMoney(value: number) {
-  return Math.round(value * 100) / 100;
 }

@@ -1,6 +1,16 @@
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import type { ListItemStatus, Unit } from "@gondly/types";
+import {
+  calculateItemTotal,
+  calculateNormalizedPrice,
+  formatBRL as formatSharedBRL,
+  formatPricePerUnitLabel,
+  parseMoneyToNumber,
+  roundMoney as roundSharedMoney,
+  safeDecimalToNumber,
+  type PriceInputMode as SharedPriceInputMode,
+} from "@gondly/utils";
 import { unitLabels } from "../components";
 import { isNetworkFailure } from "../lib/api";
 import { createLocalItemId, type PurchaseItemPayload } from "../lib/offlineQueue";
@@ -29,54 +39,25 @@ export const productSchema = z.object({
 });
 
 export function parseDecimalInput(value: unknown) {
-  if (typeof value === "number") return value;
-  if (typeof value !== "string") return value;
-
-  const cleaned = value.trim().replace(/\s/g, "").replace(/[R$]/g, "");
-  if (!cleaned) return Number.NaN;
-
-  const lastComma = cleaned.lastIndexOf(",");
-  const lastDot = cleaned.lastIndexOf(".");
-
-  if (lastComma >= 0 && lastDot >= 0) {
-    const decimalSeparator = lastComma > lastDot ? "," : ".";
-    const thousandSeparator = decimalSeparator === "," ? "." : ",";
-    return Number(cleaned.replaceAll(thousandSeparator, "").replace(decimalSeparator, "."));
-  }
-
-  if (lastComma >= 0) {
-    return Number(`${cleaned.slice(0, lastComma).replaceAll(",", "")}.${cleaned.slice(lastComma + 1)}`);
-  }
-
-  if (lastDot >= 0 && cleaned.indexOf(".") !== lastDot) {
-    return Number(`${cleaned.slice(0, lastDot).replaceAll(".", "")}.${cleaned.slice(lastDot + 1)}`);
-  }
-
-  return Number(cleaned);
+  return parseMoneyToNumber(value);
 }
 
 export function decimalValue(value: unknown, fallback = 0) {
-  const parsed = parseDecimalInput(value);
-  return typeof parsed === "number" && Number.isFinite(parsed) ? parsed : fallback;
+  return safeDecimalToNumber(value, fallback);
 }
 
 export function roundMoney(value: number) {
-  return Math.round(value * 100) / 100;
+  return roundSharedMoney(value);
 }
 
-export type PriceInputMode = "unit" | "kg" | "total";
+export type PriceInputMode = SharedPriceInputMode;
 
 export function isWeightUnit(unit: Unit) {
   return unit === "g" || unit === "kg";
 }
 
 export function calculatePurchaseItemTotal(quantity: number, unit: Unit, priceInput: number, priceInputMode: PriceInputMode) {
-  if (priceInputMode === "total") return roundMoney(priceInput);
-  if (priceInputMode === "kg") {
-    const quantityInKg = unit === "g" ? quantity / 1000 : quantity;
-    return roundMoney(quantityInKg * priceInput);
-  }
-  return roundMoney(quantity * priceInput);
+  return calculateItemTotal(quantity, unit, priceInput, priceInputMode).total;
 }
 
 export function priceInputFromItem(item: PurchaseItem): { pricePaid: number; priceInputMode: PriceInputMode } {
@@ -105,7 +86,12 @@ export function purchaseItemPriceDescription(item: PurchaseItem) {
 
   const normalizedPrice = item.unitPriceNormalized != null ? Number(item.unitPriceNormalized) : null;
   if (normalizedPrice != null && Number.isFinite(normalizedPrice) && item.normalizedUnitLabel) {
-    return `${quantityLabel} · ${formatBRL(normalizedPrice)}/${item.normalizedUnitLabel} · Total ${formatBRL(totalPaid)}`;
+    return `${quantityLabel} · ${formatPricePerUnitLabel(normalizedPrice, item.normalizedUnitLabel)} · Total ${formatBRL(totalPaid)}`;
+  }
+
+  const normalized = calculateNormalizedPrice(item.quantity, item.unit, totalPaid);
+  if (normalized.unitPriceNormalized != null && normalized.normalizedUnitLabel) {
+    return `${quantityLabel} · ${formatPricePerUnitLabel(normalized.unitPriceNormalized, normalized.normalizedUnitLabel)} · Total ${formatBRL(totalPaid)}`;
   }
 
   const quantity = Number(item.quantity ?? 0);
@@ -128,6 +114,7 @@ export function toPurchaseItemPayload(values: CartItemForm, productName: string)
 }
 
 export function optimisticCartItem(values: PurchaseItemPayload, id?: string, currentItem?: PurchaseItem): PurchaseItem {
+  const normalized = calculateNormalizedPrice(values.quantity, values.unit, values.pricePaid);
   return {
     id: id ?? createLocalItemId(),
     sourceListItemId: currentItem?.sourceListItemId ?? null,
@@ -138,8 +125,8 @@ export function optimisticCartItem(values: PurchaseItemPayload, id?: string, cur
     quantity: values.quantity,
     unit: values.unit,
     pricePaid: values.pricePaid,
-    unitPriceNormalized: null,
-    normalizedUnitLabel: null,
+    unitPriceNormalized: normalized.unitPriceNormalized,
+    normalizedUnitLabel: normalized.normalizedUnitLabel,
     notes: values.notes || null,
   };
 }
@@ -404,5 +391,5 @@ export type CartItemForm = z.infer<typeof cartItemSchema>;
 export type FinishForm = z.infer<typeof finishSchema>;
 
 export function formatBRL(value: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+  return formatSharedBRL(value);
 }

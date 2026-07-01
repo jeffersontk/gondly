@@ -1,9 +1,9 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { ListItemStatus, SharedRole, Unit } from "@prisma/client";
+import { normalizePrice } from "@gondly/utils";
 import { randomUUID } from "crypto";
 import { BillingService } from "../billing/billing.service";
 import { addDays } from "../common/utils/date";
-import { normalizePrice } from "../common/utils/normalize-price";
 import { PrismaService } from "../prisma/prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
 import { CreateInviteDto, CreateListDto, CreateListItemDto, ImportListItemsDto, UpdateListDto, UpdateListItemDto } from "./dto";

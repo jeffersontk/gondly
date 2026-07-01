@@ -1,8 +1,8 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { Unit } from "@prisma/client";
+import { normalizePrice, roundMoney } from "@gondly/utils";
 import { ListsService } from "../lists/lists.service";
 import { type NumericLike, toNumber } from "../common/utils/money";
-import { normalizePrice, roundMoney } from "../common/utils/normalize-price";
 import { PrismaService } from "../prisma/prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
 import { CreatePurchaseItemDto, FinishPurchaseDto, StartPurchaseDto, UpdatePurchaseDto, UpdatePurchaseItemDto } from "./dto";

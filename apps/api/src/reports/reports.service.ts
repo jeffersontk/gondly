@@ -1,8 +1,8 @@
 import { Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
+import { roundMoney } from "@gondly/utils";
 import { startOfMonth } from "../common/utils/date";
 import { toNumber } from "../common/utils/money";
-import { roundMoney } from "../common/utils/normalize-price";
 import { PrismaService } from "../prisma/prisma.service";
 import { ReportFiltersDto } from "./dto";
 
