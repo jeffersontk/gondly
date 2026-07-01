@@ -11,13 +11,19 @@ type LoginResponse = {
   isNewUser?: boolean;
 };
 
+type AuthMethod = "google" | "dev";
+type LogoutSource = "settings" | "app";
+type LogoutOptions = {
+  source?: LogoutSource;
+};
+
 type AuthContextValue = {
   user: User | null;
   token: string | null;
   loading: boolean;
   loginWithGoogleToken: (idToken: string) => Promise<void>;
   devLogin: (email: string, name: string) => Promise<void>;
-  logout: () => Promise<void>;
+  logout: (options?: LogoutOptions) => Promise<void>;
   refreshUser: () => Promise<void>;
 };
 
@@ -29,6 +35,18 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 async function clearLocalSessionCache() {
   queryClient.clear();
   await Promise.allSettled([clearHttpCache(), clearPersistedQueryCache(), clearOutbox()]);
+}
+
+function getAuthMethod(idToken: string): AuthMethod {
+  return idToken.startsWith("dev:") ? "dev" : "google";
+}
+
+function trackLoginSuccess(method: AuthMethod, response: LoginResponse) {
+  trackEvent("login", { method });
+
+  if (method === "google" && response.isNewUser) {
+    trackEvent("sign_up", { method });
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -48,11 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     skipNextTokenRefresh.current = true;
     setToken(response.accessToken);
     setUser(response.user);
-    const method = idToken.startsWith("dev:") ? "dev" : "google";
-    trackEvent("login", { method });
-    if (response.isNewUser) {
-      trackEvent("sign_up", { method });
-    }
+    trackLoginSuccess(getAuthMethod(idToken), response);
   }
 
   async function refreshUser() {
@@ -65,9 +79,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await applyLogin(`dev:${payload}`);
   }
 
-  async function logout() {
+  async function logout(options: LogoutOptions = {}) {
+    const source = options.source ?? "app";
+
     try {
       await api("/auth/logout", { method: "POST" });
+      trackEvent("logout", { source });
     } finally {
       storeToken(null);
       setToken(null);

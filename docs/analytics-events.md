@@ -29,6 +29,7 @@ Analytics is enabled only when `VITE_ENABLE_ANALYTICS=true`. When `VITE_DEBUG_AN
 | `click_cta_access_app` | Google CTA click on landing | `source`, `method` | No | No Google payload is sent. |
 | `login` | Successful auth response | `method` | No | No token, email, or name. |
 | `sign_up` | Successful auth response for new user | `method` | Yes | Depends on backend `isNewUser`; no user identity. |
+| `logout` | Successful logout response | `source` | No | No user identity. |
 | `click_create_list_shortcut` | Home or list shortcut click | `source` | No | Intent event only. |
 | `click_compare_shortcut` | Compare shortcut click | `source` | No | Intent event only. |
 | `create_list` | List creation succeeds | `list_id`, `items_count`, `source` | Yes | No list name or description. |
@@ -70,4 +71,3 @@ Analytics is enabled only when `VITE_ENABLE_ANALYTICS=true`. When `VITE_DEBUG_AN
 - `/app/compare` -> `compare`
 - `/app/billing` -> `billing`
 - `/app/settings` -> `settings`
-

@@ -16,7 +16,7 @@ export function SettingsPage() {
   async function handleLogout() {
     setLoggingOut(true);
     try {
-      await logout();
+      await logout({ source: "settings" });
     } finally {
       setLoggingOut(false);
     }
