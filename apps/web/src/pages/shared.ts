@@ -146,7 +146,13 @@ export function patchPurchaseItemCache(purchases: Purchase[] | undefined, purcha
   });
 }
 
-export function upsertRealtimePurchaseItemCache(purchases: Purchase[] | undefined, purchaseId: string, nextItem: PurchaseItem) {
+export function upsertRealtimePurchaseItemCache(
+  purchases: Purchase[] | undefined,
+  purchaseId: string,
+  nextItem: PurchaseItem,
+  subtotalCalculated?: number,
+  updatedAt?: string,
+) {
   if (!purchases) return purchases;
 
   const normalizedItem = normalizePurchaseItem(nextItem);
@@ -158,22 +164,44 @@ export function upsertRealtimePurchaseItemCache(purchases: Purchase[] | undefine
       ? purchase.items.map((item) => (item.id === normalizedItem.id ? normalizedItem : item))
       : [normalizedItem, ...purchase.items];
 
-    return { ...purchase, items, subtotalCalculated: calculatePurchaseSubtotal(items) };
+    return {
+      ...purchase,
+      items,
+      subtotalCalculated: typeof subtotalCalculated === "number" ? subtotalCalculated : calculatePurchaseSubtotal(items),
+      updatedAt: updatedAt ?? purchase.updatedAt,
+    };
   });
 }
 
-export function removeRealtimePurchaseItemCache(purchases: Purchase[] | undefined, purchaseId: string, itemId: string) {
+export function removeRealtimePurchaseItemCache(
+  purchases: Purchase[] | undefined,
+  purchaseId: string,
+  itemId: string,
+  subtotalCalculated?: number,
+  updatedAt?: string,
+) {
   if (!purchases) return purchases;
 
   return purchases.map((purchase) => {
     if (purchase.id !== purchaseId) return purchase;
 
     const items = purchase.items.filter((item) => item.id !== itemId);
-    return { ...purchase, items, subtotalCalculated: calculatePurchaseSubtotal(items) };
+    return {
+      ...purchase,
+      items,
+      subtotalCalculated: typeof subtotalCalculated === "number" ? subtotalCalculated : calculatePurchaseSubtotal(items),
+      updatedAt: updatedAt ?? purchase.updatedAt,
+    };
   });
 }
 
-export function updateRealtimePurchaseTotalCache(purchases: Purchase[] | undefined, purchaseId: string, subtotalCalculated?: number, status?: string) {
+export function updateRealtimePurchaseTotalCache(
+  purchases: Purchase[] | undefined,
+  purchaseId: string,
+  subtotalCalculated?: number,
+  status?: string,
+  updatedAt?: string,
+) {
   if (!purchases) return purchases;
   if (status && status !== "in_progress") return purchases.filter((purchase) => purchase.id !== purchaseId);
 
@@ -182,6 +210,7 @@ export function updateRealtimePurchaseTotalCache(purchases: Purchase[] | undefin
     return {
       ...purchase,
       subtotalCalculated: typeof subtotalCalculated === "number" ? subtotalCalculated : calculatePurchaseSubtotal(purchase.items),
+      updatedAt: updatedAt ?? purchase.updatedAt,
     };
   });
 }
@@ -244,6 +273,19 @@ export function addListItemCache(list: MarketList | undefined, item: MarketListI
   return { ...list, items: [{ ...item, important: Boolean(item.important) }, ...list.items.filter((entry) => entry.id !== item.id)] };
 }
 
+export function upsertListItemCache(list: MarketList | undefined, item: MarketListItem) {
+  if (!list) return list;
+
+  const normalizedItem = { ...item, important: Boolean(item.important) };
+  const exists = list.items.some((entry) => entry.id === normalizedItem.id);
+  return {
+    ...list,
+    items: exists
+      ? list.items.map((entry) => (entry.id === normalizedItem.id ? normalizedItem : entry))
+      : [normalizedItem, ...list.items],
+  };
+}
+
 export function normalizeMarketList(list: MarketList): MarketList {
   return {
     ...list,
@@ -303,23 +345,113 @@ export type ListStatusFilter = "all" | ListItemStatus;
 export type ListSortFilter = "default" | "important" | "name_asc" | "name_desc" | "sector" | "status";
 export type PurchaseViewFilter = "list" | "cart";
 export type RealtimeActor = { userId?: string; name?: string };
-export type PurchaseItemRealtimePayload = {
+
+export type RealtimeEnvelope<TPayload = unknown> = {
+  eventId?: string;
+  entityType?: string;
+  entityId?: string;
+  action?: string;
+  updatedAt?: string;
+  payload?: TPayload;
+  actorUserId?: string;
+  byUserId?: string;
+  by?: RealtimeActor;
+};
+
+export type RealtimeApplyState = {
+  seenEventIds: Set<string>;
+  seenEventOrder: string[];
+  entityUpdatedAt: Map<string, number>;
+};
+
+export function createRealtimeApplyState(): RealtimeApplyState {
+  return {
+    seenEventIds: new Set(),
+    seenEventOrder: [],
+    entityUpdatedAt: new Map(),
+  };
+}
+
+export function realtimeActorId(payload: Pick<RealtimeEnvelope, "actorUserId" | "byUserId" | "by">) {
+  return payload.actorUserId ?? payload.byUserId ?? payload.by?.userId;
+}
+
+export function shouldApplyRealtimeEvent(
+  state: RealtimeApplyState,
+  event: Pick<RealtimeEnvelope, "eventId" | "entityType" | "entityId" | "updatedAt">,
+  currentUpdatedAt?: string | null,
+  fallback?: { entityType?: string; entityId?: string },
+) {
+  if (event.eventId) {
+    if (state.seenEventIds.has(event.eventId)) return false;
+    state.seenEventIds.add(event.eventId);
+    state.seenEventOrder.push(event.eventId);
+    while (state.seenEventOrder.length > 1000) {
+      const staleEventId = state.seenEventOrder.shift();
+      if (staleEventId) state.seenEventIds.delete(staleEventId);
+    }
+  }
+
+  const entityType = event.entityType ?? fallback?.entityType;
+  const entityId = event.entityId ?? fallback?.entityId;
+  const eventTimestamp = parseRealtimeTimestamp(event.updatedAt);
+  if (!entityType || !entityId || eventTimestamp === undefined) return true;
+
+  const entityKey = `${entityType}:${entityId}`;
+  const currentTimestamp = parseRealtimeTimestamp(currentUpdatedAt);
+  const knownTimestamp = Math.max(state.entityUpdatedAt.get(entityKey) ?? 0, currentTimestamp ?? 0);
+  if (knownTimestamp > eventTimestamp) return false;
+
+  state.entityUpdatedAt.set(entityKey, eventTimestamp);
+  return true;
+}
+
+function parseRealtimeTimestamp(value?: string | null) {
+  if (!value) return undefined;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : undefined;
+}
+
+export type ListItemRealtimePayload = RealtimeEnvelope<{
+  listId: string;
+  item?: MarketListItem;
+  itemId?: string;
+  action?: string;
+}> & {
+  listId: string;
+  item?: MarketListItem;
+  itemId?: string;
+};
+
+export type PurchaseItemRealtimePayload = RealtimeEnvelope<{
   purchaseId: string;
   item?: PurchaseItem;
   itemId?: string;
   subtotalCalculated?: number;
+  purchaseUpdatedAt?: string;
   status?: string;
-  byUserId?: string;
-  by?: RealtimeActor;
+  purchase?: Purchase;
+}> & {
+  purchaseId: string;
+  item?: PurchaseItem;
+  itemId?: string;
+  subtotalCalculated?: number;
+  purchaseUpdatedAt?: string;
+  status?: string;
+  purchase?: Purchase;
 };
-export type ListPurchaseItemChangedPayload = {
+export type ListPurchaseItemChangedPayload = RealtimeEnvelope<{
   listId: string;
   purchaseId: string;
   action: "created" | "updated" | "deleted";
   item?: PurchaseItem;
   itemId?: string;
-  byUserId?: string;
-  by?: RealtimeActor;
+}> & {
+  listId: string;
+  purchaseId: string;
+  action: "created" | "updated" | "deleted";
+  item?: PurchaseItem;
+  itemId?: string;
 };
 
 export function matchesListStatus(item: MarketListItem, status: ListStatusFilter) {

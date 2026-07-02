@@ -1,6 +1,6 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { trackEvent } from "./analytics";
-import { api, getCachedApiRecord, storeToken } from "./api";
+import { api, ApiError, getCachedApiRecord, isNetworkFailure, storeToken } from "./api";
 import { clearHttpCache, clearOutbox } from "./db";
 import { clearPersistedQueryCache, queryClient } from "./queryClient";
 import type { User } from "../types";
@@ -28,6 +28,7 @@ type AuthContextValue = {
 };
 
 const TOKEN_KEY = "gondly.token";
+export const OPEN_TUTORIAL_ON_NEXT_HOME_KEY = "gondly.openTutorialOnNextHome";
 const AUTH_USER_CACHE_MAX_AGE = 24 * 60 * 60_000;
 const AUTH_USER_BACKGROUND_REFRESH_INTERVAL = 5 * 60_000;
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -35,6 +36,28 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 async function clearLocalSessionCache() {
   queryClient.clear();
   await Promise.allSettled([clearHttpCache(), clearPersistedQueryCache(), clearOutbox()]);
+}
+
+async function requestGoogleLogin(idToken: string) {
+  try {
+    return await api<LoginResponse>("/auth/google", {
+      method: "POST",
+      skipAuth: true,
+      body: { idToken },
+    });
+  } catch (error) {
+    if (!isTransientLoginError(error)) throw error;
+    await new Promise((resolve) => window.setTimeout(resolve, 600));
+    return api<LoginResponse>("/auth/google", {
+      method: "POST",
+      skipAuth: true,
+      body: { idToken },
+    });
+  }
+}
+
+function isTransientLoginError(error: unknown) {
+  return isNetworkFailure(error) || (error instanceof ApiError && error.status >= 500);
 }
 
 function getAuthMethod(idToken: string): AuthMethod {
@@ -57,15 +80,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function applyLogin(idToken: string) {
     await clearLocalSessionCache();
-    const response = await api<LoginResponse>("/auth/google", {
-      method: "POST",
-      skipAuth: true,
-      body: { idToken },
-    });
+    const response = await requestGoogleLogin(idToken);
     storeToken(response.accessToken);
     skipNextTokenRefresh.current = true;
     setToken(response.accessToken);
     setUser(response.user);
+    if (response.isNewUser) {
+      sessionStorage.setItem(OPEN_TUTORIAL_ON_NEXT_HOME_KEY, "true");
+    }
     trackLoginSuccess(getAuthMethod(idToken), response);
   }
 

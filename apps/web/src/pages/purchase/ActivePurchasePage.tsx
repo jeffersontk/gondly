@@ -10,13 +10,16 @@ import { discardQueuedPurchaseChanges, useOutboxStatus } from "../../lib/offline
 import { createRealtimeSocket } from "../../lib/realtime";
 import type { Purchase, PurchaseItem } from "../../types";
 import {
+  createRealtimeApplyState,
   formatBRL,
   groupItemsByCategory,
   PurchaseItemRealtimePayload,
   PurchaseViewFilter,
   purchaseItemPriceDescription,
+  realtimeActorId,
   removeActivePurchaseCache,
   removeRealtimePurchaseItemCache,
+  shouldApplyRealtimeEvent,
   updateRealtimePurchaseTotalCache,
   upsertRealtimePurchaseItemCache,
   useDebouncedValue,
@@ -37,6 +40,7 @@ export function ActivePurchasePage() {
   const totalCardRef = useRef<HTMLDivElement | null>(null);
   const realtimeNoticeTimeoutRef = useRef<number | undefined>(undefined);
   const realtimeRefetchTimeoutRef = useRef<number | undefined>(undefined);
+  const realtimeStateRef = useRef(createRealtimeApplyState());
   const purchaseId = routeParams.purchaseId ?? params.get("purchaseId");
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   const purchase = useMemo(() => active.data?.find((entry) => entry.id === purchaseId) ?? active.data?.[0], [active.data, purchaseId]);
@@ -66,7 +70,7 @@ export function ActivePurchasePage() {
       }, 350);
     };
     const notifyIfFromAnotherUser = (payload: PurchaseItemRealtimePayload, message: string) => {
-      const actorId = payload.byUserId ?? payload.by?.userId;
+      const actorId = realtimeActorId(payload);
       if (!actorId || actorId === user?.id) return;
 
       const actorName = payload.by?.name;
@@ -79,28 +83,92 @@ export function ActivePurchasePage() {
     };
     const handlePurchaseItemCreated = (payload: PurchaseItemRealtimePayload) => {
       if (payload.purchaseId !== purchase.id || !payload.item) return;
-      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => upsertRealtimePurchaseItemCache(current, purchase.id, payload.item!));
-      notifyIfFromAnotherUser(payload, `${payload.item.productName} foi adicionado ao carrinho.`);
-      schedulePurchaseRefetch();
+      const updatedAt = payload.purchaseUpdatedAt ?? payload.purchase?.updatedAt ?? payload.updatedAt;
+      let applied = false;
+      let handled = false;
+      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => {
+        const currentPurchase = current?.find((entry) => entry.id === purchase.id);
+        if (!currentPurchase) return current;
+
+        const currentItem = currentPurchase.items.find((entry) => entry.id === payload.item!.id);
+        if (!shouldApplyRealtimeEvent(realtimeStateRef.current, payload, currentItem?.updatedAt, { entityType: "purchaseItem", entityId: payload.item!.id })) {
+          handled = true;
+          return current;
+        }
+
+        handled = true;
+        applied = true;
+        return upsertRealtimePurchaseItemCache(current, purchase.id, payload.item!, payload.subtotalCalculated, updatedAt);
+      });
+      if (!handled) schedulePurchaseRefetch();
+      else if (applied) notifyIfFromAnotherUser(payload, `${payload.item.productName} foi adicionado ao carrinho.`);
     };
     const handlePurchaseItemUpdated = (payload: PurchaseItemRealtimePayload) => {
       if (payload.purchaseId !== purchase.id || !payload.item) return;
-      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => upsertRealtimePurchaseItemCache(current, purchase.id, payload.item!));
-      notifyIfFromAnotherUser(payload, `${payload.item.productName} foi atualizado no carrinho.`);
-      schedulePurchaseRefetch();
+      const updatedAt = payload.purchaseUpdatedAt ?? payload.purchase?.updatedAt ?? payload.updatedAt;
+      let applied = false;
+      let handled = false;
+      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => {
+        const currentPurchase = current?.find((entry) => entry.id === purchase.id);
+        if (!currentPurchase) return current;
+
+        const currentItem = currentPurchase.items.find((entry) => entry.id === payload.item!.id);
+        if (!shouldApplyRealtimeEvent(realtimeStateRef.current, payload, currentItem?.updatedAt, { entityType: "purchaseItem", entityId: payload.item!.id })) {
+          handled = true;
+          return current;
+        }
+
+        handled = true;
+        applied = true;
+        return upsertRealtimePurchaseItemCache(current, purchase.id, payload.item!, payload.subtotalCalculated, updatedAt);
+      });
+      if (!handled) schedulePurchaseRefetch();
+      else if (applied) notifyIfFromAnotherUser(payload, `${payload.item.productName} foi atualizado no carrinho.`);
     };
     const handlePurchaseItemDeleted = (payload: PurchaseItemRealtimePayload) => {
       if (payload.purchaseId !== purchase.id || !payload.itemId) return;
-      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => removeRealtimePurchaseItemCache(current, purchase.id, payload.itemId!));
-      notifyIfFromAnotherUser(payload, "Um item foi removido do carrinho.");
-      schedulePurchaseRefetch();
+      const updatedAt = payload.purchaseUpdatedAt ?? payload.purchase?.updatedAt ?? payload.updatedAt;
+      let applied = false;
+      let handled = false;
+      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => {
+        const currentPurchase = current?.find((entry) => entry.id === purchase.id);
+        if (!currentPurchase) return current;
+
+        const currentItem = currentPurchase.items.find((entry) => entry.id === payload.itemId);
+        if (!shouldApplyRealtimeEvent(realtimeStateRef.current, payload, currentItem?.updatedAt, { entityType: "purchaseItem", entityId: payload.itemId })) {
+          handled = true;
+          return current;
+        }
+
+        handled = true;
+        applied = true;
+        return removeRealtimePurchaseItemCache(current, purchase.id, payload.itemId!, payload.subtotalCalculated, updatedAt);
+      });
+      if (!handled) schedulePurchaseRefetch();
+      else if (applied) notifyIfFromAnotherUser(payload, "Um item foi removido do carrinho.");
     };
     const handlePurchaseTotalUpdated = (payload: PurchaseItemRealtimePayload) => {
       if (payload.purchaseId !== purchase.id) return;
-      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) =>
-        updateRealtimePurchaseTotalCache(current, purchase.id, payload.subtotalCalculated, payload.status),
-      );
-      schedulePurchaseRefetch();
+      if (typeof payload.subtotalCalculated !== "number" && !payload.status) {
+        schedulePurchaseRefetch();
+        return;
+      }
+
+      const updatedAt = payload.purchase?.updatedAt ?? payload.purchaseUpdatedAt ?? payload.updatedAt;
+      let handled = false;
+      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => {
+        const currentPurchase = current?.find((entry) => entry.id === purchase.id);
+        if (!currentPurchase) return current;
+
+        if (!shouldApplyRealtimeEvent(realtimeStateRef.current, payload, currentPurchase.updatedAt, { entityType: "purchase", entityId: purchase.id })) {
+          handled = true;
+          return current;
+        }
+
+        handled = true;
+        return updateRealtimePurchaseTotalCache(current, purchase.id, payload.subtotalCalculated, payload.status, updatedAt);
+      });
+      if (!handled) schedulePurchaseRefetch();
     };
     socket.on("connect", () => socket.emit("joinPurchase", { purchaseId: purchase.id }));
     socket.on("purchaseItemsSynced", refreshPurchase);

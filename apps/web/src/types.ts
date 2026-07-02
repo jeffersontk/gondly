@@ -91,6 +91,8 @@ export type MarketListItem = {
   assignedToUserId?: string | null;
   purchasedByUserId?: string | null;
   notes?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type ListMember = {
@@ -143,6 +145,8 @@ export type PurchaseItem = {
   unitPriceNormalized?: number | null;
   normalizedUnitLabel?: string | null;
   notes?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type Purchase = {
@@ -156,6 +160,7 @@ export type Purchase = {
   finalPaidAmount?: number | null;
   discountAmount?: number | null;
   notes?: string | null;
+  updatedAt?: string;
   items: PurchaseItem[];
   market?: Market | null;
   sourceList?: MarketList | null;

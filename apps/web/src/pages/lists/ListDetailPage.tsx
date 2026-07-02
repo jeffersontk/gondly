@@ -14,18 +14,25 @@ import { createRealtimeSocket } from "../../lib/realtime";
 import type { ListInvite, MarketList, MarketListItem, Purchase } from "../../types";
 import {
   addListCache,
+  createRealtimeApplyState,
   groupItemsByCategory,
+  ListItemRealtimePayload,
   ListPurchaseItemChangedPayload,
   ListSortFilter,
   ListStatusFilter,
   matchesListStatus,
   normalizeMarketList,
+  realtimeActorId,
+  removeRealtimePurchaseItemCache,
   removeListCache,
   removeListItemCache,
   setActivePurchaseCache,
+  shouldApplyRealtimeEvent,
   sortListItems,
   updateListItemCache,
   updateListsCache,
+  upsertListItemCache,
+  upsertRealtimePurchaseItemCache,
   useDebouncedValue,
 } from "../shared";
 import { ListActionsDrawer } from "./ListActionsDrawer";
@@ -61,6 +68,7 @@ export function ListDetailPage() {
   const [replacePurchaseOpen, setReplacePurchaseOpen] = useState(false);
   const debouncedItemSearch = useDebouncedValue(itemSearch);
   const listRealtimeNoticeTimeoutRef = useRef<number | undefined>(undefined);
+  const realtimeStateRef = useRef(createRealtimeApplyState());
   const list = useQuery({ queryKey: ["list", id], queryFn: () => api<MarketList>(`/lists/${id}`), enabled: Boolean(id) });
   const activePurchases = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   const activePurchase = activePurchases.data?.[0];
@@ -196,20 +204,80 @@ export function ListDetailPage() {
     if (!id || !token) return;
 
     const socket = createRealtimeSocket(token);
-    const refreshList = () => {
-      void queryClient.invalidateQueries({ queryKey: ["list", id] });
-      void queryClient.invalidateQueries({ queryKey: ["lists"] });
+    const refetchListFallback = () => {
+      void queryClient.refetchQueries({ queryKey: ["list", id], type: "active" });
+      void queryClient.refetchQueries({ queryKey: ["lists"], type: "active" });
+    };
+    const refetchActivePurchasesFallback = () => {
+      void queryClient.refetchQueries({ queryKey: ["active-purchases"], type: "active" });
     };
     const showListRealtimeNotice = (message: string) => {
       setListRealtimeNotice(message);
       if (listRealtimeNoticeTimeoutRef.current) window.clearTimeout(listRealtimeNoticeTimeoutRef.current);
       listRealtimeNoticeTimeoutRef.current = window.setTimeout(() => setListRealtimeNotice(null), 4_000);
     };
+    const handleListItemRealtime = (payload: ListItemRealtimePayload) => {
+      if (payload.listId !== id) return;
+
+      const action = payload.action ?? "updated";
+      const item = payload.item;
+      const itemId = payload.entityId ?? payload.itemId ?? item?.id;
+      if (!itemId || (action !== "deleted" && !item)) {
+        refetchListFallback();
+        return;
+      }
+
+      let handled = false;
+      const nextList = queryClient.setQueryData<MarketList>(["list", id], (current) => {
+        if (!current) return current;
+
+        const currentItem = current.items.find((entry) => entry.id === itemId);
+        if (!shouldApplyRealtimeEvent(realtimeStateRef.current, payload, currentItem?.updatedAt, { entityType: "listItem", entityId: itemId })) {
+          handled = true;
+          return current;
+        }
+
+        handled = true;
+        return action === "deleted" ? removeListItemCache(current, itemId) : upsertListItemCache(current, item!);
+      });
+
+      if (!handled) {
+        refetchListFallback();
+        return;
+      }
+
+      if (nextList) {
+        queryClient.setQueryData<MarketList[]>(["lists"], (current) => updateListsCache(current, nextList));
+      }
+    };
     const handlePurchaseItemChanged = (payload: ListPurchaseItemChangedPayload) => {
       if (payload.listId !== id) return;
 
-      void queryClient.refetchQueries({ queryKey: ["active-purchases"], type: "active" });
-      const actorId = payload.byUserId ?? payload.by?.userId;
+      const item = payload.item;
+      const itemId = payload.entityId ?? payload.itemId ?? item?.id;
+      if (!itemId || (payload.action !== "deleted" && !item)) {
+        refetchActivePurchasesFallback();
+      } else {
+        let handled = false;
+        queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => {
+          const currentPurchase = current?.find((entry) => entry.id === payload.purchaseId);
+          const currentItem = currentPurchase?.items.find((entry) => entry.id === itemId);
+          if (!currentPurchase) return current;
+
+          if (!shouldApplyRealtimeEvent(realtimeStateRef.current, payload, currentItem?.updatedAt, { entityType: "purchaseItem", entityId: itemId })) {
+            handled = true;
+            return current;
+          }
+
+          handled = true;
+          return payload.action === "deleted"
+            ? removeRealtimePurchaseItemCache(current, payload.purchaseId, itemId)
+            : upsertRealtimePurchaseItemCache(current, payload.purchaseId, item!);
+        });
+        if (!handled) refetchActivePurchasesFallback();
+      }
+
+      const actorId = realtimeActorId(payload);
       if (actorId === user?.id) return;
 
       const productName = payload.item?.productName ?? "Um produto";
@@ -221,24 +289,18 @@ export function ListDetailPage() {
             : "Um produto foi removido do carrinho.";
       showListRealtimeNotice(payload.by?.name ? `${payload.by.name}: ${actionMessage}` : actionMessage);
     };
-    const events = [
-      "listItemUpdated",
-      "itemAssigned",
-      "itemPurchased",
-      "itemSkipped",
-      "listItemsImported",
-      "accessRequested",
-      "memberApproved",
-      "memberRemoved",
-    ];
+    const directListItemEvents = ["listItemUpdated", "itemAssigned", "itemPurchased", "itemSkipped"];
+    const fallbackListEvents = ["listItemsImported", "accessRequested", "memberApproved", "memberRemoved"];
 
     socket.on("connect", () => socket.emit("joinList", { listId: id }));
-    events.forEach((event) => socket.on(event, refreshList));
+    directListItemEvents.forEach((event) => socket.on(event, handleListItemRealtime));
+    fallbackListEvents.forEach((event) => socket.on(event, refetchListFallback));
     socket.on("purchaseItemChanged", handlePurchaseItemChanged);
 
     return () => {
       socket.emit("leaveList", { listId: id });
-      events.forEach((event) => socket.off(event, refreshList));
+      directListItemEvents.forEach((event) => socket.off(event, handleListItemRealtime));
+      fallbackListEvents.forEach((event) => socket.off(event, refetchListFallback));
       socket.off("purchaseItemChanged", handlePurchaseItemChanged);
       socket.disconnect();
     };

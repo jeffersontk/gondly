@@ -1,21 +1,23 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, BarChart3, ChevronRight, CircleDollarSign, History, Loader2, Package, Plus, ShoppingCart, Sparkles, Store, TrendingUp } from "lucide-react";
+import { ArrowRight, BarChart3, BookOpen, ChevronRight, CircleDollarSign, History, Loader2, Package, Plus, ShoppingCart, Sparkles, Store, TrendingUp } from "lucide-react";
 import { AppButton, EmptyState, ErrorState, LoadingState, ScreenContainer } from "../components";
 import { AdSlot } from "../lib/ads";
 import { trackEvent } from "../lib/analytics";
 import { api } from "../lib/api";
-import { useAuth } from "../lib/auth";
+import { OPEN_TUTORIAL_ON_NEXT_HOME_KEY, useAuth } from "../lib/auth";
 import type { DashboardReport, MarketList, Purchase } from "../types";
 import { formatBRL, addListCache, setActivePurchaseCache } from "./shared";
 import { PurchaseTitleDialog } from "./purchase/PurchaseTitleDialog";
+import { GondlyTutorialGuide } from "./TutorialPage";
 
 export function HomePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [purchaseTitleDialogOpen, setPurchaseTitleDialogOpen] = useState(false);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
   const dashboard = useQuery({ queryKey: ["dashboard"], queryFn: () => api<DashboardReport>("/reports/dashboard") });
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   const lists = useQuery({ queryKey: ["lists"], queryFn: () => api<MarketList[]>("/lists") });
@@ -42,6 +44,14 @@ export function HomePage() {
     },
   });
 
+  useEffect(() => {
+    if (!user?.id || sessionStorage.getItem(OPEN_TUTORIAL_ON_NEXT_HOME_KEY) !== "true") return;
+
+    sessionStorage.removeItem(OPEN_TUTORIAL_ON_NEXT_HOME_KEY);
+    setTutorialOpen(true);
+    trackEvent("open_tutorial", { source: "first_login" });
+  }, [user?.id]);
+
   if (dashboard.isLoading) return <LoadingState />;
   if (dashboard.isError) return <ScreenContainer title="Gondly"><ErrorState /></ScreenContainer>;
 
@@ -62,6 +72,17 @@ export function HomePage() {
         <div className="mt-7">
           <h1 className="text-3xl font-black tracking-[-0.045em] text-ink">Olá, {firstName}</h1>
           <p className="mt-1 text-base font-medium text-ink/60">Organize, compare e economize.</p>
+          <button
+            type="button"
+            className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-black text-ink shadow-sm transition hover:border-mint/30 hover:text-mint"
+            onClick={() => {
+              trackEvent("open_tutorial", { source: "home" });
+              setTutorialOpen(true);
+            }}
+          >
+            <BookOpen className="h-4 w-4" />
+            Ver guia
+          </button>
         </div>
       </header>
 
@@ -240,6 +261,7 @@ export function HomePage() {
         }}
         onConfirm={(title) => startPurchase.mutate({ title })}
       />
+      <GondlyTutorialGuide open={tutorialOpen} onClose={() => setTutorialOpen(false)} />
     </ScreenContainer>
   );
 }

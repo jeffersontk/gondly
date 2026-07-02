@@ -1,7 +1,9 @@
 import { useEffect, type RefObject, type ReactNode } from "react";
 import {
+  AlertCircle,
   BarChart3,
   ListChecks,
+  Loader2,
   ReceiptText,
   RefreshCcw,
   ScanLine,
@@ -15,12 +17,18 @@ type LandingPageProps = {
   clientId?: string;
   signinButtonRef: RefObject<HTMLDivElement>;
   signupButtonRef: RefObject<HTMLDivElement>;
+  googleReady?: boolean;
+  loginPending?: boolean;
+  authError?: string | null;
 };
 
 export function LandingPage({
   clientId,
   signinButtonRef,
   signupButtonRef,
+  googleReady,
+  loginPending,
+  authError,
 }: LandingPageProps) {
   useEffect(() => {
     trackEvent("view_landing", { source: "login_page" });
@@ -46,6 +54,8 @@ export function LandingPage({
               label="Entrar com Google"
               className="min-h-10 w-[198px]"
               source="header"
+              loading={!googleReady || loginPending}
+              loadingLabel={loginPending ? "Entrando..." : "Preparando..."}
             />
           ) : (
             <span className="rounded-full border border-tomato/20 px-3 py-2 text-xs font-black text-tomato shadow-soft">
@@ -74,6 +84,8 @@ export function LandingPage({
                   label="Inscrever-se com Google"
                   className="min-h-11 w-[260px]"
                   source="hero"
+                  loading={!googleReady || loginPending}
+                  loadingLabel={loginPending ? "Entrando..." : "Preparando login"}
                 />
               ) : (
                 <div className="flex min-h-11 w-full max-w-[280px] items-center justify-center rounded-full border border-tomato/20  px-4 text-sm font-semibold text-tomato shadow-soft">
@@ -85,6 +97,13 @@ export function LandingPage({
                 histórico de preços.
               </p>
             </div>
+
+            {authError ? (
+              <div className="mt-3 flex max-w-xl items-start gap-2 rounded-xl border border-tomato/20 bg-tomato/10 p-3 text-sm font-semibold leading-5 text-tomato" role="alert">
+                <AlertCircle className="mt-0.5 h-4 w-4 flex-none" />
+                <span>{authError}</span>
+              </div>
+            ) : null}
 
             <div className="mt-8 grid max-w-2xl gap-3 sm:grid-cols-3">
               <LandingMetric
@@ -143,11 +162,15 @@ function GoogleAuthButton({
   label,
   className,
   source,
+  loading,
+  loadingLabel,
 }: {
   buttonRef: RefObject<HTMLDivElement>;
   label: string;
   className: string;
   source: "header" | "hero";
+  loading?: boolean;
+  loadingLabel?: string;
 }) {
   return (
     <div
@@ -162,6 +185,17 @@ function GoogleAuthButton({
         <span className="text-base font-black text-[#4285F4]">G</span>
         <span>{label}</span>
       </div>
+      {loading ? (
+        <button
+          type="button"
+          className="absolute inset-0 z-20 flex h-full min-h-[inherit] w-full cursor-wait items-center justify-center gap-2 rounded-full border border-line bg-white px-4 text-sm font-semibold text-ink/65"
+          disabled
+          aria-busy="true"
+        >
+          <Loader2 className="h-4 w-4 animate-spin text-mint" />
+          <span>{loadingLabel ?? "Carregando"}</span>
+        </button>
+      ) : null}
       <div ref={buttonRef} className="relative z-10 flex min-h-[inherit] w-full items-center justify-center" />
     </div>
   );

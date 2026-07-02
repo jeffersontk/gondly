@@ -132,10 +132,11 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
   async listItemUpdated(@ConnectedSocket() socket: Socket, @MessageBody() body: { listId: string; item: unknown }) {
     const user = this.assertUser(socket);
     await this.assertListAccess(user.id, body.listId);
-    socket.to(`list:${body.listId}`).emit("listItemUpdated", {
+    socket.to(`list:${body.listId}`).emit("listItemUpdated", this.realtimeService.buildEventPayload("listItemUpdated", {
       ...body,
+      byUserId: user.id,
       by: this.participantPayload(socket),
-    });
+    }));
   }
 
   @SubscribeMessage("itemAssigned")
@@ -223,13 +224,13 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
   private async emitListEvent(socket: Socket, event: string, body: { listId: string; item: unknown }) {
     const user = this.assertUser(socket);
     await this.assertListAccess(user.id, body.listId);
-    socket.to(`list:${body.listId}`).emit(event, { ...body, by: this.participantPayload(socket) });
+    socket.to(`list:${body.listId}`).emit(event, this.realtimeService.buildEventPayload(event, { ...body, byUserId: user.id, by: this.participantPayload(socket) }));
   }
 
   private async emitPurchaseEvent(socket: Socket, event: string, body: { purchaseId: string; item?: unknown; itemId?: string; total?: number }) {
     const user = this.assertUser(socket);
     await this.assertPurchaseAccess(user.id, body.purchaseId);
-    socket.to(`purchase:${body.purchaseId}`).emit(event, { ...body, by: this.participantPayload(socket) });
+    socket.to(`purchase:${body.purchaseId}`).emit(event, this.realtimeService.buildEventPayload(event, { ...body, byUserId: user.id, by: this.participantPayload(socket) }));
   }
 
   private addPresence(room: string, socket: Socket) {

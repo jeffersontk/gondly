@@ -7,6 +7,7 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { AdProvider } from "./lib/ads";
 import { AuthProvider } from "./lib/auth";
 import { installOfflineQueueSync } from "./lib/offlineQueue";
+import { initPwaInstall } from "./lib/pwaInstall";
 import { installBackgroundQuerySync, installQueryCachePersistence, queryClient, restorePersistedQueryCache } from "./lib/queryClient";
 import { registerServiceWorker } from "./lib/register-sw";
 import "./styles.css";
@@ -16,6 +17,7 @@ async function bootstrap() {
   installQueryCachePersistence();
   installBackgroundQuerySync();
   installOfflineQueueSync();
+  initPwaInstall();
 
   createRoot(document.getElementById("root")!).render(
     <StrictMode>

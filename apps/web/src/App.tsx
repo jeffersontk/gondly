@@ -10,17 +10,24 @@ import {
 import { lazy, Suspense } from "react";
 import {
   BarChart3,
+  CheckCircle2,
   Download,
   History,
   Home,
   ListChecks,
   Settings,
   ShoppingCart,
+  Smartphone,
   WifiOff,
+  X,
 } from "lucide-react";
 import { AppButton, LoadingState } from "./components";
 import { trackEvent, usePageTracking } from "./lib/analytics";
 import { useAuth } from "./lib/auth";
+import { promptPwaInstall, usePwaInstall } from "./lib/pwaInstall";
+
+const INSTALL_MODAL_SESSION_KEY = "gondly.installModalDismissed";
+
 const LoginPage = lazy(() =>
   import("./pages/LoginPage").then((module) => ({ default: module.LoginPage })),
 );
@@ -142,6 +149,11 @@ const SettingsPage = lazy(() =>
     default: module.SettingsPage,
   })),
 );
+const TutorialPage = lazy(() =>
+  import("./pages/TutorialPage").then((module) => ({
+    default: module.TutorialPage,
+  })),
+);
 
 export function App() {
   usePageTracking();
@@ -214,6 +226,7 @@ export function App() {
           <Route path="/app/billing/pending" element={<BillingPendingPage />} />
           <Route path="/app/billing/failure" element={<BillingFailurePage />} />
           <Route path="/app/settings" element={<SettingsPage />} />
+          <Route path="/app/tutorial" element={<TutorialPage />} />
 
           <Route path="/lists" element={<ListsPage />} />
           <Route path="/lists/new" element={<CreateEditListPage />} />
@@ -246,6 +259,7 @@ export function App() {
           <Route path="/billing/pending" element={<BillingPendingPage />} />
           <Route path="/billing/failure" element={<BillingFailurePage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/tutorial" element={<TutorialPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/app/home" replace />} />
       </Routes>
@@ -283,40 +297,53 @@ function ProtectedLayout({ children }: { children?: ReactNode }) {
 
 function AppChrome() {
   const [online, setOnline] = useState(navigator.onLine);
-  const [deferredPrompt, setDeferredPrompt] = useState<Event | null>(null);
+  const [installModalOpen, setInstallModalOpen] = useState(false);
+  const [installModalDismissed, setInstallModalDismissed] = useState(() => sessionStorage.getItem(INSTALL_MODAL_SESSION_KEY) === "true");
+  const pwaInstall = usePwaInstall();
   const location = useLocation();
   const showSettingsShortcut =
     location.pathname === "/" || location.pathname === "/app/home";
+  const canShowInstallModal = Boolean(pwaInstall.deferredPrompt) && online && !pwaInstall.installed;
 
   useEffect(() => {
     const handleOnline = () => setOnline(true);
     const handleOffline = () => setOnline(false);
-    const handleBeforeInstall = (event: Event) => {
-      event.preventDefault();
-      setDeferredPrompt(event);
-    };
     const handleAppInstalled = () => {
       trackEvent("app_installed", { source: "browser" });
-      setDeferredPrompt(null);
     };
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
-    window.addEventListener("beforeinstallprompt", handleBeforeInstall);
     window.addEventListener("appinstalled", handleAppInstalled);
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
       window.removeEventListener("appinstalled", handleAppInstalled);
     };
   }, []);
 
+  useEffect(() => {
+    if (!canShowInstallModal) {
+      setInstallModalOpen(false);
+      return;
+    }
+
+    if (!installModalDismissed) {
+      setInstallModalOpen(true);
+      trackEvent("view_install_pwa_modal", { source: "auto_prompt" });
+    }
+  }, [canShowInstallModal, installModalDismissed]);
+
   async function promptInstall() {
-    trackEvent("click_install_pwa", { source: "install_prompt" });
-    const prompt = deferredPrompt as Event & { prompt?: () => Promise<void> };
-    await prompt.prompt?.();
-    setDeferredPrompt(null);
+    trackEvent("click_install_pwa", { source: "install_modal" });
+    await promptPwaInstall();
+    dismissInstallModal();
+  }
+
+  function dismissInstallModal() {
+    sessionStorage.setItem(INSTALL_MODAL_SESSION_KEY, "true");
+    setInstallModalDismissed(true);
+    setInstallModalOpen(false);
   }
 
   return (
@@ -336,21 +363,55 @@ function AppChrome() {
           Sem conexao. Dados recentes podem vir do cache local.
         </div>
       ) : null}
-      {deferredPrompt && online ? (
-        <div className="fixed inset-x-3 bottom-[calc(86px+env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-xl items-center justify-between gap-3 rounded-2xl border border-line bg-white p-3 shadow-lift">
-          <span className="text-xs font-semibold text-ink/65">
-            Adicionar Gondly a tela inicial
+      {installModalOpen && canShowInstallModal ? <InstallAppModal onInstall={promptInstall} onClose={dismissInstallModal} /> : null}
+    </>
+  );
+}
+
+function InstallAppModal({ onInstall, onClose }: { onInstall: () => void; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/45 p-3 backdrop-blur-sm sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="install-app-title">
+      <div className="w-full max-w-sm rounded-2xl border border-line bg-white p-5 shadow-lift">
+        <div className="flex items-start justify-between gap-3">
+          <span className="grid h-12 w-12 flex-none place-items-center rounded-xl bg-mint text-white shadow-soft">
+            <Smartphone className="h-6 w-6" />
           </span>
-          <AppButton
-            className="h-10 px-3"
-            icon={<Download className="h-4 w-4" />}
-            onClick={promptInstall}
+          <button
+            type="button"
+            className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-paper text-ink/60 transition hover:bg-line hover:text-ink"
+            onClick={onClose}
+            aria-label="Fechar instalacao"
           >
-            Instalar
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <h2 id="install-app-title" className="mt-4 text-xl font-black tracking-[-0.03em] text-ink">
+          Instale o Gondly no seu dispositivo
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-ink/65">
+          Abra o Gondly como app, com acesso rapido pela tela inicial e melhor experiencia durante as compras.
+        </p>
+
+        <div className="mt-4 space-y-2 rounded-xl bg-paper p-3">
+          {["Acesso direto sem abrir o navegador", "Tela mais limpa para usar no mercado", "Dados recentes continuam disponiveis offline"].map((item) => (
+            <div key={item} className="flex items-center gap-2 text-sm font-semibold text-ink/70">
+              <CheckCircle2 className="h-4 w-4 flex-none text-mint" />
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 grid gap-2">
+          <AppButton full icon={<Download className="h-4 w-4" />} onClick={onInstall}>
+            Instalar agora
+          </AppButton>
+          <AppButton full variant="secondary" onClick={onClose}>
+            Agora nao
           </AppButton>
         </div>
-      ) : null}
-    </>
+      </div>
+    </div>
   );
 }
 
