@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, BarChart3, BookOpen, ChevronRight, CircleDollarSign, History, Loader2, Package, Plus, ShoppingCart, Sparkles, Store, TrendingUp } from "lucide-react";
 import { AppButton, EmptyState, ErrorState, LoadingState, ScreenContainer } from "../components";
-import { AdSlot } from "../lib/ads";
+import { AdSlot } from "../ads/AdSlot";
 import { trackEvent } from "../lib/analytics";
 import { api } from "../lib/api";
 import { OPEN_TUTORIAL_ON_NEXT_HOME_KEY, useAuth } from "../lib/auth";
@@ -252,7 +252,7 @@ export function HomePage() {
         </button>
       </section>
 
-      <AdSlot className="mt-5" />
+      <AdSlot slot="home_inline" className="mt-5" />
       <PurchaseTitleDialog
         open={purchaseTitleDialogOpen}
         loading={startPurchase.isPending}

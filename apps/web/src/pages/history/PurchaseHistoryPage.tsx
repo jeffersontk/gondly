@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { DateRangeFilter, EmptyState, LoadingState, ScreenContainer, SearchBar } from "../../components";
-import { AdSlot } from "../../lib/ads";
+import { AdSlot } from "../../ads/AdSlot";
 import { trackSafeSearch } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import type { Purchase } from "../../types";
@@ -45,7 +45,7 @@ export function PurchaseHistoryPage() {
         ))}
       </div>
       <div className="mt-4">
-        <AdSlot />
+        <AdSlot slot="history_inline" />
       </div>
     </ScreenContainer>
   );

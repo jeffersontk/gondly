@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Loader2, Menu, Plus, ShoppingCart, SlidersHorizontal, Star, Tags, Trash2 } from "lucide-react";
 import type { ListItemStatus } from "@gondly/types";
 import { AppButton, ConfirmDialog, EmptyState, ErrorState, ListItemRow, LoadingState, PriceCard, ScreenContainer, SectionHeader } from "../../components";
-import { AdSlot } from "../../lib/ads";
 import { trackEvent, trackSafeSearch } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
@@ -549,7 +548,7 @@ export function ListDetailPage() {
             </button>
             {!collapsedCategories.has(group.category) ? (
               <div id={`list-category-${group.category.replace(/\W+/g, "-").toLowerCase()}`} className="space-y-2">
-                {group.items.map((item, index) => (
+                {group.items.map((item) => (
                   <Fragment key={item.id}>
                     <div className="rounded-2xl border border-line bg-white p-2.5 shadow-sm">
                       <div className="flex gap-2">
@@ -597,7 +596,6 @@ export function ListDetailPage() {
                         </select>
                       </div>
                     </div>
-                    {(index + 1) % 3 === 0 ? <AdSlot /> : null}
                   </Fragment>
                 ))}
               </div>

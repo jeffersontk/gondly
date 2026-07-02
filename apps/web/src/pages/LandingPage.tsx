@@ -11,6 +11,7 @@ import {
   Store,
   TrendingUp,
 } from "lucide-react";
+import { AdSlot } from "../ads/AdSlot";
 import { trackEvent } from "../lib/analytics";
 
 type LandingPageProps = {
@@ -130,6 +131,12 @@ export function LandingPage({
           <LandingAppPreview />
         </div>
       </section>
+
+      <AdSlot
+        slot="landing_inline"
+        disabled={loginPending}
+        className="mx-5 mb-8 sm:mx-8 lg:mx-auto lg:max-w-7xl"
+      />
 
       <section className="mx-auto grid w-full max-w-7xl gap-3 px-5 pb-10 sm:px-8 md:grid-cols-4 lg:px-10">
         <LandingFeature

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { DateRangeFilter, EmptyState, PriceCard, ScreenContainer, SearchBar } from "../../components";
-import { AdSlot } from "../../lib/ads";
+import { AdSlot } from "../../ads/AdSlot";
 import { trackEvent, trackSafeSearch } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import type { PriceComparison } from "../../types";
@@ -52,7 +52,7 @@ export function PriceComparisonPage() {
         ))}
       </div>
       <div className="mt-4">
-        <AdSlot />
+        <AdSlot slot="compare_inline" />
       </div>
     </ScreenContainer>
   );

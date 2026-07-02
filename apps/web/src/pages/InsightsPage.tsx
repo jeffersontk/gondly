@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { PriceCard, ScreenContainer, SectionHeader } from "../components";
-import { AdSlot } from "../lib/ads";
 import { api } from "../lib/api";
 import type { InsightsReport } from "../types";
 import { formatBRL } from "./shared";
@@ -10,7 +9,6 @@ export function InsightsPage() {
 
   return (
     <ScreenContainer title="Insights">
-      <AdSlot />
       <SectionHeader title="Gasto mensal" />
       <div className="space-y-2">
         {insights.data?.monthly.map((entry) => <PriceCard key={entry.month} label={entry.month} value={formatBRL(entry.total)} />)}
