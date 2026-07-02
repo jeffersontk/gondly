@@ -154,6 +154,21 @@ const TutorialPage = lazy(() =>
     default: module.TutorialPage,
   })),
 );
+const PrivacyPage = lazy(() =>
+  import("./pages/PublicInfoPages").then((module) => ({
+    default: module.PrivacyPage,
+  })),
+);
+const TermsPage = lazy(() =>
+  import("./pages/PublicInfoPages").then((module) => ({
+    default: module.TermsPage,
+  })),
+);
+const ContactPage = lazy(() =>
+  import("./pages/PublicInfoPages").then((module) => ({
+    default: module.ContactPage,
+  })),
+);
 
 export function App() {
   usePageTracking();
@@ -161,7 +176,11 @@ export function App() {
   return (
     <Suspense fallback={<RouteLoadingFallback />}>
       <Routes>
-        <Route path="/login" element={<LoginPage />} />
+        <Route index element={<PublicLandingRoute />} />
+        <Route path="/login" element={<PublicLandingRoute />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/contact" element={<ContactPage />} />
         <Route
           path="/invite/:token"
           element={
@@ -179,7 +198,6 @@ export function App() {
           }
         />
         <Route element={<ProtectedLayout />}>
-          <Route index element={<HomePage />} />
           <Route path="/app/home" element={<HomePage />} />
           <Route path="/app/lists" element={<ListsPage />} />
           <Route path="/app/lists/new" element={<CreateEditListPage />} />
@@ -278,6 +296,15 @@ function RouteLoadingFallback() {
   );
 }
 
+function PublicLandingRoute() {
+  const { user, loading } = useAuth();
+
+  if (loading) return <LoadingState />;
+  if (user) return <Navigate to="/app/home" replace />;
+
+  return <LoginPage />;
+}
+
 function ProtectedLayout({ children }: { children?: ReactNode }) {
   const { user, loading } = useAuth();
 
@@ -301,8 +328,7 @@ function AppChrome() {
   const [installModalDismissed, setInstallModalDismissed] = useState(() => sessionStorage.getItem(INSTALL_MODAL_SESSION_KEY) === "true");
   const pwaInstall = usePwaInstall();
   const location = useLocation();
-  const showSettingsShortcut =
-    location.pathname === "/" || location.pathname === "/app/home";
+  const showSettingsShortcut = location.pathname === "/app/home";
   const canShowInstallModal = Boolean(pwaInstall.deferredPrompt) && online && !pwaInstall.installed;
 
   useEffect(() => {
@@ -454,7 +480,7 @@ function BottomNav() {
 }
 
 function isBottomNavActive(pathname: string, to: string) {
-  if (to === "/app/home") return pathname === "/" || pathname === "/app/home";
+  if (to === "/app/home") return pathname === "/app/home";
   if (to === "/app/purchase/start")
     return (
       pathname.startsWith("/app/purchase") || pathname.startsWith("/purchase")

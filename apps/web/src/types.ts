@@ -61,8 +61,18 @@ export type OneTimePurchase = {
 export type Market = {
   id: string;
   name: string;
+  normalizedName?: string;
   address?: string | null;
+  neighborhood?: string | null;
   city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  postalCode?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  placeId?: string | null;
+  createdByUserId?: string | null;
+  verifiedStatus?: "unverified" | "user_created" | "verified";
   notes?: string | null;
   createdAt: string;
   updatedAt: string;

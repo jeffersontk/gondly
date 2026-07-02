@@ -103,6 +103,12 @@ enum PaymentStatus {
   expired
 }
 
+enum MarketVerifiedStatus {
+  unverified
+  user_created
+  verified
+}
+
 model User {
   id                     String                @id @default(cuid())
   name                   String
@@ -128,19 +134,31 @@ model User {
 }
 
 model Market {
-  id        String     @id @default(cuid())
-  userId    String
-  name      String
-  address   String?
-  city      String?
-  notes     String?
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  deletedAt DateTime?
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  purchases Purchase[]
+  id               String               @id @default(cuid())
+  name             String
+  normalizedName   String
+  address          String?
+  neighborhood     String?
+  city             String?
+  state            String?
+  country          String               @default("BR")
+  postalCode       String?
+  latitude         Float?
+  longitude        Float?
+  placeId          String?
+  createdByUserId  String?              @map("userId")
+  verifiedStatus   MarketVerifiedStatus @default(user_created)
+  notes            String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  deletedAt        DateTime?
+  createdBy        User?                @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  purchases        Purchase[]
 
-  @@index([userId, deletedAt])
+  @@index([createdByUserId, deletedAt], map: "Market_userId_deletedAt_idx")
+  @@index([normalizedName])
+  @@index([city, neighborhood])
+  @@index([latitude, longitude])
 }
 
 model Product {

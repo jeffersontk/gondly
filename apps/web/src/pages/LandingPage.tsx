@@ -1,4 +1,5 @@
 import { useEffect, type RefObject, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import {
   AlertCircle,
   BarChart3,
@@ -39,16 +40,18 @@ export function LandingPage({
     <main className="min-h-screen overflow-x-hidden bg-paper text-ink">
       <section className="relative mx-auto flex min-h-[88svh] w-full max-w-7xl flex-col px-5 pb-10 pt-5 sm:px-8 lg:px-10">
         <header className="flex items-center justify-between gap-4">
-          <picture>
-            <source srcSet="/gondly-logo-small.webp" type="image/webp" />
-            <img
-              src="/gondly-logo-small.png"
-              alt="Gondly"
-              width="512"
-              height="171"
-              className="h-10 w-auto max-w-[150px] object-contain"
-            />
-          </picture>
+          <Link to="/" aria-label="Gondly">
+            <picture>
+              <source srcSet="/gondly-logo-small.webp" type="image/webp" />
+              <img
+                src="/gondly-logo-small.png"
+                alt="Gondly"
+                width="512"
+                height="171"
+                className="h-10 w-auto max-w-[150px] object-contain"
+              />
+            </picture>
+          </Link>
           {clientId ? (
             <GoogleAuthButton
               buttonRef={signinButtonRef}
@@ -160,6 +163,26 @@ export function LandingPage({
           description="Guarde locais, tickets e produtos para decidir mais rápido."
         />
       </section>
+
+      <footer className="mx-auto flex w-full max-w-7xl flex-col gap-4 border-t border-line px-5 py-6 text-sm font-semibold text-ink/55 sm:px-8 md:flex-row md:items-center md:justify-between lg:px-10">
+        <Link to="/" className="font-black text-ink">
+          Gondly
+        </Link>
+        <nav className="flex flex-wrap gap-x-5 gap-y-2">
+          <Link className="transition hover:text-mint" to="/privacy">
+            Privacidade
+          </Link>
+          <Link className="transition hover:text-mint" to="/terms">
+            Termos
+          </Link>
+          <Link className="transition hover:text-mint" to="/contact">
+            Contato
+          </Link>
+          <Link className="transition hover:text-mint" to="/login">
+            Entrar
+          </Link>
+        </nav>
+      </footer>
     </main>
   );
 }

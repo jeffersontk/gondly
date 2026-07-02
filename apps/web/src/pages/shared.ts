@@ -26,7 +26,14 @@ export const listSchema = z.object({
 export const marketSchema = z.object({
   name: z.string().min(2, "Informe um nome"),
   address: z.string().optional(),
+  neighborhood: z.string().optional(),
   city: z.string().optional(),
+  state: z.string().max(2, "Use a sigla do estado").optional(),
+  country: z.string().max(2).optional(),
+  postalCode: z.string().optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  placeId: z.string().optional(),
   notes: z.string().optional(),
 });
 

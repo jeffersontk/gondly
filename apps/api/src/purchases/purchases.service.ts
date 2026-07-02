@@ -109,7 +109,7 @@ export class PurchasesService {
   async update(userId: string, id: string, dto: UpdatePurchaseDto) {
     const purchase = await this.assertPurchaseEditable(userId, id);
     if (dto.marketId) {
-      await this.assertMarketBelongsToUser(userId, dto.marketId);
+      await this.assertMarketAccessible(userId, dto.marketId);
     }
 
     return this.prisma.purchase.update({
@@ -211,7 +211,7 @@ export class PurchasesService {
 
   async finish(userId: string, id: string, dto: FinishPurchaseDto) {
     const purchase = await this.assertPurchaseEditable(userId, id);
-    await this.assertMarketBelongsToUser(userId, dto.marketId);
+    await this.assertMarketAccessible(userId, dto.marketId);
 
     const finished = await this.prisma.$transaction(async (tx) => {
       const items = await tx.purchaseItem.findMany({ where: { purchaseId: purchase.id } });
@@ -351,8 +351,10 @@ export class PurchasesService {
     return item;
   }
 
-  private async assertMarketBelongsToUser(userId: string, marketId: string) {
-    const market = await this.prisma.market.findFirst({ where: { id: marketId, userId, deletedAt: null } });
+  private async assertMarketAccessible(userId: string, marketId: string) {
+    const market = await this.prisma.market.findFirst({
+      where: { id: marketId, deletedAt: null, OR: [{ createdByUserId: userId }, { createdByUserId: null }] },
+    });
     if (!market) {
       throw new NotFoundException("Market not found.");
     }

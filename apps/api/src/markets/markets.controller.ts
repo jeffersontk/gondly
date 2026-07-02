@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
@@ -18,6 +18,11 @@ export class MarketsController {
     return this.marketsService.list(user.id);
   }
 
+  @Get("nearby")
+  nearby(@CurrentUser() user: JwtUser, @Query("latitude") latitude?: string, @Query("longitude") longitude?: string) {
+    return this.marketsService.nearby(user.id, latitude, longitude);
+  }
+
   @Post()
   create(@CurrentUser() user: JwtUser, @Body() dto: CreateMarketDto) {
     return this.marketsService.create(user.id, dto);
@@ -30,6 +35,11 @@ export class MarketsController {
 
   @Put(":id")
   update(@CurrentUser() user: JwtUser, @Param("id") id: string, @Body() dto: UpdateMarketDto) {
+    return this.marketsService.update(user.id, id, dto);
+  }
+
+  @Patch(":id")
+  patch(@CurrentUser() user: JwtUser, @Param("id") id: string, @Body() dto: UpdateMarketDto) {
     return this.marketsService.update(user.id, id, dto);
   }
 

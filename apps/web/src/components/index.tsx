@@ -226,7 +226,7 @@ export function MarketSelect({
         {onCreate ? <option value="__create_market__">+ Cadastrar mercado</option> : null}
         {data.map((market) => (
           <option key={market.id} value={market.id}>
-            {market.name}
+            {[market.name, market.neighborhood, market.city].filter(Boolean).join(" - ")}
           </option>
         ))}
       </select>
@@ -486,6 +486,8 @@ export function ProductCard({ product, onClick }: { product: Product; onClick?: 
 }
 
 export function MarketCard({ market, onClick }: { market: Market; onClick?: () => void }) {
+  const location = [market.neighborhood, market.city, market.state].filter(Boolean).join(" · ");
+
   return (
     <button onClick={onClick} className="flex w-full items-center gap-3 rounded-2xl border border-line bg-white p-4 text-left shadow-sm transition hover:border-mint/25 hover:shadow-soft">
       <div className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-mint/10 text-mint">
@@ -493,7 +495,7 @@ export function MarketCard({ market, onClick }: { market: Market; onClick?: () =
       </div>
       <div className="min-w-0">
         <p className="truncate text-sm font-bold text-ink">{market.name}</p>
-        <p className="mt-0.5 truncate text-xs text-ink/60">{[market.address, market.city].filter(Boolean).join(" · ") || "Sem endereco"}</p>
+        <p className="mt-0.5 truncate text-xs text-ink/60">{location || market.address || "Sem localização"}</p>
       </div>
     </button>
   );

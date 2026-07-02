@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, BarChart3, BookOpen, ChevronRight, CircleDollarSign, History, Loader2, Package, Plus, ShoppingCart, Sparkles, Store, TrendingUp } from "lucide-react";
+import { ArrowRight, BarChart3, ChevronRight, CircleDollarSign, History, Loader2, Package, Plus, ShoppingCart, Sparkles, Store, TrendingUp } from "lucide-react";
 import { AppButton, EmptyState, ErrorState, LoadingState, ScreenContainer } from "../components";
 import { AdSlot } from "../ads/AdSlot";
 import { trackEvent } from "../lib/analytics";
@@ -68,53 +68,45 @@ export function HomePage() {
   return (
     <ScreenContainer>
       <header className="mb-5 pr-12">
-        <p className="text-3xl font-black tracking-[-0.055em] text-ink">Gondly</p>
-        <div className="mt-7">
-          <h1 className="text-3xl font-black tracking-[-0.045em] text-ink">Olá, {firstName}</h1>
-          <p className="mt-1 text-base font-medium text-ink/60">Organize, compare e economize.</p>
-          <button
-            type="button"
-            className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-black text-ink shadow-sm transition hover:border-mint/30 hover:text-mint"
-            onClick={() => {
-              trackEvent("open_tutorial", { source: "home" });
-              setTutorialOpen(true);
-            }}
-          >
-            <BookOpen className="h-4 w-4" />
-            Ver guia
-          </button>
+        <div className="flex items-center gap-3">
+          <picture className="flex-none">
+            <source srcSet="/icons/gondly-icon-192x192.webp" type="image/webp" />
+            <img
+              src="/icons/gondly-icon-192x192.png"
+              alt="Gondly"
+              width="192"
+              height="192"
+              className="h-12 w-12 rounded-xl object-contain"
+            />
+          </picture>
+          <div className="min-w-0">
+            <h1 className="truncate text-2xl font-black tracking-[-0.04em] text-ink sm:text-3xl">Olá, {firstName}</h1>
+            <p className="mt-1 truncate text-sm font-medium text-ink/60 sm:text-base">Organize, compare e economize.</p>
+          </div>
         </div>
       </header>
 
-      <section className="rounded-[28px] bg-mint p-5 text-white shadow-[0_18px_44px_rgba(79,70,229,0.28)]">
+      <section className="rounded-[24px] bg-mint p-4 text-white shadow-[0_18px_44px_rgba(79,70,229,0.24)]">
         {active.isLoading ? (
           <div className="flex items-center gap-3">
             <Loader2 className="h-5 w-5 animate-spin" />
             <div>
               <p className="text-sm font-semibold text-white/70">Compra</p>
-              <p className="text-xl font-black tracking-[-0.03em]">Verificando compra ativa...</p>
+              <p className="text-lg font-black tracking-[-0.03em]">Verificando compra ativa...</p>
             </div>
           </div>
         ) : activePurchase ? (
           <>
-            <div className="flex items-start justify-between gap-3">
-              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/12 text-white">
-                <ShoppingCart className="h-6 w-6" />
-              </span>
-              <span className="grid h-12 w-12 place-items-center rounded-2xl border border-white/20 bg-white/10 text-white">
-                <Package className="h-5 w-5" />
-              </span>
-            </div>
-            <div className="mt-4">
+            <div>
               <p className="text-sm font-semibold text-white/70">Compra em andamento</p>
-              <h2 className="mt-1 truncate text-2xl font-black tracking-[-0.04em]">{activePurchaseTitle}</h2>
-              <p className="mt-2 text-base font-semibold text-white/80">
+              <h2 className="mt-0.5 truncate text-2xl font-black tracking-[-0.035em]">{activePurchaseTitle}</h2>
+              <p className="mt-1.5 text-sm font-semibold text-white/80">
                 {formatBRL(activePurchase.subtotalCalculated)} · {activeCartItemsLabel}
               </p>
             </div>
             <button
               type="button"
-              className="mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-black text-mint shadow-soft transition active:scale-[0.99]"
+              className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-black text-mint shadow-soft transition active:scale-[0.99]"
               onClick={() => {
                 trackEvent("continue_purchase", {
                   purchase_id: activePurchase.id,
@@ -131,20 +123,12 @@ export function HomePage() {
           </>
         ) : (
           <>
-            <div className="flex items-start justify-between gap-3">
-              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/12 text-white">
-                <ShoppingCart className="h-6 w-6" />
-              </span>
-              <span className="grid h-12 w-12 place-items-center rounded-2xl border border-white/20 bg-white/10 text-white">
-                <Plus className="h-5 w-5" />
-              </span>
-            </div>
-            <h2 className="mt-4 text-2xl font-black tracking-[-0.04em]">Nova compra</h2>
-            <p className="mt-2 text-sm leading-6 text-white/78">Registre os preços enquanto compra e compare depois.</p>
-            <div className="mt-5 grid gap-2">
+            <h2 className="text-xl font-black tracking-[-0.035em]">Nova compra</h2>
+            <p className="mt-1.5 text-sm leading-5 text-white/78">Registre os preços enquanto compra e compare depois.</p>
+            <div className="mt-4 grid gap-2">
               <button
                 type="button"
-                className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-black text-mint shadow-soft transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70"
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-black text-mint shadow-soft transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70"
                 onClick={() => setPurchaseTitleDialogOpen(true)}
                 disabled={startPurchase.isPending}
               >
@@ -154,7 +138,7 @@ export function HomePage() {
               {hasLists ? (
                 <button
                   type="button"
-                  className="h-12 rounded-2xl border border-white/20 bg-white/10 px-4 text-sm font-black text-white transition active:scale-[0.99]"
+                  className="h-11 rounded-xl border border-white/20 bg-white/10 px-4 text-sm font-black text-white transition active:scale-[0.99]"
                   onClick={() => {
                     trackEvent("continue_purchase", { source: "home_existing_list" });
                     navigate("/app/purchase/start");

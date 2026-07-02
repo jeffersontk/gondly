@@ -20,9 +20,9 @@ export function ListsPage() {
   }, [debouncedQ]);
 
   return (
-    <ScreenContainer title="Listas">
+    <ScreenContainer>
+      <h1 className="mb-5 text-3xl font-black tracking-[-0.04em] text-ink">Listas</h1>
       <SearchBar placeholder="Buscar lista" value={q} onChange={(event) => setQ(event.target.value)} />
-      <AdSlot slot="lists_inline" className="mt-4" />
       <div className="mt-4 space-y-3">
         {isLoading ? <LoadingState /> : null}
         {!isLoading && !filtered.length ? <EmptyState title="Você ainda não tem listas. Crie sua primeira lista de mercado." /> : null}
@@ -31,6 +31,7 @@ export function ListsPage() {
             <MarketListCard list={list} onClick={() => navigate(`/app/lists/${list.id}`)} />
           </div>
         ))}
+        <AdSlot slot="lists_inline" />
       </div>
       <FloatingActionButton
         label="Lista"

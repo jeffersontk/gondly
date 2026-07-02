@@ -14,14 +14,30 @@ export function CreateEditMarketPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const market = useQuery({ queryKey: ["market", id], queryFn: () => api<Market>(`/markets/${id}`), enabled: isEdit });
-  const form = useForm<MarketForm>({ resolver: zodResolver(marketSchema), defaultValues: { name: "", address: "", city: "", notes: "" } });
+  const form = useForm<MarketForm>({
+    resolver: zodResolver(marketSchema),
+    defaultValues: { name: "", address: "", neighborhood: "", city: "", state: "", country: "BR", postalCode: "", notes: "" },
+  });
 
   useEffect(() => {
-    if (market.data) form.reset({ name: market.data.name, address: market.data.address ?? "", city: market.data.city ?? "", notes: market.data.notes ?? "" });
+    if (market.data) {
+      form.reset({
+        name: market.data.name,
+        address: market.data.address ?? "",
+        neighborhood: market.data.neighborhood ?? "",
+        city: market.data.city ?? "",
+        state: market.data.state ?? "",
+        country: market.data.country ?? "BR",
+        postalCode: market.data.postalCode ?? "",
+        notes: market.data.notes ?? "",
+        latitude: market.data.latitude ?? undefined,
+        longitude: market.data.longitude ?? undefined,
+      });
+    }
   }, [market.data, form]);
 
   const save = useMutation({
-    mutationFn: (values: MarketForm) => (isEdit ? api<Market>(`/markets/${id}`, { method: "PUT", body: values }) : api<Market>("/markets", { method: "POST", body: values })),
+    mutationFn: (values: MarketForm) => (isEdit ? api<Market>(`/markets/${id}`, { method: "PATCH", body: values }) : api<Market>("/markets", { method: "POST", body: values })),
     onSuccess: (saved) => {
       queryClient.setQueryData<Market[]>(["markets"], (current) => upsertById(current, saved));
       queryClient.setQueryData<{ market: Market; purchaseCount: number; totalSpent: number; averageTicket: number; topProduct: string | null }>(["market-summary", saved.id], (current) =>
@@ -35,8 +51,10 @@ export function CreateEditMarketPage() {
     <ScreenContainer title={isEdit ? "Editar mercado" : "Novo mercado"}>
       <form className="space-y-3" onSubmit={form.handleSubmit((values) => save.mutate(values))}>
         <AppInput label="Nome" error={form.formState.errors.name?.message} {...form.register("name")} />
-        <AppInput label="Endereço" {...form.register("address")} />
         <AppInput label="Cidade" {...form.register("city")} />
+        <AppInput label="Bairro" {...form.register("neighborhood")} />
+        <AppInput label="Estado" maxLength={2} {...form.register("state")} />
+        <AppInput label="Endereço" {...form.register("address")} />
         <AppInput label="Observações" {...form.register("notes")} />
         <AppButton full type="submit" loading={save.isPending} loadingLabel="Salvando">
           Salvar

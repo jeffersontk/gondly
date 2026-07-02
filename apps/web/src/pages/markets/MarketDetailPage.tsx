@@ -24,9 +24,10 @@ export function MarketDetailPage() {
 
   if (summary.isLoading) return <LoadingState />;
   if (!summary.data) return <ScreenContainer title="Mercado"><ErrorState /></ScreenContainer>;
+  const location = [summary.data.market.neighborhood, summary.data.market.city, summary.data.market.state].filter(Boolean).join(" · ");
 
   return (
-    <ScreenContainer title={summary.data.market.name} subtitle={summary.data.market.city ?? undefined}>
+    <ScreenContainer title={summary.data.market.name} subtitle={location || undefined}>
       <div className="grid grid-cols-2 gap-3">
         <SummaryCard label="Total" value={formatBRL(summary.data.totalSpent)} />
         <SummaryCard label="Compras" value={summary.data.purchaseCount} tone="sky" />
