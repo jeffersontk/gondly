@@ -1,4 +1,4 @@
-import { Injectable, ServiceUnavailableException } from "@nestjs/common";
+import { Injectable, Logger, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 type GoogleAddressComponent = {
@@ -13,6 +13,7 @@ type GoogleGeocodeResult = {
 
 type GoogleGeocodeResponse = {
   status: string;
+  error_message?: string;
   results: GoogleGeocodeResult[];
 };
 
@@ -25,6 +26,8 @@ export type ReverseGeocodeResult = {
 
 @Injectable()
 export class GeocodingService {
+  private readonly logger = new Logger(GeocodingService.name);
+
   constructor(private readonly config: ConfigService) {}
 
   async reverseGeocode(latitude: number, longitude: number): Promise<ReverseGeocodeResult> {
@@ -45,6 +48,7 @@ export class GeocodingService {
 
     const data = (await response.json()) as GoogleGeocodeResponse;
     if (data.status !== "OK" || !data.results.length) {
+      this.logger.warn(`Reverse geocode failed: status=${data.status} message=${data.error_message ?? "-"}`);
       return { city: null, state: null, neighborhood: null, country: null };
     }
 

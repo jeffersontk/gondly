@@ -520,11 +520,7 @@ function FiltersSheet({
 
       {section === "region" ? (
         <div className="space-y-3">
-          <UseMyLocationButton onResolve={(result) => {
-            if (result.city) onCity(result.city);
-            if (result.state) onState(result.state);
-            if (result.neighborhood) onNeighborhood(result.neighborhood);
-          }} />
+          {/* "Usar minha localização" fica desativado até o faturamento da Geocoding API estar ativo no Google Cloud. */}
           <div className="grid grid-cols-2 gap-2">
             <AppInput label="Cidade" value={city} onChange={(event) => onCity(event.target.value)} placeholder="Ex.: Barra Mansa" />
             <AppInput label="UF" maxLength={2} value={state} onChange={(event) => onState(event.target.value.toUpperCase())} placeholder="RJ" />
