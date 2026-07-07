@@ -1,12 +1,38 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { ListItemStatus, SharedRole, Unit } from "@prisma/client";
+import { ListItemStatus, Prisma, SharedRole, Unit } from "@prisma/client";
 import { normalizePrice } from "@gondly/utils";
 import { randomUUID } from "crypto";
 import { BillingService } from "../billing/billing.service";
 import { addDays } from "../common/utils/date";
+import { normalizeSearchName, optionalNumber, optionalText } from "../common/utils/normalize";
 import { PrismaService } from "../prisma/prisma.service";
 import { RealtimeService } from "../realtime/realtime.service";
 import { CreateInviteDto, CreateListDto, CreateListItemDto, ImportListItemsDto, UpdateListDto, UpdateListItemDto } from "./dto";
+
+type BrandInput = {
+  brandId?: string;
+  brand?: string;
+  brandNameSnapshot?: string;
+};
+
+type ItemProductInput = BrandInput & {
+  productId?: string;
+  productName: string;
+  category?: string;
+  unit?: Unit;
+  packageSize?: number;
+  packageUnit?: Unit;
+};
+
+type ProductSnapshot = {
+  id: string;
+  name: string;
+  brandId: string | null;
+  brand: string | null;
+  category: string | null;
+  packageSize: number | null;
+  packageUnit: Unit | null;
+};
 
 @Injectable()
 export class ListsService {
@@ -90,7 +116,11 @@ export class ListsService {
           productId: item.productId,
           productName: item.productName,
           brand: item.brand,
+          brandId: item.brandId,
+          brandNameSnapshot: item.brandNameSnapshot,
           category: item.category,
+          packageSize: item.packageSize,
+          packageUnit: item.packageUnit,
           expectedQuantity: item.expectedQuantity,
           unit: item.unit,
           notes: item.notes,
@@ -104,15 +134,12 @@ export class ListsService {
 
   async addItem(userId: string, listId: string, dto: CreateListItemDto) {
     await this.assertCanEdit(userId, listId);
-    const productId = await this.resolveProductId(userId, dto);
+    const snapshot = await this.resolveItemSnapshot(userId, dto);
 
     const item = await this.prisma.marketListItem.create({
       data: {
         listId,
-        productId,
-        productName: dto.productName,
-        brand: dto.brand,
-        category: dto.category,
+        ...snapshot,
         expectedQuantity: dto.expectedQuantity,
         unit: dto.unit,
         notes: dto.notes,
@@ -130,7 +157,7 @@ export class ListsService {
     const list = await this.prisma.$transaction(async (tx) => {
       const uniqueItems = new Map<string, CreateListItemDto>();
       for (const item of dto.items) {
-        const key = this.normalizeProductName(item.productName);
+        const key = this.productIdentityKey(item);
         if (!uniqueItems.has(key)) uniqueItems.set(key, item);
       }
 
@@ -142,16 +169,23 @@ export class ListsService {
           name: { in: names, mode: "insensitive" },
         },
       });
-      const productsByName = new Map(existingProducts.map((product) => [this.normalizeProductName(product.name), product]));
-      const missingProducts = [...uniqueItems.entries()]
-        .filter(([key]) => !productsByName.has(key))
-        .map(([, item]) => ({
+      const productsByKey = new Map(existingProducts.map((product) => [this.productIdentityKeyFromProduct(product), product]));
+      const missingProducts = [];
+      for (const [key, item] of uniqueItems.entries()) {
+        if (productsByKey.has(key)) continue;
+        const brand = await this.resolveBrandFields(item, tx);
+        missingProducts.push({
           userId,
           name: item.productName,
-          brand: item.brand,
-          category: item.category,
+          normalizedName: this.normalizeProductName(item.productName),
+          brand: brand.brandNameSnapshot,
+          brandId: brand.brandId,
+          category: optionalText(item.category),
           defaultUnit: item.unit,
-        }));
+          packageSize: optionalNumber(item.packageSize),
+          packageUnit: item.packageUnit,
+        });
+      }
 
       if (missingProducts.length) {
         await tx.product.createMany({ data: missingProducts });
@@ -166,15 +200,23 @@ export class ListsService {
             },
           })
         : existingProducts;
-      const productIdsByName = new Map(products.map((product) => [this.normalizeProductName(product.name), product.id]));
+      const productIdsByKey = new Map(products.map((product) => [this.productIdentityKeyFromProduct(product), product.id]));
+      const itemSnapshots = [];
+      for (const item of dto.items) {
+        itemSnapshots.push({ item, brand: await this.resolveBrandFields(item, tx) });
+      }
 
       await tx.marketListItem.createMany({
-        data: dto.items.map((item) => ({
+        data: itemSnapshots.map(({ item, brand }) => ({
           listId,
-          productId: productIdsByName.get(this.normalizeProductName(item.productName)),
+          productId: productIdsByKey.get(this.productIdentityKey(item, brand.brandNameSnapshot ?? undefined)),
           productName: item.productName,
-          brand: item.brand,
+          brand: brand.brandNameSnapshot,
+          brandId: brand.brandId,
+          brandNameSnapshot: brand.brandNameSnapshot,
           category: item.category,
+          packageSize: item.packageSize,
+          packageUnit: item.packageUnit,
           expectedQuantity: item.expectedQuantity,
           unit: item.unit,
           notes: item.notes,
@@ -528,7 +570,11 @@ export class ListsService {
       productId: string | null;
       productName: string;
       brand: string | null;
+      brandId: string | null;
+      brandNameSnapshot: string | null;
       category: string | null;
+      packageSize: number | null;
+      packageUnit: Unit | null;
       expectedQuantity: number | null;
       unit: Unit;
       status: ListItemStatus;
@@ -578,7 +624,11 @@ export class ListsService {
               productId: item.productId,
               productName: item.productName,
               brand: item.brand,
+              brandId: item.brandId,
+              brandNameSnapshot: item.brandNameSnapshot,
               category: item.category,
+              packageSize: item.packageSize,
+              packageUnit: item.packageUnit,
               quantity,
               unit: item.unit,
               pricePaid: 0,
@@ -611,9 +661,20 @@ export class ListsService {
     }
   }
 
-  private async findOrCreateProduct(userId: string, dto: { productName: string; brand?: string; category?: string; unit?: Unit }) {
+  private async findOrCreateProduct(userId: string, dto: ItemProductInput) {
+    const normalizedName = this.normalizeProductName(dto.productName);
+    const brand = await this.resolveBrandFields(dto);
+    const packageSize = optionalNumber(dto.packageSize) ?? null;
+    const packageUnit = dto.packageUnit ?? null;
     const existing = await this.prisma.product.findFirst({
-      where: { userId, deletedAt: null, name: { equals: dto.productName, mode: "insensitive" } },
+      where: {
+        userId,
+        deletedAt: null,
+        normalizedName,
+        brandId: brand.brandId ?? null,
+        packageSize,
+        packageUnit,
+      },
     });
 
     if (existing) {
@@ -624,16 +685,21 @@ export class ListsService {
       data: {
         userId,
         name: dto.productName,
-        brand: dto.brand,
-        category: dto.category,
+        normalizedName,
+        brand: brand.brandNameSnapshot,
+        brandId: brand.brandId,
+        category: optionalText(dto.category),
         defaultUnit: dto.unit ?? "un",
+        packageSize,
+        packageUnit,
       },
     });
   }
 
-  private async resolveProductId(userId: string, dto: { productId?: string; productName: string; brand?: string; category?: string; unit?: Unit }) {
+  private async resolveItemSnapshot(userId: string, dto: ItemProductInput) {
     if (!dto.productId) {
-      return (await this.findOrCreateProduct(userId, dto)).id;
+      const product = await this.findOrCreateProduct(userId, dto);
+      return this.snapshotFromProduct(dto, product);
     }
 
     const product = await this.prisma.product.findFirst({ where: { id: dto.productId, userId, deletedAt: null } });
@@ -641,7 +707,46 @@ export class ListsService {
       throw new NotFoundException("Product not found.");
     }
 
-    return product.id;
+    return this.snapshotFromProduct(dto, product);
+  }
+
+  private async snapshotFromProduct(dto: ItemProductInput, product: ProductSnapshot) {
+    const explicitBrand = await this.resolveBrandFields(dto);
+    const brandId = explicitBrand.brandId ?? product.brandId ?? null;
+    const brandNameSnapshot = explicitBrand.brandNameSnapshot ?? product.brand ?? null;
+    const packageSize = optionalNumber(dto.packageSize) ?? product.packageSize ?? null;
+    const packageUnit = dto.packageUnit ?? product.packageUnit ?? null;
+
+    return {
+      productId: product.id,
+      productName: dto.productName,
+      brand: brandNameSnapshot,
+      brandId,
+      brandNameSnapshot,
+      category: optionalText(dto.category) ?? product.category ?? null,
+      packageSize,
+      packageUnit,
+    };
+  }
+
+  private async resolveBrandFields(dto: BrandInput, client: PrismaService | Prisma.TransactionClient = this.prisma) {
+    const brandId = optionalText(dto.brandId);
+    if (brandId) {
+      const brand = await client.brand.findUnique({ where: { id: brandId } });
+      if (!brand) throw new NotFoundException("Brand not found.");
+      return { brandId: brand.id, brandNameSnapshot: brand.name };
+    }
+
+    const brandName = optionalText(dto.brandNameSnapshot) ?? optionalText(dto.brand);
+    if (!brandName) return { brandId: null, brandNameSnapshot: null };
+
+    const normalizedName = normalizeSearchName(brandName);
+    const brand = await client.brand.upsert({
+      where: { normalizedName },
+      create: { name: brandName, normalizedName },
+      update: {},
+    });
+    return { brandId: brand.id, brandNameSnapshot: brand.name };
   }
 
   private listInclude() {
@@ -652,7 +757,25 @@ export class ListsService {
   }
 
   private normalizeProductName(value: string) {
-    return value.trim().toLocaleLowerCase("pt-BR");
+    return normalizeSearchName(value);
+  }
+
+  private productIdentityKey(item: ItemProductInput, brandNameOverride?: string) {
+    return [
+      this.normalizeProductName(item.productName),
+      normalizeSearchName(brandNameOverride ?? optionalText(item.brandNameSnapshot) ?? optionalText(item.brand) ?? optionalText(item.brandId) ?? ""),
+      optionalNumber(item.packageSize) ?? "",
+      item.packageUnit ?? "",
+    ].join("|");
+  }
+
+  private productIdentityKeyFromProduct(product: ProductSnapshot) {
+    return [
+      this.normalizeProductName(product.name),
+      normalizeSearchName(product.brand ?? ""),
+      product.packageSize ?? "",
+      product.packageUnit ?? "",
+    ].join("|");
   }
 
   private async assertFreeShareLimit(userId: string, listId: string) {

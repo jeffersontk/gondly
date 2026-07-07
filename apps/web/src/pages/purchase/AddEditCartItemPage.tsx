@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ShoppingCart, X } from "lucide-react";
 import type { Unit } from "@gondly/types";
-import { AppButton, AppInput, MoneyInput, ProductSearchInput, QuantityInput, UnitSelect, unitLabels } from "../../components";
+import { AppButton, AppInput, BrandSelect, MoneyInput, ProductSearchInput, QuantityInput, UnitSelect, unitLabels } from "../../components";
 import { sanitizeAnalyticsCategory, trackEvent } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import { isLocalId, queuePurchaseItemUpsert, syncOutbox, type PurchaseItemPayload } from "../../lib/offlineQueue";
@@ -41,7 +41,7 @@ export function AddEditCartItemPage() {
   const editingItem = purchase?.items.find((item) => item.id === itemId);
   const form = useForm<CartItemForm>({
     resolver: zodResolver(cartItemSchema),
-    defaultValues: { productName: "", quantity: 1, unit: "un", priceInputMode: "unit", pricePaid: 0 },
+    defaultValues: { productName: "", brand: "", brandId: "", brandNameSnapshot: "", packageSize: undefined, packageUnit: "kg", quantity: 1, unit: "un", priceInputMode: "unit", pricePaid: 0 },
   });
   useEffect(() => {
     if (!editingItem) return;
@@ -52,7 +52,11 @@ export function AddEditCartItemPage() {
       productId: editingItem.productId ?? undefined,
       productName: editingItem.productName,
       brand: editingItem.brand ?? "",
+      brandId: editingItem.brandId ?? "",
+      brandNameSnapshot: editingItem.brandNameSnapshot ?? editingItem.brand ?? "",
       category: editingItem.category ?? "",
+      packageSize: editingItem.packageSize ?? undefined,
+      packageUnit: editingItem.packageUnit ?? "kg",
       quantity: editingItem.quantity,
       unit: editingItem.unit,
       priceInputMode: priceInput.priceInputMode,
@@ -113,6 +117,8 @@ export function AddEditCartItemPage() {
   const watchedPriceInputMode = form.watch("priceInputMode");
   const supportsKgPrice = isWeightUnit(watchedUnit);
   const selectedCartSector = form.watch("category") ?? "";
+  const cartBrandName = form.watch("brandNameSnapshot") ?? form.watch("brand") ?? "";
+  const cartBrandId = form.watch("brandId") ?? "";
   const cartSectors = useMemo(() => {
     const sectors = new Set(
       purchase?.items
@@ -179,6 +185,8 @@ export function AddEditCartItemPage() {
           })}
         >
           <input type="hidden" {...form.register("brand")} />
+          <input type="hidden" {...form.register("brandId")} />
+          <input type="hidden" {...form.register("brandNameSnapshot")} />
           <ProductSearchInput
             value={productName}
             onChange={(value) => {
@@ -187,9 +195,23 @@ export function AddEditCartItemPage() {
             }}
             onSelect={(product) => {
               form.setValue("productId", product.id);
-              form.setValue("brand", product.brand ?? "");
+              form.setValue("brandId", product.brandId ?? "");
+              form.setValue("brand", product.brandRef?.name ?? product.brand ?? "");
+              form.setValue("brandNameSnapshot", product.brandRef?.name ?? product.brand ?? "");
               form.setValue("category", product.category ?? "");
               form.setValue("unit", product.defaultUnit);
+              form.setValue("packageSize", product.packageSize ?? undefined);
+              form.setValue("packageUnit", product.packageUnit ?? "kg");
+            }}
+          />
+          <BrandSelect
+            brandId={cartBrandId}
+            brandName={cartBrandName}
+            disabled={save.isPending}
+            onChange={(brand) => {
+              form.setValue("brandId", brand.id ?? "");
+              form.setValue("brand", brand.name);
+              form.setValue("brandNameSnapshot", brand.name);
             }}
           />
           <label className="block">
@@ -224,6 +246,10 @@ export function AddEditCartItemPage() {
               {...form.register("category")}
             />
           ) : null}
+          <div className="grid grid-cols-[1fr_120px] gap-2">
+            <QuantityInput label="Embalagem" placeholder="Ex.: 5" {...form.register("packageSize")} />
+            <UnitSelect label="Un." {...form.register("packageUnit")} />
+          </div>
           <div className="grid grid-cols-[1fr_120px] gap-2">
             <QuantityInput label="Quantidade" error={form.formState.errors.quantity?.message} {...form.register("quantity")} />
             <UnitSelect label="Unidade" {...form.register("unit")} />

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronRight, Plus, ShoppingCart, Tags, X } from "lucide-react";
-import { AppButton, EmptyState, LoadingState, ScreenContainer, SearchBar } from "../../components";
+import { AppButton, EmptyState, LoadingState, ScreenContainer, SearchBar, formatPackageSize } from "../../components";
 import { trackEvent, trackSafeSearch } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
@@ -231,6 +231,7 @@ export function ActivePurchasePage() {
     (item) =>
       !normalizedPurchaseSearch ||
       item.productName.toLocaleLowerCase("pt-BR").includes(normalizedPurchaseSearch) ||
+      item.brandNameSnapshot?.toLocaleLowerCase("pt-BR").includes(normalizedPurchaseSearch) ||
       item.brand?.toLocaleLowerCase("pt-BR").includes(normalizedPurchaseSearch) ||
       item.category?.toLocaleLowerCase("pt-BR").includes(normalizedPurchaseSearch),
   );
@@ -438,6 +439,7 @@ function ActivePurchaseItemRow({ purchaseId, item }: { purchaseId: string; item:
   const pricePaid = Number(item.pricePaid ?? 0);
   const added = Number(item.pricePaid ?? 0) > 0;
   const itemMeta = purchaseItemPriceDescription(item);
+  const identity = [item.brandNameSnapshot ?? item.brand, formatPackageSize(item.packageSize, item.packageUnit)].filter(Boolean).join(" · ");
 
   return (
     <button
@@ -451,7 +453,7 @@ function ActivePurchaseItemRow({ purchaseId, item }: { purchaseId: string; item:
           <span className="truncate text-sm font-black tracking-[-0.01em] text-ink">{item.productName}</span>
           {isPending ? <span className="rounded-full bg-mint/10 px-2 py-0.5 text-[10px] font-black text-mint">Pendente</span> : null}
         </span>
-        <span className="mt-0.5 block truncate text-xs font-medium text-ink/55">{itemMeta}</span>
+        <span className="mt-0.5 block truncate text-xs font-medium text-ink/55">{[identity, itemMeta].filter(Boolean).join(" · ")}</span>
       </span>
       <span className="flex flex-none flex-col items-end gap-1">
         <span

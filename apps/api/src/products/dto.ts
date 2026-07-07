@@ -1,6 +1,6 @@
 import { PartialType } from "@nestjs/swagger";
 import { Unit } from "@prisma/client";
-import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
+import { IsEnum, IsNumber, IsOptional, IsString, MaxLength, Min, MinLength } from "class-validator";
 
 export class CreateProductDto {
   @IsString()
@@ -15,8 +15,16 @@ export class CreateProductDto {
 
   @IsOptional()
   @IsString()
+  brandId?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(80)
   category?: string;
+
+  @IsOptional()
+  @IsString()
+  categoryId?: string;
 
   @IsEnum(Unit)
   defaultUnit!: Unit;
@@ -25,6 +33,15 @@ export class CreateProductDto {
   @IsString()
   @MaxLength(80)
   barcode?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  packageSize?: number;
+
+  @IsOptional()
+  @IsEnum(Unit)
+  packageUnit?: Unit;
 }
 
 export class UpdateProductDto extends PartialType(CreateProductDto) {}

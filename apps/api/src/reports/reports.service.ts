@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
+import { Prisma, Unit } from "@prisma/client";
 import { roundMoney } from "@gondly/utils";
 import { startOfMonth } from "../common/utils/date";
 import { toNumber } from "../common/utils/money";
@@ -130,14 +130,27 @@ export class ReportsService {
   }
 
   async insights(userId: string, filters: ReportFiltersDto = {}) {
-    const [monthly, markets, products, variation] = await Promise.all([
+    const [monthly, markets, products, variation, purchasesCount, lastPurchase] = await Promise.all([
       this.monthlySpending(userId, filters),
       this.marketsRanking(userId, filters),
       this.mostPurchasedProducts(userId, filters),
       this.highestPriceVariation(userId, filters),
+      this.prisma.purchase.count({ where: this.purchaseWhere(userId, filters) }),
+      this.prisma.purchase.findFirst({
+        where: this.purchaseWhere(userId, filters),
+        include: { market: true },
+        orderBy: { completedAt: "desc" },
+      }),
     ]);
 
-    return { monthly, markets, products, variation };
+    return {
+      monthly,
+      markets,
+      products,
+      variation,
+      purchasesCount,
+      lastPurchase: lastPurchase ? { marketName: lastPurchase.market?.name ?? null, completedAt: lastPurchase.completedAt } : null,
+    };
   }
 
   async mostExpensiveProducts(userId: string, filters: ReportFiltersDto = {}) {
@@ -218,37 +231,77 @@ export class ReportsService {
 
   private async groupNormalizedPrices(userId: string, q?: string, filters: ReportFiltersDto = {}) {
     const items = await this.purchaseItems(userId, q, filters);
-    const grouped = new Map<string, { productName: string; prices: number[]; lastPrice: number | null; lastMarket: string | null }>();
+    const grouped = new Map<
+      string,
+      {
+        productName: string;
+        prices: number[];
+        lastPrice: number | null;
+        lastMarket: string | null;
+        lastPurchasedAt: Date | null;
+        category: string | null;
+        brandName: string | null;
+        packageSize: number | null;
+        packageUnit: Unit | null;
+        purchaseIds: Set<string>;
+      }
+    >();
 
     for (const item of items) {
-      if (item.unitPriceNormalized === null) continue;
-      const normalizedPrice = toNumber(item.unitPriceNormalized);
       const entry = grouped.get(item.productName) ?? {
         productName: item.productName,
         prices: [],
         lastPrice: null,
         lastMarket: null,
+        lastPurchasedAt: null,
+        category: null,
+        brandName: null,
+        packageSize: null,
+        packageUnit: null,
+        purchaseIds: new Set<string>(),
       };
-      entry.prices.push(normalizedPrice);
-      if (entry.lastPrice === null) {
-        entry.lastPrice = normalizedPrice;
+
+      entry.purchaseIds.add(item.purchaseId);
+
+      if (!entry.lastPurchasedAt) {
+        entry.lastPurchasedAt = item.purchase.completedAt ?? item.createdAt;
         entry.lastMarket = item.purchase.market?.name ?? null;
+        entry.category = item.category ?? null;
+        entry.brandName = item.brandNameSnapshot ?? item.brand ?? null;
+        entry.packageSize = item.packageSize ?? null;
+        entry.packageUnit = item.packageUnit ?? null;
       }
+
+      if (item.unitPriceNormalized !== null) {
+        const normalizedPrice = toNumber(item.unitPriceNormalized);
+        entry.prices.push(normalizedPrice);
+        if (entry.lastPrice === null) {
+          entry.lastPrice = normalizedPrice;
+        }
+      }
+
       grouped.set(item.productName, entry);
     }
 
     return [...grouped.values()].map((entry) => ({
       productName: entry.productName,
+      category: entry.category,
+      brandName: entry.brandName,
+      packageSize: entry.packageSize,
+      packageUnit: entry.packageUnit,
       minPrice: entry.prices.length ? roundMoney(Math.min(...entry.prices)) : null,
       maxPrice: entry.prices.length ? roundMoney(Math.max(...entry.prices)) : null,
       averagePrice: entry.prices.length ? roundMoney(entry.prices.reduce((sum, value) => sum + value, 0) / entry.prices.length) : null,
       lastPrice: entry.lastPrice,
       lastMarket: entry.lastMarket,
+      lastPurchasedAt: entry.lastPurchasedAt,
+      purchasesCount: entry.purchaseIds.size,
     }));
   }
 
   private purchaseItemWhere(userId: string, q?: string, filters: ReportFiltersDto = {}): Prisma.PurchaseItemWhereInput {
     return {
+      pricePaid: { gt: 0 },
       ...(q ? { productName: { contains: q, mode: "insensitive" } } : {}),
       ...(filters.productId ? { productId: filters.productId } : {}),
       purchase: this.purchaseWhere(userId, filters),

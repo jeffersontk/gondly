@@ -37,14 +37,6 @@ export const marketSchema = z.object({
   notes: z.string().optional(),
 });
 
-export const productSchema = z.object({
-  name: z.string().min(2, "Informe um produto"),
-  brand: z.string().optional(),
-  category: z.string().optional(),
-  defaultUnit: z.enum(units),
-  barcode: z.string().optional(),
-});
-
 export function parseDecimalInput(value: unknown) {
   return parseMoneyToNumber(value);
 }
@@ -108,11 +100,18 @@ export function purchaseItemPriceDescription(item: PurchaseItem) {
 
 export function toPurchaseItemPayload(values: CartItemForm, productName: string): PurchaseItemPayload {
   const pricePaid = calculatePurchaseItemTotal(Number(values.quantity ?? 0), values.unit, Number(values.pricePaid ?? 0), values.priceInputMode);
+  const packageSize = typeof values.packageSize === "number" && Number.isFinite(values.packageSize) && values.packageSize > 0 ? values.packageSize : null;
+  const brandName = values.brandNameSnapshot?.trim() || values.brand?.trim() || null;
+
   return {
-    productId: values.productId,
+    productId: values.productId?.trim() || undefined,
     productName,
-    brand: values.brand,
-    category: values.category,
+    brand: brandName,
+    brandId: values.brandId?.trim() || null,
+    brandNameSnapshot: brandName,
+    category: values.category?.trim() || null,
+    packageSize,
+    packageUnit: packageSize ? values.packageUnit ?? null : null,
     quantity: values.quantity,
     unit: values.unit,
     pricePaid,
@@ -128,7 +127,11 @@ export function optimisticCartItem(values: PurchaseItemPayload, id?: string, cur
     productId: values.productId ?? null,
     productName: values.productName,
     brand: values.brand || null,
+    brandId: values.brandId || null,
+    brandNameSnapshot: values.brandNameSnapshot || values.brand || null,
     category: values.category || null,
+    packageSize: values.packageSize ?? null,
+    packageUnit: values.packageUnit ?? null,
     quantity: values.quantity,
     unit: values.unit,
     pricePaid: values.pricePaid,
@@ -504,12 +507,33 @@ export function useDebouncedValue<T>(value: T, delay = 350) {
 
 export const decimalNumber = (message: string) => z.preprocess(parseDecimalInput, z.number().min(0, message));
 export const positiveDecimalNumber = (message: string) => z.preprocess(parseDecimalInput, z.number().positive(message));
+export const optionalDecimalNumber = (message: string) =>
+  z.preprocess((value) => {
+    if (value === "" || value === null || value === undefined) return undefined;
+    return parseDecimalInput(value);
+  }, z.number().min(0, message).optional());
+
+export const productSchema = z.object({
+  name: z.string().min(2, "Informe um produto"),
+  brand: z.string().optional(),
+  brandId: z.string().optional(),
+  category: z.string().optional(),
+  categoryId: z.string().optional(),
+  defaultUnit: z.enum(units),
+  barcode: z.string().optional(),
+  packageSize: optionalDecimalNumber("Tamanho invalido"),
+  packageUnit: z.enum(units).optional(),
+});
 
 export const cartItemSchema = z.object({
   productId: z.string().optional(),
   productName: z.string().min(2, "Informe um produto"),
   brand: z.string().optional(),
+  brandId: z.string().optional(),
+  brandNameSnapshot: z.string().optional(),
   category: z.string().optional(),
+  packageSize: optionalDecimalNumber("Tamanho invalido"),
+  packageUnit: z.enum(units).optional(),
   quantity: positiveDecimalNumber("Quantidade deve ser maior que zero"),
   unit: z.enum(units),
   priceInputMode: z.enum(["unit", "kg", "total"]).default("unit"),
@@ -520,6 +544,7 @@ export const cartItemSchema = z.object({
 export const finishSchema = z.object({
   marketId: z.string().min(1, "Selecione o mercado"),
   finalPaidAmount: decimalNumber("Valor invalido"),
+  sharePrices: z.boolean().default(false),
   notes: z.string().optional(),
 });
 

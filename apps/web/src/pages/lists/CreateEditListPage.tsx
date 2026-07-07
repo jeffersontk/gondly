@@ -5,12 +5,25 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, Plus } from "lucide-react";
 import type { Unit } from "@gondly/types";
-import { AppButton, AppInput, ProductSearchInput, QuantityInput, ScreenContainer, SectionHeader, UnitSelect, unitLabels } from "../../components";
+import { AppButton, AppInput, BrandSelect, ProductSearchInput, QuantityInput, ScreenContainer, SectionHeader, UnitSelect, formatPackageSize, unitLabels } from "../../components";
 import { sanitizeAnalyticsCategory, trackEvent } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import type { MarketList, MarketListItem } from "../../types";
 import { ItemFeedback } from "../../components/ItemFeedback";
 import { addListCache, addListItemCache, ListForm, listSchema, mergeMarketList, updateListsCache } from "../shared";
+
+type ListItemForm = {
+  productId?: string;
+  productName: string;
+  brand?: string;
+  brandId?: string;
+  brandNameSnapshot?: string;
+  category: string;
+  packageSize?: number;
+  packageUnit?: Unit;
+  expectedQuantity: number;
+  unit: Unit;
+};
 
 export function CreateEditListPage() {
   const { id } = useParams();
@@ -19,13 +32,16 @@ export function CreateEditListPage() {
   const queryClient = useQueryClient();
   const list = useQuery({ queryKey: ["list", id], queryFn: () => api<MarketList>(`/lists/${id}`), enabled: isEdit });
   const form = useForm<ListForm>({ resolver: zodResolver(listSchema), defaultValues: { name: "", description: "" } });
-  const itemForm = useForm<{ productName: string; category: string; expectedQuantity: number; unit: Unit }>({
-    defaultValues: { productName: "", category: "", expectedQuantity: 1, unit: "un" },
+  const itemForm = useForm<ListItemForm>({
+    defaultValues: { productId: "", productName: "", brand: "", brandId: "", brandNameSnapshot: "", category: "", packageSize: undefined, packageUnit: "kg", expectedQuantity: 1, unit: "un" },
   });
   const [creatingSector, setCreatingSector] = useState(false);
   const [itemFeedback, setItemFeedback] = useState<{ tone: "info" | "success" | "error"; message: string } | null>(null);
   const [recentlyAddedItems, setRecentlyAddedItems] = useState<MarketListItem[]>([]);
   const selectedSector = itemForm.watch("category");
+  const itemProductName = itemForm.watch("productName") ?? "";
+  const itemBrandName = itemForm.watch("brandNameSnapshot") ?? itemForm.watch("brand") ?? "";
+  const itemBrandId = itemForm.watch("brandId") ?? "";
   const availableSectors = useMemo(() => {
     const sectors = new Set(
       list.data?.items
@@ -53,15 +69,15 @@ export function CreateEditListPage() {
     },
   });
   const addItem = useMutation({
-    mutationFn: (values: { productName: string; category: string; expectedQuantity: number; unit: Unit }) =>
-      api<MarketListItem>(`/lists/${id}/items`, { method: "POST", body: values }),
+    mutationFn: (values: ListItemForm) =>
+      api<MarketListItem>(`/lists/${id}/items`, { method: "POST", body: sanitizeListItemForm(values) }),
     onMutate: (values) => {
       setItemFeedback({ tone: "info", message: `Adicionando ${values.productName} à lista...` });
     },
     onSuccess: (item) => {
       setRecentlyAddedItems((current) => [item, ...current.filter((entry) => entry.id !== item.id)].slice(0, 5));
       setItemFeedback({ tone: "success", message: `${item.productName} foi adicionado à lista.` });
-      itemForm.reset({ productName: "", category: item.category ?? "", expectedQuantity: 1, unit: "un" });
+      itemForm.reset({ productId: "", productName: "", brand: "", brandId: "", brandNameSnapshot: "", category: item.category ?? "", packageSize: undefined, packageUnit: "kg", expectedQuantity: 1, unit: "un" });
       setCreatingSector(false);
       queryClient.setQueryData<MarketList>(["list", id], (current) => addListItemCache(current, item));
       trackEvent("add_item_to_list", {
@@ -90,8 +106,35 @@ export function CreateEditListPage() {
       {isEdit ? (
         <>
           <SectionHeader title="Adicionar item" />
-          <form className="grid gap-3 rounded-xl bg-white p-4 shadow-soft" onSubmit={itemForm.handleSubmit((values) => addItem.mutate({ ...values, productName: values.productName.trim(), category: values.category.trim() }))}>
-            <AppInput label="Produto" disabled={addItem.isPending} {...itemForm.register("productName", { required: true })} />
+          <form className="grid gap-3 rounded-xl bg-white p-4 shadow-soft" onSubmit={itemForm.handleSubmit((values) => addItem.mutate(values))}>
+            <input type="hidden" {...itemForm.register("productId")} />
+            <input type="hidden" {...itemForm.register("brand")} />
+            <input type="hidden" {...itemForm.register("brandId")} />
+            <input type="hidden" {...itemForm.register("brandNameSnapshot")} />
+            <ProductSearchInput
+              value={itemProductName}
+              onChange={(value) => itemForm.setValue("productName", value)}
+              onSelect={(product) => {
+                itemForm.setValue("productId", product.id);
+                itemForm.setValue("brandId", product.brandId ?? "");
+                itemForm.setValue("brand", product.brandRef?.name ?? product.brand ?? "");
+                itemForm.setValue("brandNameSnapshot", product.brandRef?.name ?? product.brand ?? "");
+                itemForm.setValue("category", product.category ?? "");
+                itemForm.setValue("unit", product.defaultUnit);
+                itemForm.setValue("packageSize", product.packageSize ?? undefined);
+                itemForm.setValue("packageUnit", product.packageUnit ?? "kg");
+              }}
+            />
+            <BrandSelect
+              brandId={itemBrandId}
+              brandName={itemBrandName}
+              disabled={addItem.isPending}
+              onChange={(brand) => {
+                itemForm.setValue("brandId", brand.id ?? "");
+                itemForm.setValue("brand", brand.name);
+                itemForm.setValue("brandNameSnapshot", brand.name);
+              }}
+            />
             <label className="block">
               <span className="mb-1 block text-sm font-semibold text-ink/80">Setor</span>
               <select
@@ -125,6 +168,10 @@ export function CreateEditListPage() {
               />
             ) : null}
             <div className="grid grid-cols-[1fr_120px] gap-2">
+              <QuantityInput label="Embalagem" placeholder="Ex.: 5" disabled={addItem.isPending} {...itemForm.register("packageSize", { valueAsNumber: true })} />
+              <UnitSelect label="Un." disabled={addItem.isPending} {...itemForm.register("packageUnit")} />
+            </div>
+            <div className="grid grid-cols-[1fr_120px] gap-2">
               <QuantityInput label="Qtd." disabled={addItem.isPending} {...itemForm.register("expectedQuantity", { valueAsNumber: true })} />
               <UnitSelect label="Un." disabled={addItem.isPending} {...itemForm.register("unit")} />
             </div>
@@ -145,7 +192,7 @@ export function CreateEditListPage() {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-black text-ink">{item.productName}</span>
                       <span className="block text-xs font-semibold text-ink/50">
-                        {item.expectedQuantity ?? 1} {unitLabels[item.unit]} · {item.category || "Sem setor"}
+                        {[item.brandNameSnapshot ?? item.brand, formatPackageSize(item.packageSize, item.packageUnit), `${item.expectedQuantity ?? 1} ${unitLabels[item.unit]}`, item.category || "Sem setor"].filter(Boolean).join(" · ")}
                       </span>
                     </span>
                     <span className="rounded-full bg-mint/12 px-2 py-1 text-xs font-black text-mint">Novo</span>
@@ -158,4 +205,20 @@ export function CreateEditListPage() {
       ) : null}
     </ScreenContainer>
   );
+}
+
+function sanitizeListItemForm(values: ListItemForm) {
+  const packageSize = typeof values.packageSize === "number" && Number.isFinite(values.packageSize) && values.packageSize > 0 ? values.packageSize : null;
+
+  return {
+    ...values,
+    productId: values.productId?.trim() || undefined,
+    productName: values.productName.trim(),
+    brand: values.brandNameSnapshot?.trim() || values.brand?.trim() || null,
+    brandId: values.brandId?.trim() || null,
+    brandNameSnapshot: values.brandNameSnapshot?.trim() || values.brand?.trim() || null,
+    category: values.category.trim() || null,
+    packageSize,
+    packageUnit: packageSize ? values.packageUnit : null,
+  };
 }

@@ -109,51 +109,82 @@ enum MarketVerifiedStatus {
   verified
 }
 
+enum SharedPriceVisibility {
+  shared
+  private
+}
+
+enum SharedPriceStatus {
+  valid
+  suspected
+  ignored
+  user_reported
+}
+
+enum SharedPriceReportReason {
+  wrong_price
+  wrong_product
+  wrong_market
+  wrong_brand
+  wrong_unit
+  other
+}
+
+enum ShareLocationLevel {
+  none
+  city
+  neighborhood
+}
+
 model User {
-  id                     String                @id @default(cuid())
+  id                     String                      @id @default(cuid())
   name                   String
-  email                  String                @unique
+  email                  String                      @unique
   photoUrl               String?
-  googleId               String?               @unique
-  createdAt              DateTime              @default(now())
-  updatedAt              DateTime              @updatedAt
+  googleId               String?                     @unique
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
   markets                Market[]
   products               Product[]
-  lists                  MarketList[]          @relation("ListOwner")
+  lists                  MarketList[]                @relation("ListOwner")
   purchases              Purchase[]
   memberships            ListMember[]
-  invitedListInvites     ListInvite[]          @relation("InvitedByUser")
-  assignedListItems      MarketListItem[]      @relation("AssignedListItems")
-  purchasedListItems     MarketListItem[]      @relation("PurchasedListItems")
-  addedPurchaseItems     PurchaseItem[]        @relation("AddedPurchaseItems")
-  updatedPurchaseItems   PurchaseItem[]        @relation("UpdatedPurchaseItems")
+  invitedListInvites     ListInvite[]                @relation("InvitedByUser")
+  assignedListItems      MarketListItem[]            @relation("AssignedListItems")
+  purchasedListItems     MarketListItem[]            @relation("PurchasedListItems")
+  addedPurchaseItems     PurchaseItem[]              @relation("AddedPurchaseItems")
+  updatedPurchaseItems   PurchaseItem[]              @relation("UpdatedPurchaseItems")
   purchaseParticipations PurchaseParticipant[]
   subscription           Subscription?
   entitlements           UserEntitlement[]
   oneTimePurchases       OneTimePurchase[]
+  sharedPriceRecords     SharedPriceRecord[]
+  sharedPriceReports     SharedPriceReport[]
+  priceSharingPreference UserPriceSharingPreference?
 }
 
 model Market {
-  id               String               @id @default(cuid())
-  name             String
-  normalizedName   String
-  address          String?
-  neighborhood     String?
-  city             String?
-  state            String?
-  country          String               @default("BR")
-  postalCode       String?
-  latitude         Float?
-  longitude        Float?
-  placeId          String?
-  createdByUserId  String?              @map("userId")
-  verifiedStatus   MarketVerifiedStatus @default(user_created)
-  notes            String?
-  createdAt        DateTime             @default(now())
-  updatedAt        DateTime             @updatedAt
-  deletedAt        DateTime?
-  createdBy        User?                @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
-  purchases        Purchase[]
+  id                 String               @id @default(cuid())
+  name               String
+  normalizedName     String
+  address            String?
+  neighborhood       String?
+  city               String?
+  state              String?
+  country            String               @default("BR")
+  postalCode         String?
+  latitude           Float?
+  longitude          Float?
+  placeId            String?
+  createdByUserId    String?              @map("userId")
+  verifiedStatus     MarketVerifiedStatus @default(user_created)
+  notes              String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  deletedAt          DateTime?
+  createdBy          User?                @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  purchases          Purchase[]
+  sharedPriceRecords SharedPriceRecord[]
 
   @@index([createdByUserId, deletedAt], map: "Market_userId_deletedAt_idx")
   @@index([normalizedName])
@@ -161,23 +192,46 @@ model Market {
   @@index([latitude, longitude])
 }
 
+model Brand {
+  id             String           @id @default(cuid())
+  name           String
+  normalizedName String           @unique
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  products       Product[]        @relation("ProductBrand")
+  listItems      MarketListItem[] @relation("MarketListItemBrand")
+  purchaseItems  PurchaseItem[]   @relation("PurchaseItemBrand")
+
+  @@index([name])
+}
+
 model Product {
-  id          String           @id @default(cuid())
-  userId      String
-  name        String
-  brand       String?
-  category    String?
-  defaultUnit Unit             @default(un)
-  barcode     String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  deletedAt   DateTime?
-  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  listItems   MarketListItem[]
-  items       PurchaseItem[]
+  id             String           @id @default(cuid())
+  userId         String
+  name           String
+  normalizedName String
+  brand          String?
+  brandId        String?
+  category       String?
+  categoryId     String?
+  defaultUnit    Unit             @default(un)
+  barcode        String?
+  packageSize    Float?
+  packageUnit    Unit?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  deletedAt      DateTime?
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brandRef       Brand?           @relation("ProductBrand", fields: [brandId], references: [id], onDelete: SetNull)
+  listItems      MarketListItem[]
+  items          PurchaseItem[]
 
   @@index([userId, deletedAt])
   @@index([userId, name])
+  @@index([userId, normalizedName])
+  @@index([userId, barcode])
+  @@index([brandId])
+  @@index([categoryId])
 }
 
 model MarketList {
@@ -204,7 +258,11 @@ model MarketListItem {
   productId         String?
   productName       String
   brand             String?
+  brandId           String?
+  brandNameSnapshot String?
   category          String?
+  packageSize       Float?
+  packageUnit       Unit?
   expectedQuantity  Float?
   unit              Unit           @default(un)
   checked           Boolean        @default(false)
@@ -219,11 +277,13 @@ model MarketListItem {
   updatedAt         DateTime       @updatedAt
   list              MarketList     @relation(fields: [listId], references: [id], onDelete: Cascade)
   product           Product?       @relation(fields: [productId], references: [id], onDelete: SetNull)
+  brandRef          Brand?         @relation("MarketListItemBrand", fields: [brandId], references: [id], onDelete: SetNull)
   assignedToUser    User?          @relation("AssignedListItems", fields: [assignedToUserId], references: [id], onDelete: SetNull)
   purchasedByUser   User?          @relation("PurchasedListItems", fields: [purchasedByUserId], references: [id], onDelete: SetNull)
   purchaseItems     PurchaseItem[]
 
   @@index([listId, status])
+  @@index([brandId])
 }
 
 model Purchase {
@@ -246,39 +306,123 @@ model Purchase {
   sourceList         MarketList?           @relation(fields: [sourceListId], references: [id], onDelete: SetNull)
   items              PurchaseItem[]
   participants       PurchaseParticipant[]
+  sharedPriceRecords SharedPriceRecord[]
 
   @@index([userId, status, deletedAt])
   @@index([marketId])
 }
 
 model PurchaseItem {
-  id                  String   @id @default(cuid())
+  id                  String              @id @default(cuid())
   purchaseId          String
   sourceListItemId    String?
   productId           String?
   productName         String
   brand               String?
+  brandId             String?
+  brandNameSnapshot   String?
   category            String?
+  packageSize         Float?
+  packageUnit         Unit?
   quantity            Float
-  unit                Unit     @default(un)
-  pricePaid           Decimal  @db.Decimal(12, 2)
-  unitPriceNormalized Decimal? @db.Decimal(12, 4)
+  unit                Unit                @default(un)
+  pricePaid           Decimal             @db.Decimal(12, 2)
+  unitPriceNormalized Decimal?            @db.Decimal(12, 4)
   normalizedUnitLabel String?
   addedByUserId       String?
   updatedByUserId     String?
   notes               String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  purchase            Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
-  sourceListItem      MarketListItem? @relation(fields: [sourceListItemId], references: [id], onDelete: SetNull)
-  product             Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
-  addedByUser         User?    @relation("AddedPurchaseItems", fields: [addedByUserId], references: [id], onDelete: SetNull)
-  updatedByUser       User?    @relation("UpdatedPurchaseItems", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  purchase            Purchase            @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  sourceListItem      MarketListItem?     @relation(fields: [sourceListItemId], references: [id], onDelete: SetNull)
+  product             Product?            @relation(fields: [productId], references: [id], onDelete: SetNull)
+  brandRef            Brand?              @relation("PurchaseItemBrand", fields: [brandId], references: [id], onDelete: SetNull)
+  addedByUser         User?               @relation("AddedPurchaseItems", fields: [addedByUserId], references: [id], onDelete: SetNull)
+  updatedByUser       User?               @relation("UpdatedPurchaseItems", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  sharedPriceRecords  SharedPriceRecord[]
 
   @@index([purchaseId])
   @@index([sourceListItemId])
   @@index([productId])
+  @@index([brandId])
   @@index([productName])
+}
+
+model SharedPriceRecord {
+  id                    String                @id @default(cuid())
+  userId                String
+  purchaseId            String
+  purchaseItemId        String
+  marketId              String
+  marketNameSnapshot    String?
+  productId             String?
+  canonicalProductId    String?
+  productNameRaw        String
+  normalizedProductName String
+  brandId               String?
+  brandNameSnapshot     String?
+  categoryId            String?
+  categoryNameSnapshot  String?
+  quantity              Float
+  unit                  Unit
+  packageSize           Float?
+  packageUnit           Unit?
+  pricePaid             Decimal               @db.Decimal(12, 2)
+  normalizedPrice       Decimal?              @db.Decimal(12, 4)
+  normalizedUnit        String?
+  purchasedAt           DateTime
+  city                  String?
+  state                 String?
+  neighborhood          String?
+  latitudeApprox        Float?
+  longitudeApprox       Float?
+  visibility            SharedPriceVisibility @default(shared)
+  status                SharedPriceStatus     @default(valid)
+  qualityReason         String?
+  confidenceScore       Float?
+  createdAt             DateTime              @default(now())
+  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purchase              Purchase              @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  purchaseItem          PurchaseItem          @relation(fields: [purchaseItemId], references: [id], onDelete: Cascade)
+  market                Market                @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  reports               SharedPriceReport[]
+
+  @@unique([userId, purchaseItemId])
+  @@index([purchaseId])
+  @@index([purchaseItemId])
+  @@index([marketId])
+  @@index([productId])
+  @@index([canonicalProductId])
+  @@index([normalizedProductName])
+  @@index([visibility, purchasedAt])
+  @@index([status, visibility, purchasedAt])
+  @@index([city, state, neighborhood])
+}
+
+model SharedPriceReport {
+  id                  String                  @id @default(cuid())
+  sharedPriceRecordId String
+  reporterUserId      String
+  reason              SharedPriceReportReason
+  comment             String?
+  createdAt           DateTime                @default(now())
+  sharedPriceRecord   SharedPriceRecord       @relation(fields: [sharedPriceRecordId], references: [id], onDelete: Cascade)
+  reporter            User                    @relation(fields: [reporterUserId], references: [id], onDelete: Cascade)
+
+  @@unique([sharedPriceRecordId, reporterUserId])
+  @@index([sharedPriceRecordId])
+  @@index([reporterUserId])
+  @@index([reason])
+}
+
+model UserPriceSharingPreference {
+  userId             String             @id
+  sharePrices        Boolean            @default(false)
+  shareLocationLevel ShareLocationLevel @default(city)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model ListMember {

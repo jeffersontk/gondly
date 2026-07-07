@@ -13,8 +13,12 @@ const OUTBOX_SYNC_INTERVAL = 30_000;
 export type PurchaseItemPayload = {
   productId?: string;
   productName: string;
-  brand?: string;
-  category?: string;
+  brand?: string | null;
+  brandId?: string | null;
+  brandNameSnapshot?: string | null;
+  category?: string | null;
+  packageSize?: number | null;
+  packageUnit?: Unit | null;
   quantity: number;
   unit: Unit;
   pricePaid: number;

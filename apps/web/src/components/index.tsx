@@ -1,26 +1,39 @@
 ﻿import { useEffect, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, forwardRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowLeft,
+  Baby,
+  Beef,
   Check,
   ChevronRight,
   CircleDollarSign,
+  Cookie,
+  CupSoda,
+  Croissant,
+  type LucideIcon,
   Loader2,
+  Milk,
   PackagePlus,
+  PawPrint,
   Plus,
   Search,
   ShoppingBasket,
+  Snowflake,
+  SprayCan,
+  Sparkles,
   Star,
   Store,
+  Tag,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
 import type { Unit } from "@gondly/types";
 import { calculateNormalizedPrice, formatBRL as formatSharedBRL, formatPricePerUnitLabel, roundMoney } from "@gondly/utils";
 import { api } from "../lib/api";
-import type { Market, MarketList, MarketListItem, Product, PurchaseItem, User } from "../types";
+import type { Brand, Market, MarketList, MarketListItem, Product, PurchaseItem, User } from "../types";
 
 function cls(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -39,6 +52,88 @@ export const unitLabels: Record<Unit, string> = {
   caixa: "Caixa",
   outro: "Outro",
 };
+
+const packageUnitLabels: Record<Unit, string> = {
+  un: "un",
+  kg: "kg",
+  g: "g",
+  l: "L",
+  ml: "ml",
+  pacote: "pacote",
+  caixa: "caixa",
+  outro: "un",
+};
+
+export function formatPackageSize(packageSize?: number | null, packageUnit?: Unit | null) {
+  const numericSize = Number(packageSize ?? 0);
+  if (!Number.isFinite(numericSize) || numericSize <= 0 || !packageUnit) return "";
+
+  const sizeLabel = Number.isInteger(numericSize)
+    ? String(numericSize)
+    : numericSize.toLocaleString("pt-BR", { maximumFractionDigits: 3 });
+  return `${sizeLabel}${packageUnitLabels[packageUnit]}`;
+}
+
+function productBrandName(product: Product) {
+  return product.brandRef?.name ?? product.brand ?? "";
+}
+
+function itemBrandName(item: Pick<MarketListItem | PurchaseItem, "brand" | "brandNameSnapshot">) {
+  return item.brandNameSnapshot ?? item.brand ?? "";
+}
+
+function productIdentityLine(product: Product) {
+  return [productBrandName(product), formatPackageSize(product.packageSize, product.packageUnit)].filter(Boolean).join(" · ");
+}
+
+function itemIdentityLine(item: Pick<MarketListItem | PurchaseItem, "brand" | "brandNameSnapshot" | "packageSize" | "packageUnit">) {
+  return [itemBrandName(item), formatPackageSize(item.packageSize, item.packageUnit)].filter(Boolean).join(" · ");
+}
+
+type CategoryVisual = { icon: LucideIcon; label: string; badgeClass: string; iconClass: string };
+
+const categoryVisuals: Array<{ match: RegExp; visual: CategoryVisual }> = [
+  { match: /latic|frio|leite|queijo|iogurte/, visual: { icon: Milk, label: "Laticínios", badgeClass: "bg-sky-50 text-sky-700", iconClass: "bg-sky-100 text-sky-600" } },
+  { match: /bebida|refrigerante|suco|cerveja|agua|café|cafe/, visual: { icon: CupSoda, label: "Bebidas", badgeClass: "bg-rose-50 text-rose-700", iconClass: "bg-rose-100 text-rose-600" } },
+  { match: /higien|limpeza|perfum/, visual: { icon: SprayCan, label: "Higiene", badgeClass: "bg-cyan-50 text-cyan-700", iconClass: "bg-cyan-100 text-cyan-600" } },
+  { match: /prote|carne|acougue|frango|peixe/, visual: { icon: Beef, label: "Proteínas", badgeClass: "bg-orange-50 text-orange-700", iconClass: "bg-orange-100 text-orange-600" } },
+  { match: /doce|sobremesa|chocolate|bala/, visual: { icon: Cookie, label: "Doces", badgeClass: "bg-amber-50 text-amber-700", iconClass: "bg-amber-100 text-amber-600" } },
+  { match: /padaria|pao|paes/, visual: { icon: Croissant, label: "Padaria", badgeClass: "bg-yellow-50 text-yellow-700", iconClass: "bg-yellow-100 text-yellow-600" } },
+  { match: /congelad/, visual: { icon: Snowflake, label: "Congelados", badgeClass: "bg-blue-50 text-blue-700", iconClass: "bg-blue-100 text-blue-600" } },
+  { match: /hortifruti|sacolao|fruta|legume|verdura/, visual: { icon: Sparkles, label: "Hortifruti", badgeClass: "bg-emerald-50 text-emerald-700", iconClass: "bg-emerald-100 text-emerald-600" } },
+  { match: /bebe|infantil/, visual: { icon: Baby, label: "Bebês", badgeClass: "bg-pink-50 text-pink-700", iconClass: "bg-pink-100 text-pink-600" } },
+  { match: /pet|animal/, visual: { icon: PawPrint, label: "Pet", badgeClass: "bg-violet-50 text-violet-700", iconClass: "bg-violet-100 text-violet-600" } },
+  { match: /descart/, visual: { icon: Trash2, label: "Descartáveis", badgeClass: "bg-slate-100 text-slate-700", iconClass: "bg-slate-200 text-slate-600" } },
+  { match: /mercearia|condiment|grao|arroz|feijao/, visual: { icon: ShoppingBasket, label: "Mercearia", badgeClass: "bg-mint/10 text-mint", iconClass: "bg-mint/10 text-mint" } },
+];
+
+const fallbackCategoryVisual: CategoryVisual = { icon: Tag, label: "Outros", badgeClass: "bg-paper text-ink/60", iconClass: "bg-paper text-ink/50" };
+
+export function categoryVisual(category?: string | null): CategoryVisual {
+  const normalized = (category ?? "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+  if (!normalized) return fallbackCategoryVisual;
+
+  const found = categoryVisuals.find((entry) => entry.match.test(normalized));
+  return found ? { ...found.visual, label: category!.trim() || found.visual.label } : { ...fallbackCategoryVisual, label: category!.trim() };
+}
+
+export function CategoryIcon({ category, className }: { category?: string | null; className?: string }) {
+  const visual = categoryVisual(category);
+  const Icon = visual.icon;
+  return (
+    <div className={cls("grid h-12 w-12 flex-none place-items-center rounded-2xl", visual.iconClass, className)}>
+      <Icon className="h-5 w-5" />
+    </div>
+  );
+}
+
+export function CategoryBadge({ category }: { category?: string | null }) {
+  const visual = categoryVisual(category);
+  return <span className={cls("inline-block rounded-full px-2.5 py-1 text-[11px] font-black", visual.badgeClass)}>{visual.label}</span>;
+}
 
 type AppButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "ghost" | "danger";
@@ -184,11 +279,96 @@ export function ProductSearchInput({
             >
               <span>
                 <span className="block font-semibold text-ink">{product.name}</span>
-                <span className="block text-xs text-ink/55">{[product.brand, product.category].filter(Boolean).join(" · ")}</span>
+                <span className="block text-xs text-ink/55">
+                  {[productIdentityLine(product), product.category].filter(Boolean).join(" · ")}
+                </span>
               </span>
               <ChevronRight className="h-4 w-4 text-ink/40" />
             </button>
           ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function BrandSelect({
+  brandId,
+  brandName,
+  disabled,
+  onChange,
+  label = "Marca",
+}: {
+  brandId?: string;
+  brandName?: string;
+  disabled?: boolean;
+  onChange: (brand: { id?: string; name: string }) => void;
+  label?: string;
+}) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const search = brandName ?? "";
+  const trimmedSearch = search.trim();
+  const { data = [] } = useQuery({
+    queryKey: ["brands", trimmedSearch],
+    queryFn: () => api<Brand[]>(`/brands?q=${encodeURIComponent(trimmedSearch)}`),
+    enabled: open && trimmedSearch.length >= 2,
+  });
+  const exactMatch = data.some((brand) => brand.name.localeCompare(trimmedSearch, "pt-BR", { sensitivity: "base" }) === 0);
+  const create = useMutation({
+    mutationFn: (name: string) => api<Brand>("/brands", { method: "POST", body: { name } }),
+    onSuccess: (brand) => {
+      queryClient.setQueryData<Brand[]>(["brands", trimmedSearch], (current) =>
+        current ? [brand, ...current.filter((entry) => entry.id !== brand.id)] : [brand],
+      );
+      onChange({ id: brand.id, name: brand.name });
+      setOpen(false);
+    },
+  });
+
+  return (
+    <div className="relative">
+      <AppInput
+        label={label}
+        value={search}
+        disabled={disabled || create.isPending}
+        placeholder="Ex.: Tio Joao"
+        onChange={(event) => {
+          onChange({ id: undefined, name: event.target.value });
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+      />
+      <input type="hidden" value={brandId ?? ""} readOnly />
+      {open && trimmedSearch.length >= 2 ? (
+        <div className="absolute z-30 mt-2 max-h-56 w-full overflow-auto rounded-xl border border-line bg-white p-1 shadow-lift">
+          {data.map((brand) => (
+            <button
+              key={brand.id}
+              type="button"
+              className="flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm transition hover:bg-paper"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onChange({ id: brand.id, name: brand.name });
+                setOpen(false);
+              }}
+            >
+              <span className="font-semibold text-ink">{brand.name}</span>
+              <ChevronRight className="h-4 w-4 text-ink/40" />
+            </button>
+          ))}
+          {!exactMatch ? (
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-3 text-left text-sm font-bold text-mint transition hover:bg-mint/10 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={create.isPending}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => create.mutate(trimmedSearch)}
+            >
+              {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              Criar "{trimmedSearch}"
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -371,6 +551,7 @@ function getScreenBackFallback(pathname: string) {
   if (/^\/app\/purchase\/[^/]+\/finish$/.test(pathname)) return pathname.replace(/\/finish$/, "");
   if (/^\/app\/purchase\/[^/]+$/.test(pathname) || pathname === "/purchase/item" || pathname === "/purchase/finish") return "/app/purchase/start";
   if (/^\/app\/history\/[^/]+$/.test(pathname) || /^\/history\/[^/]+$/.test(pathname)) return "/app/history";
+  if (pathname === "/app/compare/region" || pathname === "/prices/region") return "/app/compare";
   if (/^\/app\/compare\/products\/[^/]+$/.test(pathname) || /^\/prices\/products\/[^/]+$/.test(pathname)) return "/app/compare";
   if (pathname === "/app/markets/new" || pathname === "/markets/new") return "/app/markets";
   if (/^\/app\/markets\/[^/]+\/edit$/.test(pathname)) return pathname.replace(/\/edit$/, "");
@@ -423,6 +604,7 @@ export function PurchaseItemCard({ item, action }: { item: PurchaseItem; action?
   const isPending = item.id.startsWith("local-");
   const pricePaid = Number(item.pricePaid ?? 0);
   const hasPrice = pricePaid > 0;
+  const identity = itemIdentityLine(item);
   const normalizedPrice = item.unitPriceNormalized != null ? Number(item.unitPriceNormalized) : null;
   const calculatedNormalized = hasPrice ? calculateNormalizedPrice(item.quantity, item.unit, pricePaid) : null;
   const priceDescription =
@@ -441,6 +623,7 @@ export function PurchaseItemCard({ item, action }: { item: PurchaseItem; action?
           <p className="truncate text-sm font-black text-ink">{item.productName}</p>
           {isPending ? <span className="rounded-full bg-mint/10 px-2 py-0.5 text-[11px] font-bold text-mint">Pendente</span> : null}
         </div>
+        {identity ? <p className="mt-0.5 truncate text-xs font-semibold text-ink/55">{identity}</p> : null}
         <p className="mt-0.5 text-xs text-ink/60">
           {item.quantity} {unitLabels[item.unit]} · {priceDescription}
         </p>
@@ -474,11 +657,14 @@ export function MarketListCard({ list, onClick, loading, disabled }: { list: Mar
 }
 
 export function ProductCard({ product, onClick }: { product: Product; onClick?: () => void }) {
+  const identity = productIdentityLine(product);
+  const fallback = [product.category, unitLabels[product.defaultUnit]].filter(Boolean).join(" · ");
+
   return (
     <button onClick={onClick} className="flex w-full items-center justify-between gap-3 rounded-2xl border border-line bg-white p-4 text-left shadow-sm transition hover:border-mint/25 hover:shadow-soft">
       <div className="min-w-0">
         <p className="truncate text-sm font-black text-ink">{product.name}</p>
-        <p className="text-xs text-ink/55">{[product.brand, product.category, unitLabels[product.defaultUnit]].filter(Boolean).join(" · ")}</p>
+        <p className="text-xs text-ink/55">{identity || fallback}</p>
       </div>
       <ChevronRight className="h-5 w-5 text-ink/35" />
     </button>
@@ -606,6 +792,7 @@ function listItemMarkerClass(item: MarketListItem) {
 
 export function ListItemRow({ item }: { item: MarketListItem }) {
   const isReduced = item.status !== "pending";
+  const identity = itemIdentityLine(item);
 
   return (
     <div
@@ -626,6 +813,7 @@ export function ListItemRow({ item }: { item: MarketListItem }) {
             {item.productName}
           </p>
         </div>
+        {identity ? <p className={cls("mt-0.5 truncate text-xs font-semibold", isReduced ? "text-muted" : "text-ink/55")}>{identity}</p> : null}
         <p className={cls("mt-0.5 text-xs", isReduced ? "text-muted" : "text-ink/60")}>
           {item.expectedQuantity ?? 1} {unitLabels[item.unit]} · {listItemStatusLabels[item.status]}
         </p>

@@ -7,6 +7,18 @@ export type MarketListStatus = (typeof marketListStatuses)[number];
 export const purchaseStatuses = ["in_progress", "completed", "cancelled"] as const;
 export type PurchaseStatus = (typeof purchaseStatuses)[number];
 
+export const sharedPriceVisibilities = ["shared", "private"] as const;
+export type SharedPriceVisibility = (typeof sharedPriceVisibilities)[number];
+
+export const shareLocationLevels = ["none", "city", "neighborhood"] as const;
+export type ShareLocationLevel = (typeof shareLocationLevels)[number];
+
+export const regionalComparisonLevels = ["exact", "same_brand", "similar_product", "generic"] as const;
+export type RegionalComparisonLevel = (typeof regionalComparisonLevels)[number];
+
+export const regionalComparisonConfidences = ["high", "medium", "low"] as const;
+export type RegionalComparisonConfidence = (typeof regionalComparisonConfidences)[number];
+
 export const sharedRoles = ["owner", "editor", "viewer"] as const;
 export type SharedRole = (typeof sharedRoles)[number];
 

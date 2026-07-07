@@ -94,6 +94,11 @@ const PriceComparisonPage = lazy(() =>
     default: module.PriceComparisonPage,
   })),
 );
+const RegionalPriceLibraryPage = lazy(() =>
+  import("./pages/compare/RegionalPriceLibraryPage").then((module) => ({
+    default: module.RegionalPriceLibraryPage,
+  })),
+);
 const ProductPriceDetailPage = lazy(() =>
   import("./pages/compare/ProductPriceDetailPage").then((module) => ({
     default: module.ProductPriceDetailPage,
@@ -220,6 +225,7 @@ export function App() {
           <Route path="/app/history" element={<PurchaseHistoryPage />} />
           <Route path="/app/history/:id" element={<PurchaseDetailPage />} />
           <Route path="/app/compare" element={<PriceComparisonPage />} />
+          <Route path="/app/compare/region" element={<RegionalPriceLibraryPage />} />
           <Route
             path="/app/compare/products/:productId"
             element={<ProductPriceDetailPage />}
@@ -257,6 +263,7 @@ export function App() {
           <Route path="/history" element={<PurchaseHistoryPage />} />
           <Route path="/history/:id" element={<PurchaseDetailPage />} />
           <Route path="/prices" element={<PriceComparisonPage />} />
+          <Route path="/prices/region" element={<RegionalPriceLibraryPage />} />
           <Route
             path="/prices/products/:productId"
             element={<ProductPriceDetailPage />}

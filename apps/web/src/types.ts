@@ -6,6 +6,9 @@ import type {
   PaymentProvider,
   PaymentStatus,
   PurchaseStatus,
+  RegionalComparisonConfidence,
+  RegionalComparisonLevel,
+  ShareLocationLevel,
   SharedRole,
   Unit,
 } from "@gondly/types";
@@ -38,6 +41,13 @@ export type BillingStatus = {
   hasNoAds: boolean;
   entitlements: EntitlementKey[];
   availableOffers: BillingOffer[];
+};
+
+export type PriceSharingPreference = {
+  sharePrices: boolean;
+  shareLocationLevel: ShareLocationLevel;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type OneTimePurchase = {
@@ -78,13 +88,43 @@ export type Market = {
   updatedAt: string;
 };
 
+export type Brand = {
+  id: string;
+  name: string;
+  normalizedName: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type Product = {
   id: string;
   name: string;
+  normalizedName?: string;
   brand?: string | null;
+  brandId?: string | null;
+  brandRef?: Brand | null;
   category?: string | null;
+  categoryId?: string | null;
   defaultUnit: Unit;
   barcode?: string | null;
+  packageSize?: number | null;
+  packageUnit?: Unit | null;
+};
+
+export type ProductBarcodeLookup = {
+  product: Product;
+  brand?: Brand | { id?: string | null; name: string } | null;
+  category?: string | null;
+  packageSize?: number | null;
+  packageUnit?: Unit | null;
+  unit: Unit;
+  lastKnownPrice?: {
+    pricePaid: number;
+    normalizedPrice?: number | null;
+    normalizedUnit?: string | null;
+    market?: { id: string; name: string } | null;
+    purchasedAt?: string | null;
+  } | null;
 };
 
 export type MarketListItem = {
@@ -92,7 +132,11 @@ export type MarketListItem = {
   productId?: string | null;
   productName: string;
   brand?: string | null;
+  brandId?: string | null;
+  brandNameSnapshot?: string | null;
   category?: string | null;
+  packageSize?: number | null;
+  packageUnit?: Unit | null;
   expectedQuantity?: number | null;
   unit: Unit;
   checked: boolean;
@@ -148,7 +192,11 @@ export type PurchaseItem = {
   productId?: string | null;
   productName: string;
   brand?: string | null;
+  brandId?: string | null;
+  brandNameSnapshot?: string | null;
   category?: string | null;
+  packageSize?: number | null;
+  packageUnit?: Unit | null;
   quantity: number;
   unit: Unit;
   pricePaid: number;
@@ -188,11 +236,17 @@ export type DashboardReport = {
 
 export type PriceComparison = {
   productName: string;
+  category?: string | null;
+  brandName?: string | null;
+  packageSize?: number | null;
+  packageUnit?: Unit | null;
   minPrice: number | null;
   maxPrice: number | null;
   averagePrice: number | null;
   lastPrice: number | null;
   lastMarket: string | null;
+  lastPurchasedAt?: string | null;
+  purchasesCount?: number;
 };
 
 export type InsightsReport = {
@@ -200,10 +254,125 @@ export type InsightsReport = {
   markets: Array<{ marketName: string; total: number }>;
   products: Array<{ productName: string; quantity: number }>;
   variation: Array<{ productName: string; variation: number }>;
+  purchasesCount?: number;
+  lastPurchase?: { marketName: string | null; completedAt: string | null } | null;
 };
 
 export type ProductPriceDetailsReport = {
   history: unknown[];
   markets: Array<{ marketId: string; marketName: string; averagePrice: number }>;
   best: { marketId: string; marketName: string; averagePrice: number } | null;
+};
+
+export type RegionalPriceComparison = {
+  product: {
+    productId?: string | null;
+    canonicalProductId?: string | null;
+    productName?: string | null;
+    brandId?: string | null;
+    categoryId?: string | null;
+    unit?: Unit | null;
+    packageSize?: number | null;
+    packageUnit?: Unit | null;
+  };
+  region: {
+    city?: string | null;
+    state?: string | null;
+    neighborhood?: string | null;
+    radiusKm?: number | null;
+    periodDays: number;
+  };
+  comparisonLevel: RegionalComparisonLevel;
+  confidence: RegionalComparisonConfidence;
+  recordsCount: number;
+  marketsCount: number;
+  minPrice: number;
+  avgPrice: number;
+  medianPrice: number;
+  maxPrice: number;
+  normalizedMinPrice?: number | null;
+  normalizedAvgPrice?: number | null;
+  normalizedUnit?: string | null;
+  lastUpdatedAt?: string | null;
+  reportableRecordId?: string | null;
+};
+
+export type PurchaseRegionalPriceComparison = {
+  purchaseId: string;
+  originalMarket: { marketId: string; marketName: string } | null;
+  originalTotal: number;
+  region: {
+    city?: string | null;
+    state?: string | null;
+    neighborhood?: string | null;
+    radiusKm?: number | null;
+  };
+  periodDays: number;
+  comparableItemsCount: number;
+  totalItemsCount: number;
+  estimatedMarkets: Array<{
+    marketId: string;
+    marketName: string;
+    estimatedTotal: number;
+    matchedItemsCount: number;
+    missingItemsCount: number;
+    estimatedSavings: number;
+    confidence: RegionalComparisonConfidence;
+  }>;
+  items: Array<{
+    purchaseItemId: string;
+    productName: string;
+    brandName?: string | null;
+    userPaidPrice: number;
+    normalizedUserPrice?: number | null;
+    normalizedUnit?: string | null;
+    bestRegionalPrice: number;
+    avgRegionalPrice: number;
+    bestMarketName?: string | null;
+    recordsCount: number;
+    comparisonLevel: RegionalComparisonLevel;
+    confidence: RegionalComparisonConfidence;
+    lastUpdatedAt?: string | null;
+    reportableRecordId?: string | null;
+  }>;
+};
+
+export type PriceLibraryItem = {
+  productName: string;
+  brandName?: string | null;
+  packageSize?: number | null;
+  packageUnit?: Unit | null;
+  categoryName?: string | null;
+  minPrice: number;
+  avgPrice: number;
+  medianPrice: number;
+  maxPrice?: number;
+  normalizedMinPrice?: number | null;
+  normalizedAvgPrice?: number | null;
+  normalizedUnit?: string | null;
+  cheapestMarketName?: string | null;
+  recordsCount: number;
+  marketsCount: number;
+  lastUpdatedAt?: string | null;
+  confidence: RegionalComparisonConfidence;
+  reportableRecordId?: string | null;
+  periodDays?: number;
+};
+
+export type ReverseGeocodeResult = {
+  city: string | null;
+  state: string | null;
+  neighborhood: string | null;
+  country: string | null;
+};
+
+export type PriceLibraryMarket = {
+  marketId: string;
+  marketName: string;
+  neighborhood?: string | null;
+  city?: string | null;
+  price: number;
+  recordsCount: number;
+  lastUpdatedAt?: string | null;
+  confidence: RegionalComparisonConfidence;
 };

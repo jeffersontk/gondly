@@ -332,6 +332,7 @@ export function ListDetailPage() {
     const matchesSearch =
       !normalizedSearch ||
       item.productName.toLocaleLowerCase("pt-BR").includes(normalizedSearch) ||
+      item.brandNameSnapshot?.toLocaleLowerCase("pt-BR").includes(normalizedSearch) ||
       item.brand?.toLocaleLowerCase("pt-BR").includes(normalizedSearch) ||
       item.category?.toLocaleLowerCase("pt-BR").includes(normalizedSearch);
     const matchesSector = sectorFilter === "all" || (item.category?.trim() || "Sem setor") === sectorFilter;

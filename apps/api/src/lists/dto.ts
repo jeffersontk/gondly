@@ -48,8 +48,26 @@ export class CreateListItemDto {
 
   @IsOptional()
   @IsString()
+  brandId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  brandNameSnapshot?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(80)
   category?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  packageSize?: number;
+
+  @IsOptional()
+  @IsEnum(Unit)
+  packageUnit?: Unit;
 
   @IsOptional()
   @IsNumber()

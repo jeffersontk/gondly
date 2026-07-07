@@ -39,6 +39,16 @@ export class PurchasesController {
     return this.purchasesService.get(user.id, id);
   }
 
+  @Delete("history")
+  clearHistory(@CurrentUser() user: JwtUser) {
+    return this.purchasesService.clearHistory(user.id);
+  }
+
+  @Delete(":id")
+  remove(@CurrentUser() user: JwtUser, @Param("id") id: string) {
+    return this.purchasesService.remove(user.id, id);
+  }
+
   @Put(":id")
   update(@CurrentUser() user: JwtUser, @Param("id") id: string, @Body() dto: UpdatePurchaseDto) {
     return this.purchasesService.update(user.id, id, dto);

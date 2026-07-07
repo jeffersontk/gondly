@@ -9,7 +9,7 @@ import { ItemFeedback } from "../../components/ItemFeedback";
 import { trackEvent } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import { useOutboxStatus } from "../../lib/offlineQueue";
-import type { Market, Purchase } from "../../types";
+import type { Market, PriceSharingPreference, Purchase } from "../../types";
 import { decimalValue, finishSchema, FinishForm, formatBRL, MarketForm, marketSchema, removeActivePurchaseCache } from "../shared";
 
 type GeoFeedback = {
@@ -27,11 +27,15 @@ export function FinishPurchasePage() {
   const [geoPending, setGeoPending] = useState(false);
   const [geoFeedback, setGeoFeedback] = useState<GeoFeedback | null>(null);
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
+  const priceSharingPreference = useQuery({
+    queryKey: ["price-sharing-preference"],
+    queryFn: () => api<PriceSharingPreference>("/me/price-sharing-preference"),
+  });
   const purchase = active.data?.find((entry) => entry.id === purchaseId) ?? active.data?.[0];
   const outbox = useOutboxStatus(purchase?.id);
   const form = useForm<FinishForm>({
     resolver: zodResolver(finishSchema),
-    defaultValues: { marketId: "", finalPaidAmount: 0, notes: "" },
+    defaultValues: { marketId: "", finalPaidAmount: 0, sharePrices: false, notes: "" },
   });
   const marketForm = useForm<MarketForm>({
     resolver: zodResolver(marketSchema),
@@ -39,10 +43,14 @@ export function FinishPurchasePage() {
   });
   const finish = useMutation({
     mutationFn: (values: FinishForm) => api<Purchase>(`/purchases/${purchase?.id}/finish`, { method: "POST", body: values }),
-    onSuccess: (saved) => {
+    onSuccess: (saved, values) => {
       queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => removeActivePurchaseCache(current, saved.id));
       queryClient.setQueryData(["purchase", saved.id], saved);
       queryClient.setQueryData<Purchase[]>(["purchases"], (current) => (current ? [saved, ...current.filter((purchase) => purchase.id !== saved.id)] : current));
+      queryClient.setQueryData<PriceSharingPreference>(["price-sharing-preference"], (current) =>
+        current ? { ...current, sharePrices: values.sharePrices } : current,
+      );
+      void queryClient.invalidateQueries({ queryKey: ["price-sharing-preference"] });
       trackEvent("finish_purchase", {
         purchase_id: saved.id,
         market_id: saved.marketId,
@@ -51,6 +59,7 @@ export function FinishPurchasePage() {
         subtotal_calculated: saved.subtotalCalculated,
         final_paid_amount: saved.finalPaidAmount,
         discount_amount: saved.discountAmount,
+        share_prices: values.sharePrices,
       });
       navigate(`/app/history/${saved.id}`);
     },
@@ -105,9 +114,16 @@ export function FinishPurchasePage() {
     if (purchase) form.setValue("finalPaidAmount", purchase.subtotalCalculated, { shouldDirty: false });
   }, [form, purchase?.id, purchase?.subtotalCalculated]);
 
+  useEffect(() => {
+    if (priceSharingPreference.data) {
+      form.setValue("sharePrices", priceSharingPreference.data.sharePrices, { shouldDirty: false });
+    }
+  }, [form, priceSharingPreference.data?.sharePrices]);
+
   if (!purchase) return <LoadingState />;
   const finalPaidAmount = decimalValue(form.watch("finalPaidAmount"));
   const difference = purchase.subtotalCalculated - finalPaidAmount;
+  const sharePrices = Boolean(form.watch("sharePrices"));
 
   return (
     <ScreenContainer title="Finalizar">
@@ -171,6 +187,35 @@ export function FinishPurchasePage() {
             </div>
           </div>
         ) : null}
+        <div className="rounded-xl border border-line bg-white p-3 shadow-sm">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={sharePrices}
+            className="flex w-full items-center justify-between gap-3 text-left"
+            onClick={() => form.setValue("sharePrices", !sharePrices, { shouldDirty: true })}
+          >
+            <span className="min-w-0">
+              <span className="block text-sm font-black text-ink">Contribuir com a base de preços da região</span>
+              <span className="mt-1 block text-sm leading-5 text-ink/60">
+                Ao ativar, os preços desta compra ajudam outros usuários a comparar mercados. Seus dados pessoais não serão exibidos.
+              </span>
+            </span>
+            <span
+              className={[
+                "relative h-7 w-12 flex-none rounded-full transition",
+                sharePrices ? "bg-mint" : "bg-ink/15",
+              ].join(" ")}
+            >
+              <span
+                className={[
+                  "absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition",
+                  sharePrices ? "left-6" : "left-1",
+                ].join(" ")}
+              />
+            </span>
+          </button>
+        </div>
         <MoneyInput label="Valor pago no caixa" error={form.formState.errors.finalPaidAmount?.message} {...form.register("finalPaidAmount")} />
         <AppInput label="Observações" {...form.register("notes")} />
         <div className="rounded-xl bg-white p-3 shadow-soft">

@@ -40,8 +40,26 @@ export class CreatePurchaseItemDto {
 
   @IsOptional()
   @IsString()
+  brandId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  brandNameSnapshot?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(80)
   category?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  packageSize?: number;
+
+  @IsOptional()
+  @IsEnum(Unit)
+  packageUnit?: Unit;
 
   @IsNumber()
   @Min(0.0001)
@@ -69,6 +87,10 @@ export class FinishPurchaseDto {
   @IsNumber()
   @Min(0)
   finalPaidAmount!: number;
+
+  @IsOptional()
+  @IsBoolean()
+  sharePrices?: boolean;
 
   @IsOptional()
   @IsString()
