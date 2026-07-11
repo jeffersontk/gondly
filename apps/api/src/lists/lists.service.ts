@@ -486,6 +486,42 @@ export class ListsService {
     return this.prisma.listMember.update({ where: { id: memberId }, data: { role } });
   }
 
+  async listMessages(userId: string, listId: string, limit = 50) {
+    await this.assertListMembership(userId, listId);
+    return this.prisma.listMessage.findMany({
+      where: { listId },
+      orderBy: { createdAt: "asc" },
+      take: limit,
+      include: { user: { select: { id: true, name: true, photoUrl: true } } },
+    });
+  }
+
+  async addMessage(userId: string, listId: string, body: string) {
+    await this.assertListMembership(userId, listId);
+    const message = await this.prisma.listMessage.create({
+      data: { listId, userId, body },
+      include: { user: { select: { id: true, name: true, photoUrl: true } } },
+    });
+
+    this.realtime.emitToList(listId, "listMessageCreated", { listId, message, byUserId: userId });
+    return message;
+  }
+
+  private async assertListMembership(userId: string, listId: string) {
+    const list = await this.prisma.marketList.findFirst({
+      where: {
+        id: listId,
+        deletedAt: null,
+        OR: [{ userId }, { members: { some: { userId, status: "accepted" } } }],
+      },
+      select: { id: true },
+    });
+
+    if (!list) {
+      throw new NotFoundException("List not found.");
+    }
+  }
+
   private async assertCanAccess(userId: string, listId: string) {
     const list = await this.prisma.marketList.findFirst({
       where: {

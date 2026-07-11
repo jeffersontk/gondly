@@ -122,3 +122,10 @@ export class UpdateMemberRoleDto {
   @IsEnum(SharedRole)
   role!: SharedRole;
 }
+
+export class CreateListMessageDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(1000)
+  body!: string;
+}

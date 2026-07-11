@@ -42,4 +42,12 @@ export class SharingService {
   updateMemberRole(userId: string, listId: string, memberId: string, role: SharedRole) {
     return this.listsService.updateMemberRole(userId, listId, memberId, role);
   }
+
+  messages(userId: string, listId: string) {
+    return this.listsService.listMessages(userId, listId);
+  }
+
+  addMessage(userId: string, listId: string, body: string) {
+    return this.listsService.addMessage(userId, listId, body);
+  }
 }

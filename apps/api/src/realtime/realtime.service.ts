@@ -80,6 +80,16 @@ export class RealtimeService {
       };
     }
 
+    if (event === "listMessageCreated") {
+      const message = this.objectValue(payload.message);
+      return {
+        entityType: "listMessage",
+        entityId: this.stringValue(message?.id),
+        action: this.defaultActionFor(event),
+        updatedAt: this.isoDate(message?.createdAt),
+      };
+    }
+
     return {
       entityType: this.stringValue(payload.entityType) ?? "unknown",
       entityId: this.stringValue(payload.entityId) ?? this.stringValue(payload.purchaseId) ?? this.stringValue(payload.listId),
@@ -104,6 +114,7 @@ export class RealtimeService {
       accessRequested: "access_requested",
       memberApproved: "member_approved",
       memberRemoved: "member_removed",
+      listMessageCreated: "created",
     };
     return actions[event] ?? event;
   }

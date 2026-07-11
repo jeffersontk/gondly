@@ -633,7 +633,19 @@ export function PurchaseItemCard({ item, action }: { item: PurchaseItem; action?
   );
 }
 
-export function MarketListCard({ list, onClick, loading, disabled }: { list: MarketList; onClick?: () => void; loading?: boolean; disabled?: boolean }) {
+export function MarketListCard({
+  list,
+  onClick,
+  loading,
+  disabled,
+  hasNewItems,
+}: {
+  list: MarketList;
+  onClick?: () => void;
+  loading?: boolean;
+  disabled?: boolean;
+  hasNewItems?: boolean;
+}) {
   const needed = list.items.filter((item) => item.status === "pending").length;
   return (
     <button
@@ -645,7 +657,10 @@ export function MarketListCard({ list, onClick, loading, disabled }: { list: Mar
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-base font-bold tracking-tight text-ink">{list.name}</p>
+          <p className="flex items-center gap-2 truncate text-base font-bold tracking-tight text-ink">
+            {list.name}
+            {hasNewItems ? <span className="h-2 w-2 flex-none rounded-full bg-tomato" aria-label="Itens novos" /> : null}
+          </p>
           <p className="mt-1 text-xs text-ink/60">
             {needed} para comprar · {list.status === "archived" ? "Arquivada" : "Ativa"}
           </p>

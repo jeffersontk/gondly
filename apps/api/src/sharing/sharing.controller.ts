@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import type { JwtUser } from "../common/auth.types";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
-import { CreateInviteDto, UpdateMemberRoleDto } from "../lists/dto";
+import { CreateInviteDto, CreateListMessageDto, UpdateMemberRoleDto } from "../lists/dto";
 import { SharingService } from "./sharing.service";
 
 @ApiTags("Sharing")
@@ -61,5 +61,15 @@ export class SharingController {
     @Body() dto: UpdateMemberRoleDto,
   ) {
     return this.sharingService.updateMemberRole(user.id, id, memberId, dto.role);
+  }
+
+  @Get(":id/messages")
+  messages(@CurrentUser() user: JwtUser, @Param("id") id: string) {
+    return this.sharingService.messages(user.id, id);
+  }
+
+  @Post(":id/messages")
+  addMessage(@CurrentUser() user: JwtUser, @Param("id") id: string, @Body() dto: CreateListMessageDto) {
+    return this.sharingService.addMessage(user.id, id, dto.body);
   }
 }

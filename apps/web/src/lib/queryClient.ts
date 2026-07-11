@@ -42,6 +42,16 @@ queryClient.setQueryDefaults(["lists"], {
   refetchOnMount: true,
 });
 
+queryClient.setQueryDefaults(["list"], {
+  staleTime: 30_000,
+  refetchOnMount: true,
+});
+
+queryClient.setQueryDefaults(["list-messages"], {
+  staleTime: 30_000,
+  refetchOnMount: true,
+});
+
 queryClient.setQueryDefaults(["billing-status"], {
   staleTime: 30 * 60_000,
 });

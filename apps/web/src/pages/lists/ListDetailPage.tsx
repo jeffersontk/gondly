@@ -1,12 +1,14 @@
 import { Fragment, lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Loader2, Menu, Plus, ShoppingCart, SlidersHorizontal, Star, Tags, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2, Menu, MessageCircle, Plus, ShoppingCart, SlidersHorizontal, Star, Tags, Trash2 } from "lucide-react";
 import type { ListItemStatus } from "@gondly/types";
+import type { Socket } from "socket.io-client";
 import { AppButton, ConfirmDialog, EmptyState, ErrorState, ListItemRow, LoadingState, PriceCard, ScreenContainer, SectionHeader } from "../../components";
 import { trackEvent, trackSafeSearch } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
+import { getListLastMessageReadAt, setListLastMessageReadAt, setListLastViewedAt } from "../../lib/listActivity";
 import type { ParsedShoppingList } from "../../lib/listImport";
 import { discardQueuedPurchaseChanges } from "../../lib/offlineQueue";
 import { createRealtimeSocket } from "../../lib/realtime";
@@ -35,8 +37,10 @@ import {
   useDebouncedValue,
 } from "../shared";
 import { ListActionsDrawer } from "./ListActionsDrawer";
+import { ListChatDrawer } from "./ListChatDrawer";
 import { ListFiltersDrawer } from "./ListFiltersDrawer";
 import { ListSharingPanel } from "./SharedListMembers";
+import { useListChat } from "./useListChat";
 
 const ListImportPanel = lazy(() =>
   import("./ListImportPanel").then((module) => ({
@@ -65,10 +69,14 @@ export function ListDetailPage() {
   const [listRealtimeNotice, setListRealtimeNotice] = useState<string | null>(null);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(() => new Set());
   const [replacePurchaseOpen, setReplacePurchaseOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatUnread, setChatUnread] = useState(false);
+  const [realtimeSocket, setRealtimeSocket] = useState<Socket | undefined>(undefined);
   const debouncedItemSearch = useDebouncedValue(itemSearch);
   const listRealtimeNoticeTimeoutRef = useRef<number | undefined>(undefined);
   const realtimeStateRef = useRef(createRealtimeApplyState());
   const list = useQuery({ queryKey: ["list", id], queryFn: () => api<MarketList>(`/lists/${id}`), enabled: Boolean(id) });
+  const chat = useListChat(id, realtimeSocket);
   const activePurchases = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   const activePurchase = activePurchases.data?.[0];
   const removeItem = useMutation({
@@ -203,6 +211,7 @@ export function ListDetailPage() {
     if (!id || !token) return;
 
     const socket = createRealtimeSocket(token);
+    setRealtimeSocket(socket);
     const refetchListFallback = () => {
       void queryClient.refetchQueries({ queryKey: ["list", id], type: "active" });
       void queryClient.refetchQueries({ queryKey: ["lists"], type: "active" });
@@ -247,6 +256,10 @@ export function ListDetailPage() {
 
       if (nextList) {
         queryClient.setQueryData<MarketList[]>(["lists"], (current) => updateListsCache(current, nextList));
+      }
+
+      if (action === "created" && realtimeActorId(payload) !== user?.id && item) {
+        showListRealtimeNotice(`${item.productName} foi adicionado à lista.`);
       }
     };
     const handlePurchaseItemChanged = (payload: ListPurchaseItemChangedPayload) => {
@@ -302,6 +315,7 @@ export function ListDetailPage() {
       fallbackListEvents.forEach((event) => socket.off(event, refetchListFallback));
       socket.off("purchaseItemChanged", handlePurchaseItemChanged);
       socket.disconnect();
+      setRealtimeSocket(undefined);
     };
   }, [id, queryClient, token, user?.id]);
 
@@ -314,6 +328,24 @@ export function ListDetailPage() {
   useEffect(() => {
     trackSafeSearch("lists", debouncedItemSearch);
   }, [debouncedItemSearch]);
+
+  useEffect(() => {
+    if (!id || !list.data) return;
+    setListLastViewedAt(id);
+  }, [id, list.data]);
+
+  useEffect(() => {
+    if (!id) return;
+    if (chatOpen) {
+      setChatUnread(false);
+      setListLastMessageReadAt(id);
+      return;
+    }
+
+    const lastMessage = chat.messages[chat.messages.length - 1];
+    if (!lastMessage) return;
+    setChatUnread(Date.parse(lastMessage.createdAt) > getListLastMessageReadAt(id));
+  }, [id, chatOpen, chat.messages]);
 
   if (list.isLoading) return <LoadingState />;
   if (list.isError || !list.data) return <ScreenContainer title="Lista"><ErrorState /></ScreenContainer>;
@@ -368,9 +400,13 @@ export function ListDetailPage() {
 
   return (
     <ScreenContainer title={currentList.name} subtitle={currentList.description ?? undefined}>
-      <div className="grid grid-cols-[1fr_auto] gap-2">
+      <div className="grid grid-cols-[1fr_auto_auto] gap-2">
         <AppButton icon={<ShoppingCart className="h-5 w-5" />} onClick={handleStartPurchaseFromList} loading={start.isPending} loadingLabel="Iniciando">
           Comprar
+        </AppButton>
+        <AppButton className="relative w-14 px-0" variant="secondary" icon={<MessageCircle className="h-5 w-5" />} onClick={() => setChatOpen(true)} aria-label="Abrir mensagens da lista">
+          <span className="sr-only">Mensagens</span>
+          {chatUnread ? <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-tomato" /> : null}
         </AppButton>
         <AppButton className="w-14 px-0" variant="secondary" icon={<Menu className="h-5 w-5" />} onClick={() => setActionsOpen(true)} aria-label="Abrir ações da lista">
           <span className="sr-only">Ações</span>
@@ -435,6 +471,15 @@ export function ListDetailPage() {
           setStatusFilter("all");
           setSortFilter("default");
         }}
+      />
+
+      <ListChatDrawer
+        open={chatOpen}
+        messages={chat.messages}
+        currentUserId={user?.id}
+        sending={chat.sending}
+        onClose={() => setChatOpen(false)}
+        onSend={chat.send}
       />
 
       {showShare && isOwner ? (

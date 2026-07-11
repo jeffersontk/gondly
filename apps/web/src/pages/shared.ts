@@ -14,7 +14,7 @@ import {
 import { unitLabels } from "../components";
 import { isNetworkFailure } from "../lib/api";
 import { createLocalItemId, type PurchaseItemPayload } from "../lib/offlineQueue";
-import type { MarketList, MarketListItem, Purchase, PurchaseItem } from "../types";
+import type { ListMessage, MarketList, MarketListItem, Purchase, PurchaseItem } from "../types";
 
 export const units = ["un", "kg", "g", "l", "ml", "pacote", "caixa", "outro"] as const;
 
@@ -464,6 +464,11 @@ export type ListPurchaseItemChangedPayload = RealtimeEnvelope<{
   itemId?: string;
 };
 
+export type ListMessageRealtimePayload = RealtimeEnvelope<{ listId: string; message: ListMessage }> & {
+  listId: string;
+  message: ListMessage;
+};
+
 export function matchesListStatus(item: MarketListItem, status: ListStatusFilter) {
   return status === "all" || item.status === status;
 }
@@ -487,6 +492,12 @@ export function sortListItems(items: MarketListItem[], sort: ListSortFilter) {
 export function upsertById<T extends { id: string }>(items: T[] | undefined, nextItem: T) {
   if (!items) return items;
   return [nextItem, ...items.filter((item) => item.id !== nextItem.id)];
+}
+
+export function upsertListMessageCache(messages: ListMessage[] | undefined, nextMessage: ListMessage) {
+  if (!messages) return messages;
+  if (messages.some((message) => message.id === nextMessage.id)) return messages;
+  return [...messages, nextMessage];
 }
 
 export function removeById<T extends { id: string }>(items: T[] | undefined, itemId: string) {

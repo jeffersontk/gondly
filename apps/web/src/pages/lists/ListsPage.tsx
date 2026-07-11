@@ -5,6 +5,7 @@ import { EmptyState, FloatingActionButton, LoadingState, MarketListCard, ScreenC
 import { AdSlot } from "../../ads/AdSlot";
 import { trackEvent, trackSafeSearch } from "../../lib/analytics";
 import { api } from "../../lib/api";
+import { getListLastViewedAt, hasNewItemsSince } from "../../lib/listActivity";
 import type { MarketList } from "../../types";
 import { useDebouncedValue } from "../shared";
 
@@ -28,7 +29,11 @@ export function ListsPage() {
         {!isLoading && !filtered.length ? <EmptyState title="Você ainda não tem listas. Crie sua primeira lista de mercado." /> : null}
         {filtered.map((list) => (
           <div key={list.id} className="space-y-3">
-            <MarketListCard list={list} onClick={() => navigate(`/app/lists/${list.id}`)} />
+            <MarketListCard
+              list={list}
+              onClick={() => navigate(`/app/lists/${list.id}`)}
+              hasNewItems={hasNewItemsSince(list, getListLastViewedAt(list.id))}
+            />
           </div>
         ))}
         <AdSlot slot="lists_inline" />

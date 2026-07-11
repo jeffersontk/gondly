@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronRight, Plus, ShoppingCart, Tags, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, MessageCircle, Plus, ShoppingCart, Tags, X } from "lucide-react";
+import type { Socket } from "socket.io-client";
 import { AppButton, EmptyState, LoadingState, ScreenContainer, SearchBar, formatPackageSize } from "../../components";
 import { trackEvent, trackSafeSearch } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
+import { getListLastMessageReadAt, setListLastMessageReadAt } from "../../lib/listActivity";
 import { discardQueuedPurchaseChanges, useOutboxStatus } from "../../lib/offlineQueue";
 import { createRealtimeSocket } from "../../lib/realtime";
+import { ListChatDrawer } from "../lists/ListChatDrawer";
+import { useListChat } from "../lists/useListChat";
 import type { Purchase, PurchaseItem } from "../../types";
 import {
   createRealtimeApplyState,
@@ -36,6 +40,9 @@ export function ActivePurchasePage() {
   const [realtimeNotice, setRealtimeNotice] = useState<string | null>(null);
   const [showStickySummary, setShowStickySummary] = useState(false);
   const [expandedPurchaseCategories, setExpandedPurchaseCategories] = useState<Set<string>>(() => new Set());
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatUnread, setChatUnread] = useState(false);
+  const [realtimeSocket, setRealtimeSocket] = useState<Socket | undefined>(undefined);
   const debouncedPurchaseSearch = useDebouncedValue(purchaseSearch);
   const totalCardRef = useRef<HTMLDivElement | null>(null);
   const realtimeNoticeTimeoutRef = useRef<number | undefined>(undefined);
@@ -44,6 +51,8 @@ export function ActivePurchasePage() {
   const purchaseId = routeParams.purchaseId ?? params.get("purchaseId");
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   const purchase = useMemo(() => active.data?.find((entry) => entry.id === purchaseId) ?? active.data?.[0], [active.data, purchaseId]);
+  const sourceListId = purchase?.sourceListId ?? undefined;
+  const chat = useListChat(sourceListId, realtimeSocket);
   const outbox = useOutboxStatus(purchase?.id);
   const cancel = useMutation({
     mutationFn: () => api<Purchase>(`/purchases/${purchase?.id}/cancel`, { method: "POST" }),
@@ -63,6 +72,7 @@ export function ActivePurchasePage() {
     if (!purchase?.id || !token) return;
 
     const socket = createRealtimeSocket(token);
+    setRealtimeSocket(socket);
     const schedulePurchaseRefetch = () => {
       if (realtimeRefetchTimeoutRef.current) window.clearTimeout(realtimeRefetchTimeoutRef.current);
       realtimeRefetchTimeoutRef.current = window.setTimeout(() => {
@@ -170,7 +180,10 @@ export function ActivePurchasePage() {
       });
       if (!handled) schedulePurchaseRefetch();
     };
-    socket.on("connect", () => socket.emit("joinPurchase", { purchaseId: purchase.id }));
+    socket.on("connect", () => {
+      socket.emit("joinPurchase", { purchaseId: purchase.id });
+      if (sourceListId) socket.emit("joinList", { listId: sourceListId });
+    });
     socket.on("purchaseItemsSynced", refreshPurchase);
     socket.on("purchaseItemCreated", handlePurchaseItemCreated);
     socket.on("purchaseItemUpdated", handlePurchaseItemUpdated);
@@ -179,15 +192,17 @@ export function ActivePurchasePage() {
 
     return () => {
       socket.emit("leavePurchase", { purchaseId: purchase.id });
+      if (sourceListId) socket.emit("leaveList", { listId: sourceListId });
       socket.off("purchaseItemsSynced", refreshPurchase);
       socket.off("purchaseItemCreated", handlePurchaseItemCreated);
       socket.off("purchaseItemUpdated", handlePurchaseItemUpdated);
       socket.off("purchaseItemDeleted", handlePurchaseItemDeleted);
       socket.off("purchaseTotalUpdated", handlePurchaseTotalUpdated);
       socket.disconnect();
+      setRealtimeSocket(undefined);
       if (realtimeRefetchTimeoutRef.current) window.clearTimeout(realtimeRefetchTimeoutRef.current);
     };
-  }, [purchase?.id, queryClient, token, user?.id]);
+  }, [purchase?.id, queryClient, sourceListId, token, user?.id]);
 
   useEffect(() => {
     return () => {
@@ -204,6 +219,19 @@ export function ActivePurchasePage() {
   useEffect(() => {
     trackSafeSearch("purchase", debouncedPurchaseSearch);
   }, [debouncedPurchaseSearch]);
+
+  useEffect(() => {
+    if (!sourceListId) return;
+    if (chatOpen) {
+      setChatUnread(false);
+      setListLastMessageReadAt(sourceListId);
+      return;
+    }
+
+    const lastMessage = chat.messages[chat.messages.length - 1];
+    if (!lastMessage) return;
+    setChatUnread(Date.parse(lastMessage.createdAt) > getListLastMessageReadAt(sourceListId));
+  }, [sourceListId, chatOpen, chat.messages]);
 
   useEffect(() => {
     const node = totalCardRef.current;
@@ -254,14 +282,27 @@ export function ActivePurchasePage() {
       title={purchaseTitle}
       subtitle={`Compra ativa · ${cartItemsLabel}`}
       headerAction={
-        <button
-          type="button"
-          className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-mint px-3 text-xs font-black text-white shadow-soft transition hover:bg-mint/90 active:scale-[0.98]"
-          onClick={() => navigate(`/app/purchase/${purchase.id}/item`)}
-        >
-          <Plus className="h-4 w-4" />
-          Item
-        </button>
+        <div className="flex items-center gap-2">
+          {sourceListId ? (
+            <button
+              type="button"
+              className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-white text-ink shadow-sm transition hover:border-mint/30"
+              onClick={() => setChatOpen(true)}
+              aria-label="Abrir mensagens da lista"
+            >
+              <MessageCircle className="h-4 w-4" />
+              {chatUnread ? <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-tomato" /> : null}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-mint px-3 text-xs font-black text-white shadow-soft transition hover:bg-mint/90 active:scale-[0.98]"
+            onClick={() => navigate(`/app/purchase/${purchase.id}/item`)}
+          >
+            <Plus className="h-4 w-4" />
+            Item
+          </button>
+        </div>
       }
     >
       {showStickySummary ? (
@@ -429,6 +470,15 @@ export function ActivePurchasePage() {
           );
         })}
       </div>
+
+      <ListChatDrawer
+        open={chatOpen}
+        messages={chat.messages}
+        currentUserId={user?.id}
+        sending={chat.sending}
+        onClose={() => setChatOpen(false)}
+        onSend={chat.send}
+      />
     </ScreenContainer>
   );
 }

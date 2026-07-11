@@ -150,6 +150,7 @@ model User {
   purchases              Purchase[]
   memberships            ListMember[]
   invitedListInvites     ListInvite[]                @relation("InvitedByUser")
+  listMessages           ListMessage[]
   assignedListItems      MarketListItem[]            @relation("AssignedListItems")
   purchasedListItems     MarketListItem[]            @relation("PurchasedListItems")
   addedPurchaseItems     PurchaseItem[]              @relation("AddedPurchaseItems")
@@ -247,6 +248,7 @@ model MarketList {
   items       MarketListItem[]
   members     ListMember[]
   invites     ListInvite[]
+  messages    ListMessage[]
   purchases   Purchase[]
 
   @@index([userId, status, deletedAt])
@@ -441,6 +443,18 @@ model ListMember {
 
   @@unique([listId, userId])
   @@index([userId, status])
+}
+
+model ListMessage {
+  id        String     @id @default(cuid())
+  listId    String
+  userId    String
+  body      String
+  createdAt DateTime   @default(now())
+  list      MarketList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([listId, createdAt])
 }
 
 model ListInvite {

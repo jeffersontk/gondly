@@ -177,6 +177,15 @@ export type ListInvite = {
   expiresAt: string;
 };
 
+export type ListMessage = {
+  id: string;
+  listId: string;
+  userId: string;
+  body: string;
+  createdAt: string;
+  user: Pick<User, "id" | "name" | "photoUrl">;
+};
+
 export type ShareLinkInfo = {
   listId: string;
   listName: string;
