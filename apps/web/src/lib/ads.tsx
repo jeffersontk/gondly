@@ -23,10 +23,10 @@ const defaultStatus: BillingStatus = {
 };
 
 export function AdProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const noAdsTrackedRef = useRef(false);
   const query = useQuery({
-    queryKey: ["billing-status"],
+    queryKey: ["billing-status", user?.id],
     queryFn: () => api<BillingStatus>("/billing/status"),
     enabled: Boolean(user && !user.monetization),
     staleTime: 30 * 60_000,
@@ -49,7 +49,7 @@ export function AdProvider({ children }: { children: ReactNode }) {
       value={{
         adsEnabled: status.adsEnabled,
         hasNoAds: status.hasNoAds,
-        isLoading: query.isLoading,
+        isLoading: authLoading || Boolean(user && !user.monetization && (!query.data || query.isError)),
         status,
         refreshBillingStatus,
       }}

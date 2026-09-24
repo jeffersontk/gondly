@@ -1,0 +1,224 @@
+[
+  {
+    "slug": "planejar-compras-da-semana",
+    "title": "Uma semana de refeições começa com uma lista possível",
+    "summary": "Planeje o que você vai cozinhar e compre o que realmente falta.",
+    "category": "Organização",
+    "sections": [
+      {
+        "title": "Comece pela agenda",
+        "paragraphs": [
+          "Conte as refeições que serão feitas em casa e o número de pessoas. Uma semana com dois almoços fora pede quantidades diferentes daquela em que todos estarão em casa. Escolha preparações compatíveis com o tempo disponível.",
+          "Procure ingredientes que possam entrar em mais de uma preparação. Isso simplifica a lista sem exigir que todas as refeições sejam iguais."
+        ]
+      },
+      {
+        "title": "Confira antes de comprar",
+        "paragraphs": [
+          "Olhe despensa, geladeira e congelador. Observe quantidade, validade e as condições indicadas nas embalagens. Desconte o que já existe em quantidade suficiente. Combine essa conferência com quem divide as compras."
+        ]
+      },
+      {
+        "title": "Transforme refeições em quantidades",
+        "paragraphs": [
+          "Some ingredientes repetidos e escreva a unidade: gramas, quilos, litros ou unidades. “Arroz, 1 pacote de 1 kg” informa mais que apenas “arroz”. Separe reposições necessárias de itens opcionais."
+        ]
+      },
+      {
+        "title": "Aprenda com a semana",
+        "paragraphs": [
+          "Observe o que faltou e o que sobrou antes de repetir a lista. No Gondly, mantenha nomes e quantidades claros. O registro serve como referência para ajustar sua próxima compra à rotina real."
+        ]
+      }
+    ],
+    "status": "draft"
+  },
+  {
+    "slug": "comparar-embalagens-no-mercado",
+    "title": "Embalagem maior nem sempre significa melhor compra",
+    "summary": "Compare preço por unidade e a quantidade que você pretende usar.",
+    "category": "Economia",
+    "sections": [
+      {
+        "title": "Use a mesma medida",
+        "paragraphs": [
+          "Divida o preço pela quantidade. Compare quilos com quilos e litros com litros. O valor da embalagem sozinho não revela qual produto custa menos por unidade."
+        ]
+      },
+      {
+        "title": "Uma conta com valores hipotéticos",
+        "paragraphs": [
+          "Um pacote de 500 g por R$ 8,00 custa R$ 16,00/kg: 8 ÷ 0,5. Outro de 750 g por R$ 11,25 custa R$ 15,00/kg: 11,25 ÷ 0,75. A segunda opção custa menos por quilo, mas exige um desembolso maior nessa compra. São exemplos, não ofertas atuais."
+        ]
+      },
+      {
+        "title": "Considere o consumo",
+        "paragraphs": [
+          "Confirme que os produtos têm características equivalentes. Pense no espaço disponível e em quanto será usado, seguindo as instruções de conservação. Não há vantagem automática em comprar mais do que precisa."
+        ]
+      },
+      {
+        "title": "Registre com contexto",
+        "paragraphs": [
+          "Anote nome, marca, tamanho, preço, mercado e data. Um preço antigo é uma referência, não a garantia de uma oferta. Use o histórico do Gondly e confirme o valor no estabelecimento."
+        ]
+      }
+    ],
+    "status": "draft"
+  },
+  {
+    "slug": "organizar-a-despensa",
+    "title": "Confira a despensa antes de montar a lista",
+    "summary": "Uma conferência simples ajuda a evitar compras duplicadas.",
+    "category": "Organização",
+    "sections": [
+      {
+        "title": "Deixe o estoque visível",
+        "paragraphs": [
+          "Organize os produtos em grupos que façam sentido para sua casa: grãos, massas, temperos e pacotes abertos. O objetivo é encontrar o que existe sem precisar retirar tudo."
+        ]
+      },
+      {
+        "title": "Dê atenção aos pacotes abertos",
+        "paragraphs": [
+          "Confira se já existe um produto aberto antes de incluir outro na lista. Preserve as informações da embalagem e siga as instruções do fabricante. Organização não substitui verificar validade e condições do alimento."
+        ]
+      },
+      {
+        "title": "Defina reposições possíveis",
+        "paragraphs": [
+          "A quantidade de referência depende do consumo, do espaço e do orçamento da sua casa. Registre o tamanho das embalagens e combine as reposições com quem também faz compras."
+        ]
+      },
+      {
+        "title": "Mantenha a lista atualizada",
+        "paragraphs": [
+          "Retire o que já foi comprado e anote o que acabou. Uma lista compartilhada só ajuda se as quantidades estiverem claras. Revise o estoque antes de sair, mesmo que tenha uma lista recorrente."
+        ]
+      }
+    ],
+    "status": "draft"
+  },
+  {
+    "slug": "compras-com-orcamento-definido",
+    "title": "Organize uma compra com um limite de gastos",
+    "summary": "Separe prioridades e acompanhe o total antes de chegar ao caixa.",
+    "category": "Economia",
+    "sections": [
+      {
+        "title": "Defina o limite desta compra",
+        "paragraphs": [
+          "Escolha um valor compatível com as necessidades da casa e as demais despesas. Uma lista genérica não conhece sua rotina. Comece pelo que você precisa repor e pelas refeições previstas."
+        ]
+      },
+      {
+        "title": "Separe prioridades",
+        "paragraphs": [
+          "Marque os itens necessários e os opcionais. Se os preços forem diferentes do previsto, essa separação ajuda a decidir o que pode esperar."
+        ]
+      },
+      {
+        "title": "Use estimativas com cuidado",
+        "paragraphs": [
+          "Recibos e registros recentes ajudam a estimar valores, mas preços podem mudar entre mercados e datas. Atualize os preços conforme coloca os produtos no carrinho."
+        ]
+      },
+      {
+        "title": "Revise antes do caixa",
+        "paragraphs": [
+          "Se o total se aproximar do limite, reveja opcionais e alternativas equivalentes. Depois, compare previsão e total pago. Use esse aprendizado na próxima lista, sem esperar uma economia fixa ou garantida."
+        ]
+      }
+    ],
+    "status": "draft"
+  },
+  {
+    "slug": "macarrao-com-legumes",
+    "title": "Macarrão com legumes para uma lista curta",
+    "summary": "Uma proposta simples com ingredientes que cabem em outras refeições.",
+    "category": "Receitas",
+    "sections": [
+      {
+        "title": "Antes de montar a lista",
+        "paragraphs": [
+          "Confira se já tem macarrão, alho e azeite. Escolha legumes em boas condições e siga as orientações de higiene e conservação dos produtos."
+        ]
+      },
+      {
+        "title": "Ajuste ao seu preparo",
+        "paragraphs": [
+          "Corte os legumes em pedaços semelhantes. Use a embalagem do macarrão como referência de cozimento. Se a frigideira ficar seca, acrescente um pouco de água e mexa."
+        ]
+      },
+      {
+        "title": "Nota de revisão",
+        "paragraphs": [
+          "O rendimento é aproximado. Receita preparada com auxílio de IA, sem teste culinário documentado. Quantidades e instruções precisam de revisão antes da publicação."
+        ]
+      }
+    ],
+    "recipe": {
+      "yield": "2 porções aproximadas",
+      "ingredients": [
+        "160 g de macarrão seco",
+        "1 cenoura pequena",
+        "1 abobrinha pequena",
+        "1 dente de alho",
+        "1 colher de sopa de azeite",
+        "Sal e temperos a gosto"
+      ],
+      "steps": [
+        "Lave os legumes, descasque o alho e corte os ingredientes.",
+        "Cozinhe o macarrão conforme a embalagem. Reserve um pouco da água e escorra.",
+        "Aqueça o azeite em fogo médio e refogue o alho sem deixar queimar.",
+        "Acrescente a cenoura e depois a abobrinha; cozinhe até a textura desejada, adicionando água se necessário.",
+        "Misture o macarrão aos legumes, ajuste os temperos e sirva."
+      ]
+    },
+    "status": "draft"
+  },
+  {
+    "slug": "omelete-de-legumes",
+    "title": "Omelete de legumes: organize antes de começar",
+    "summary": "Uma receita curta para preparar com poucos ingredientes.",
+    "category": "Receitas",
+    "sections": [
+      {
+        "title": "Confira os ingredientes",
+        "paragraphs": [
+          "Ovos, cebola e abobrinha formam a base desta proposta. Use produtos em boas condições. Não use a receita como orientação para aproveitar alimentos de conservação duvidosa."
+        ]
+      },
+      {
+        "title": "Prepare os legumes primeiro",
+        "paragraphs": [
+          "Pique em pedaços pequenos e refogue antes de juntar os ovos. O tamanho dos pedaços e a umidade dos ingredientes influenciam a textura."
+        ]
+      },
+      {
+        "title": "Nota de revisão",
+        "paragraphs": [
+          "Cozinhe até os ovos estarem firmes, sem parte líquida visível. O rendimento é aproximado. Receita preparada com auxílio de IA, sem teste culinário documentado; revisar antes de publicar."
+        ]
+      }
+    ],
+    "recipe": {
+      "yield": "1 a 2 porções aproximadas",
+      "ingredients": [
+        "3 ovos",
+        "1/2 cebola pequena picada",
+        "1/2 abobrinha pequena picada",
+        "1 colher de chá de azeite",
+        "Sal e temperos a gosto"
+      ],
+      "steps": [
+        "Lave a abobrinha e pique os legumes.",
+        "Aqueça o azeite e refogue os legumes até amaciarem.",
+        "Bata os ovos em um recipiente e acrescente os temperos.",
+        "Distribua os ovos sobre os legumes e cozinhe em fogo baixo.",
+        "Vire ou dobre cuidadosamente e termine o cozimento até os ovos ficarem firmes por completo."
+      ]
+    },
+    "status": "draft"
+  }
+]

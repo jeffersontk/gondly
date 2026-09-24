@@ -13,7 +13,7 @@ export function ListsPage() {
   const [q, setQ] = useState("");
   const debouncedQ = useDebouncedValue(q);
   const navigate = useNavigate();
-  const { data = [], isLoading } = useQuery({ queryKey: ["lists"], queryFn: () => api<MarketList[]>("/lists") });
+  const { data = [], isLoading, isError } = useQuery({ queryKey: ["lists"], queryFn: () => api<MarketList[]>("/lists") });
   const filtered = data.filter((list) => list.name.toLowerCase().includes(q.toLowerCase()));
 
   useEffect(() => {
@@ -36,7 +36,7 @@ export function ListsPage() {
             />
           </div>
         ))}
-        <AdSlot slot="lists_inline" />
+        <AdSlot slot="lists_inline" hasContent={filtered.length > 0} disabled={isLoading || isError} />
       </div>
       <FloatingActionButton
         label="Lista"

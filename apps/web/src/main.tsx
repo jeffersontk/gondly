@@ -1,41 +1,11 @@
-import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { App } from "./App";
-import { ErrorBoundary } from "./ErrorBoundary";
-import { AdProvider } from "./lib/ads";
-import { AuthProvider } from "./lib/auth";
-import { installOfflineQueueSync } from "./lib/offlineQueue";
-import { initPwaInstall } from "./lib/pwaInstall";
-import { installBackgroundQuerySync, installQueryCachePersistence, queryClient, restorePersistedQueryCache } from "./lib/queryClient";
-import { registerServiceWorker } from "./lib/register-sw";
+﻿import { isEditorialPath } from "./editorial/catalog.mjs";
 import "./styles.css";
+import { registerServiceWorker } from "./lib/register-sw";
 
-async function bootstrap() {
-  await restorePersistedQueryCache();
-  installQueryCachePersistence();
-  installBackgroundQuerySync();
-  installOfflineQueueSync();
-  initPwaInstall();
+registerServiceWorker();
 
-  createRoot(document.getElementById("root")!).render(
-    <StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <BrowserRouter>
-            <AdProvider>
-              <ErrorBoundary>
-                <App />
-              </ErrorBoundary>
-            </AdProvider>
-          </BrowserRouter>
-        </AuthProvider>
-      </QueryClientProvider>
-    </StrictMode>,
-  );
-
-  registerServiceWorker();
+if (isEditorialPath(window.location.pathname)) {
+  void import("./editorial/public-main");
+} else {
+  void import("./app-main");
 }
-
-void bootstrap();

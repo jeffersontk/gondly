@@ -90,8 +90,8 @@ Com Blueprint:
 Variaveis obrigatorias no Render:
 
 ```env
-DATABASE_URL="postgresql://...pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1"
-DIRECT_URL="postgresql://...pooler.supabase.com:5432/postgres"
+DATABASE_URL="postgresql://postgres.PROJECT_REF:SENHA@aws-0-REGIAO.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1"
+DIRECT_URL="postgresql://postgres:SENHA@db.PROJECT_REF.supabase.co:5432/postgres"
 GOOGLE_CLIENT_ID="seu-client-id.apps.googleusercontent.com"
 GOOGLE_CLIENT_SECRET=""
 FRONTEND_URL="https://SEU-PROJETO.vercel.app"
@@ -101,6 +101,11 @@ API_PUBLIC_URL="https://SEU-SERVICO-RENDER.onrender.com"
 MERCADO_PAGO_ACCESS_TOKEN="seu-token-mercado-pago"
 MERCADO_PAGO_WEBHOOK_SECRET=""
 ```
+
+No Supabase, use a URL de pooler/transacao em `DATABASE_URL` e a URL direta em `DIRECT_URL`.
+O usuario do pooler precisa estar no formato `postgres.PROJECT_REF`; se usar apenas `postgres`
+contra o host `*.pooler.supabase.com`, o Render pode cair com erro como
+`tenant/user postgres.PROJECT_REF not found`.
 
 Para dominio proprio, configure a API com as duas origens quando usar raiz e `www`, por exemplo:
 

@@ -7,11 +7,13 @@ export function registerServiceWorker() {
       window.location.reload();
     });
 
-    window.addEventListener("load", () => {
+    const register = () => {
       navigator.serviceWorker
         .register("/sw.js")
         .then((registration) => registration.update())
         .catch(() => undefined);
-    });
+    };
+    if (document.readyState === "complete") register();
+    else window.addEventListener("load", register, { once: true });
   }
 }
