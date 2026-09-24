@@ -39,7 +39,7 @@ export function LandingPage({
   return (
     <main className="min-h-screen overflow-x-hidden bg-paper text-ink">
       <section className="relative mx-auto flex min-h-[88svh] w-full max-w-7xl flex-col px-5 pb-10 pt-5 sm:px-8 lg:px-10">
-        <header className="flex items-center justify-between gap-4">
+        <header className="flex flex-wrap items-center justify-between gap-4">
           <Link to="/" aria-label="Gondly">
             <picture>
               <source srcSet="/gondly-logo-small.webp" type="image/webp" />
@@ -52,6 +52,11 @@ export function LandingPage({
               />
             </picture>
           </Link>
+          <nav aria-label="Conteúdos públicos" className="flex flex-wrap gap-3 text-xs font-semibold sm:text-sm">
+            <a href="/blog">Blog</a>
+            <a href="/receitas">Receitas</a>
+            <a href="/sobre">Sobre</a>
+          </nav>
           {clientId ? (
             <GoogleAuthButton
               buttonRef={signinButtonRef}
@@ -137,7 +142,8 @@ export function LandingPage({
 
       <AdSlot
         slot="landing_inline"
-        disabled={loginPending}
+        hasContent={true}
+        disabled={loginPending || Boolean(authError)}
         className="mx-5 mb-8 sm:mx-8 lg:mx-auto lg:max-w-7xl"
       />
 
@@ -169,6 +175,10 @@ export function LandingPage({
           Gondly
         </Link>
         <nav className="flex flex-wrap gap-x-5 gap-y-2">
+          <a href="/blog">Blog</a>
+          <a href="/receitas">Receitas</a>
+          <a href="/guias/lista-de-compras">Guia de compras</a>
+          <a href="/sobre">Sobre</a>
           <Link className="transition hover:text-mint" to="/privacy">
             Privacidade
           </Link>

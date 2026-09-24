@@ -5,7 +5,7 @@ const allowedRoutes: Record<AdSlotName, string[]> = {
   lists_inline: ["/app/lists", "/lists"],
   history_inline: ["/app/history", "/history"],
   compare_inline: ["/app/compare", "/prices"],
-  landing_inline: ["/", "/login"],
+  landing_inline: ["/"],
 };
 
 export function isBlockedAdRoute(pathname: string) {

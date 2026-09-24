@@ -16,7 +16,7 @@ export function PurchaseHistoryPage() {
   const debouncedQ = useDebouncedValue(q);
   const [purchaseToRemove, setPurchaseToRemove] = useState<string | null>(null);
   const [clearAllOpen, setClearAllOpen] = useState(false);
-  const { data = [], isLoading } = useQuery({ queryKey: ["purchases"], queryFn: () => api<Purchase[]>("/purchases") });
+  const { data = [], isLoading, isError } = useQuery({ queryKey: ["purchases"], queryFn: () => api<Purchase[]>("/purchases") });
   const completed = data
     .filter((purchase) => purchase.status === "completed")
     .filter((purchase) => {
@@ -86,7 +86,7 @@ export function PurchaseHistoryPage() {
         ))}
       </div>
       <div className="mt-4">
-        <AdSlot slot="history_inline" />
+        <AdSlot slot="history_inline" hasContent={completed.length > 0} disabled={isLoading || isError} />
       </div>
 
       <ConfirmDialog

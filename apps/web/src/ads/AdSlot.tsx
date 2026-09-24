@@ -5,28 +5,28 @@ import { useAds } from "../lib/ads";
 import { AdPlaceholder } from "./AdPlaceholder";
 import { AdSenseAd } from "./AdSenseAd";
 import { HouseAd } from "./HouseAd";
-import { isAllowedAdRoute, isBlockedAdRoute } from "./blockedRoutes";
+import { canShowAd } from "./eligibility.mjs";
 import { adsConfig, getAdSenseSlotId, type AdSlotName } from "./config";
 
 type AdSlotProps = {
   slot: AdSlotName;
   className?: string;
   disabled?: boolean;
+  hasContent: boolean;
 };
 
-export function AdSlot({ slot, className, disabled }: AdSlotProps) {
+export function AdSlot({ slot, className, disabled, hasContent }: AdSlotProps) {
   const location = useLocation();
   const { adsEnabled, hasNoAds, isLoading } = useAds();
-  const blockedByRoute =
-    isBlockedAdRoute(location.pathname) ||
-    !isAllowedAdRoute(location.pathname, slot);
-  const hidden =
-    disabled ||
-    isLoading ||
-    !adsConfig.enabled ||
-    !adsEnabled ||
-    hasNoAds ||
-    blockedByRoute;
+  const hidden = !canShowAd({
+    enabled: adsConfig.enabled && adsEnabled,
+    hasNoAds,
+    loading: isLoading,
+    error: disabled,
+    hasContent,
+    pathname: location.pathname,
+    slot,
+  });
   const adsenseSlotId = getAdSenseSlotId(slot);
   const canRenderAdsense =
     import.meta.env.PROD &&

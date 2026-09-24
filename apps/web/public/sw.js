@@ -1,5 +1,5 @@
-const CACHE_NAME = "gondly-cache-v4";
-const APP_SHELL = ["/", "/manifest.webmanifest", "/icons/gondly-icon-192x192.png", "/icons/apple-touch-icon.png", "/gondly-logo-small.webp"];
+const CACHE_NAME = "gondly-cache-v5";
+const APP_SHELL = ["/index.html", "/manifest.webmanifest", "/icons/gondly-icon-192x192.png", "/icons/apple-touch-icon.png", "/gondly-logo-small.webp"];
 const STATIC_PUBLIC_ASSETS = new Set([
   "/manifest.webmanifest",
   "/gondly-logo-small.webp",
@@ -38,16 +38,19 @@ self.addEventListener("fetch", (event) => {
 });
 
 async function networkFirstNavigation(request) {
+  const url = new URL(request.url);
+  const editorial = /^\/(blog|receitas|guias|sobre)(\/|$)/.test(url.pathname);
   try {
     const response = await fetch(request);
-    if (response.ok && isHtmlResponse(response)) {
+    if (editorial && !url.search && response.ok && isHtmlResponse(response)) {
       const copy = response.clone();
       const cache = await caches.open(CACHE_NAME);
-      await cache.put("/", copy);
+      await cache.put(url.href, copy);
     }
     return response;
   } catch {
-    return (await caches.match("/")) || Response.error();
+    const cached = editorial ? await caches.match(url.href) : await caches.match("/index.html");
+    return cached || new Response('<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Sem conexão | Gondly</title><h1>Você está sem conexão</h1><p>Esta página ainda não está disponível offline. Reconecte e tente novamente.</p></html>', {status:503, headers:{"Content-Type":"text/html; charset=utf-8"}});
   }
 }
 

@@ -296,7 +296,7 @@ export function PriceComparisonPage() {
       ) : null}
 
       <div className="mt-4">
-        <AdSlot slot="compare_inline" />
+        <AdSlot slot="compare_inline" hasContent={tab === "region" ? Boolean(regionQuery.data?.length) : tab === "mine" ? mineItems.length > 0 : false} disabled={tab === "region" ? regionQuery.isLoading || regionQuery.isError : tab === "mine" ? mineQuery.isLoading || mineQuery.isError || insightsQuery.isLoading || insightsQuery.isError : true} />
       </div>
 
       {helpOpen ? <HelpModal onClose={() => setHelpOpen(false)} /> : null}

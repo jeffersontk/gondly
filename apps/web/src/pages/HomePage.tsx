@@ -236,7 +236,7 @@ export function HomePage() {
         </button>
       </section>
 
-      <AdSlot slot="home_inline" className="mt-5" />
+      <AdSlot slot="home_inline" className="mt-5" hasContent={Boolean(hasLists || data?.lastPurchase || activePurchase?.items.length)} disabled={lists.isLoading || lists.isError || active.isLoading || active.isError} />
       <PurchaseTitleDialog
         open={purchaseTitleDialogOpen}
         loading={startPurchase.isPending}

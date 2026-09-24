@@ -1,0 +1,77 @@
+[
+  {
+    "path": "/guias/lista-de-compras",
+    "title": "Uma lista que acompanha sua rotina",
+    "summary": "Da conferência da despensa ao mercado: organize sua próxima compra em cinco passos.",
+    "sections": [
+      {
+        "title": "1. Conte as refeições, depois os ingredientes",
+        "paragraphs": [
+          "Pense nos próximos dias: quantas pessoas vão comer em casa? Quais refeições você pretende preparar? Escolha preparações compatíveis com o tempo disponível. Uma lista útil atende a esse plano, em vez de repetir todos os produtos que você costuma encontrar no mercado."
+        ]
+      },
+      {
+        "title": "2. Confira o que já existe",
+        "paragraphs": [
+          "Olhe a despensa, a geladeira e o congelador. Observe quantidades e as instruções de validade e conservação. Desconte o que já tem e pretende usar. Combine essa conferência com quem também faz compras: um produto pode ter sido comprado e ainda não estar registrado."
+        ]
+      },
+      {
+        "title": "3. Escreva nome, quantidade e unidade",
+        "paragraphs": [
+          "“Tomate, 4 unidades” e “arroz, 1 pacote de 1 kg” deixam menos dúvida que apenas os nomes. Some ingredientes usados em mais de uma receita. Observe se a quantidade está em peso, volume ou unidades antes de converter para uma embalagem.",
+          "Exemplo de organização: separe hortifruti, despensa, refrigerados e produtos de limpeza. Dentro de cada grupo, escreva apenas as quantidades que faltam. Essas categorias ajudam a percorrer o mercado; não são uma lista obrigatória de produtos."
+        ]
+      },
+      {
+        "title": "4. Marque prioridades",
+        "paragraphs": [
+          "Separe necessários e opcionais. Se houver um limite de gastos, use registros recentes apenas como estimativa: os preços podem mudar. Atualize os valores durante a compra para decidir antes do caixa. Compare também preço unitário e volume que você consegue aproveitar."
+        ]
+      },
+      {
+        "title": "5. Revise ao voltar",
+        "paragraphs": [
+          "Registre o que foi comprado e o que ficou faltando. Na próxima semana, observe as sobras antes de repetir a lista. No Gondly, você pode organizar listas e acompanhar compras. A ferramenta ajuda a registrar decisões; prioridades e quantidades continuam sendo as da sua casa."
+        ]
+      }
+    ]
+  },
+  {
+    "path": "/guias/comparar-precos",
+    "title": "Compare o conteúdo, não só a etiqueta",
+    "summary": "Coloque embalagens diferentes na mesma unidade e faça uma comparação útil.",
+    "sections": [
+      {
+        "title": "A conta básica",
+        "paragraphs": [
+          "Preço por unidade de medida = preço da embalagem ÷ quantidade na unidade escolhida. Para comparar por quilo, transforme gramas em quilos: 500 g são 0,5 kg. Para comparar por litro, 250 ml são 0,25 L. Confira se os produtos têm características equivalentes e se a oferta depende de clube, quantidade mínima ou forma de pagamento."
+        ]
+      },
+      {
+        "title": "Duas embalagens de tamanhos diferentes",
+        "paragraphs": [
+          "Exemplo hipotético: 500 g por R$ 8,00 e 750 g por R$ 11,25. A primeira custa 8 ÷ 0,5 = R$ 16,00/kg. A segunda custa 11,25 ÷ 0,75 = R$ 15,00/kg. A segunda tem menor preço por quilo, mas exige R$ 3,25 a mais no caixa. Os preços ilustram a conta e não representam ofertas atuais."
+        ]
+      },
+      {
+        "title": "Produtos vendidos em unidades",
+        "paragraphs": [
+          "Outro exemplo hipotético: 6 unidades por R$ 9,00 custam R$ 1,50 cada. Dez por R$ 16,00 custam R$ 1,60 cada. Aqui, o pacote menor tem menor preço unitário. Essa conta só faz sentido se as unidades forem equivalentes em tamanho e características."
+        ]
+      },
+      {
+        "title": "O consumo faz parte da decisão",
+        "paragraphs": [
+          "Considere quanto precisa, o espaço de armazenamento e o consumo previsto. Um produto que não atende à necessidade pode não ser uma boa compra, mesmo com preço unitário menor. Ao comparar estabelecimentos, considere também deslocamento ou entrega."
+        ]
+      },
+      {
+        "title": "Guarde informações úteis",
+        "paragraphs": [
+          "Registre produto, marca, tamanho, unidade, preço, mercado e data. O histórico organiza referências, mas não garante disponibilidade ou preço atual. No Gondly, compare seus registros e confirme etiqueta e total no caixa."
+        ]
+      }
+    ]
+  }
+]
