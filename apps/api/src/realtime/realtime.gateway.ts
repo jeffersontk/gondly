@@ -13,6 +13,7 @@ import {
 import { Server, Socket } from "socket.io";
 import { buildAllowedOrigins, isAllowedOrigin } from "../common/cors-origins";
 import { PrismaService } from "../prisma/prisma.service";
+import { purchaseAccessWhere } from "../purchases/purchase-access";
 import { RealtimeService } from "./realtime.service";
 
 const realtimeOrigins = buildAllowedOrigins(process.env.FRONTEND_URL, process.env.WEB_ORIGIN, process.env.CORS_ORIGINS);
@@ -211,7 +212,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
       where: {
         id: purchaseId,
         deletedAt: null,
-        OR: [{ userId }, { participants: { some: { userId } } }, { sourceList: { members: { some: { userId, status: "accepted" } } } }],
+        ...purchaseAccessWhere(userId),
       },
       select: { id: true },
     });

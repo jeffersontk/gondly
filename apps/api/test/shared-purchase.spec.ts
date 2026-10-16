@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { ForbiddenException } from "@nestjs/common";
+import { purchaseAccessWhere } from "../src/purchases/purchase-access";
 import { PurchasesService } from "../src/purchases/purchases.service";
 
 function sharedPurchase(overrides: Record<string, unknown> = {}) {
@@ -108,6 +109,19 @@ describe("shared list purchases", () => {
 
     assert.equal(cancelled.status, "cancelled");
     assert.deepEqual(events.map(({ event, payload }) => [event, payload.status, payload.byUserId]), [["purchaseTotalUpdated", "cancelled", "guest-1"]]);
+  });
+
+  it("only grants past participants access to list purchases that already ended", () => {
+    const where = purchaseAccessWhere("guest-1");
+
+    assert.deepEqual(where.OR, [
+      { userId: "guest-1" },
+      { sourceList: { members: { some: { userId: "guest-1", status: "accepted" } } } },
+      {
+        participants: { some: { userId: "guest-1" } },
+        OR: [{ sourceListId: null }, { status: { not: "in_progress" } }],
+      },
+    ]);
   });
 
   it("blocks edits from a member removed from the list even if they joined the purchase before", async () => {
