@@ -75,12 +75,14 @@ export function usePurchaseRealtime(purchaseId: string | undefined, sourceListId
       return applied;
     };
 
-    const handleItemUpsert = (message: (productName: string) => string) => (payload: PurchaseItemRealtimePayload) => {
+    const handleItemUpsert = (message: (payload: PurchaseItemRealtimePayload, productName: string) => string) => (payload: PurchaseItemRealtimePayload) => {
       if (payload.purchaseId !== purchaseId || !payload.item) return;
-      if (applyItemChange(payload, payload.item.id, false)) showNotice(payload, message(payload.item.productName));
+      if (applyItemChange(payload, payload.item.id, false)) showNotice(payload, message(payload, payload.item.productName));
     };
-    const handleItemCreated = handleItemUpsert((name) => `${name} foi adicionado ao carrinho.`);
-    const handleItemUpdated = handleItemUpsert((name) => `${name} foi atualizado no carrinho.`);
+    const handleItemCreated = handleItemUpsert((_payload, name) => `${name} foi adicionado ao carrinho.`);
+    const handleItemUpdated = handleItemUpsert((payload, name) =>
+      payload.action === "claimed" ? `vai pegar ${name}.` : payload.action === "unclaimed" ? `não vai mais pegar ${name}.` : `${name} foi atualizado no carrinho.`,
+    );
     const handleItemDeleted = (payload: PurchaseItemRealtimePayload) => {
       if (payload.purchaseId !== purchaseId || !payload.itemId) return;
       if (applyItemChange(payload, payload.itemId, true)) showNotice(payload, "Um item foi removido do carrinho.");

@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { normalizePrice, roundMoney } from "@gondly/utils";
 import { ListsService } from "../lists/lists.service";
@@ -11,6 +11,9 @@ import { RealtimeService } from "../realtime/realtime.service";
 import { CreatePurchaseItemDto, FinishPurchaseDto, StartPurchaseDto, UpdatePurchaseDto, UpdatePurchaseItemDto } from "./dto";
 
 type SharedPriceLocationLevel = "none" | "city" | "neighborhood";
+
+// Participant names let clients show who put each item in the cart and who is going to pick it.
+const PARTICIPANTS_INCLUDE = { include: { user: { select: { id: true, name: true, photoUrl: true } } } } as const;
 type SharedPriceItem = Prisma.PurchaseItemGetPayload<{ include: { product: true } }>;
 
 @Injectable()
@@ -28,7 +31,7 @@ export class PurchasesService {
   async start(userId: string, dto: StartPurchaseDto) {
     const activePurchase = await this.prisma.purchase.findFirst({
       where: { userId, status: "in_progress", deletedAt: null },
-      include: { items: { orderBy: { createdAt: "desc" } }, market: true, participants: true, sourceList: true },
+      include: { items: { orderBy: { createdAt: "desc" } }, market: true, participants: PARTICIPANTS_INCLUDE, sourceList: true },
       orderBy: { startedAt: "desc" },
     });
 
@@ -94,7 +97,7 @@ export class PurchasesService {
           participants: { create: { userId } },
           ...(purchaseItems.length ? { items: { createMany: { data: purchaseItems } } } : {}),
         },
-        include: { items: true, market: true, participants: true, sourceList: true },
+        include: { items: true, market: true, participants: PARTICIPANTS_INCLUDE, sourceList: true },
       });
     } catch (error) {
       if (activePurchase && dto.cancelActive) {
@@ -116,7 +119,7 @@ export class PurchasesService {
         status: "in_progress",
         ...purchaseAccessWhere(userId),
       },
-      include: { items: { orderBy: { createdAt: "desc" } }, market: true, participants: true, sourceList: true },
+      include: { items: { orderBy: { createdAt: "desc" } }, market: true, participants: PARTICIPANTS_INCLUDE, sourceList: true },
       orderBy: { startedAt: "desc" },
     });
   }
@@ -239,6 +242,34 @@ export class PurchasesService {
     });
     this.emitListPurchaseItemChanged(purchase, "updated", { item: updatedItem, byUserId: userId });
     this.emitPurchaseTotal(updatedPurchase, userId);
+    return updatedPurchase;
+  }
+
+  async claimItem(userId: string, purchaseId: string, itemId: string, claimed: boolean) {
+    const purchase = await this.assertPurchaseEditable(userId, purchaseId);
+    const item = await this.assertItemInPurchase(purchase.id, itemId);
+
+    if (claimed && item.claimedByUserId && item.claimedByUserId !== userId) {
+      throw new ConflictException("Another participant is already picking this item.");
+    }
+    if (!claimed && item.claimedByUserId !== userId) {
+      return this.purchaseWithIncludes(purchase.id);
+    }
+
+    const updatedItem = await this.prisma.purchaseItem.update({
+      where: { id: itemId },
+      data: claimed ? { claimedByUserId: userId, claimedAt: new Date() } : { claimedByUserId: null, claimedAt: null },
+    });
+    const updatedPurchase = await this.purchaseWithIncludes(purchase.id);
+    this.realtime.emitToPurchase(purchase.id, "purchaseItemUpdated", {
+      purchaseId: purchase.id,
+      item: updatedItem,
+      subtotalCalculated: toNumber(updatedPurchase.subtotalCalculated),
+      purchaseUpdatedAt: updatedPurchase.updatedAt,
+      action: claimed ? "claimed" : "unclaimed",
+      byUserId: userId,
+    });
+    this.emitListPurchaseItemChanged(purchase, "updated", { item: updatedItem, byUserId: userId });
     return updatedPurchase;
   }
 
@@ -407,7 +438,7 @@ export class PurchasesService {
         items: { orderBy: { createdAt: "desc" } },
         market: true,
         sourceList: { include: { members: true } },
-        participants: true,
+        participants: PARTICIPANTS_INCLUDE,
       },
     });
 
@@ -709,6 +740,13 @@ export class PurchasesService {
     return Math.round(value * 100) / 100;
   }
 
+  private purchaseWithIncludes(purchaseId: string) {
+    return this.prisma.purchase.findUniqueOrThrow({
+      where: { id: purchaseId },
+      include: { items: { orderBy: { createdAt: "desc" } }, market: true, participants: PARTICIPANTS_INCLUDE, sourceList: true },
+    });
+  }
+
   private async recalculateSubtotal(purchaseId: string) {
     const items = await this.prisma.purchaseItem.findMany({ where: { purchaseId } });
     const subtotal = roundMoney(items.reduce((sum, item) => sum + toNumber(item.pricePaid), 0));
@@ -716,7 +754,7 @@ export class PurchasesService {
     return this.prisma.purchase.update({
       where: { id: purchaseId },
       data: { subtotalCalculated: subtotal },
-      include: { items: { orderBy: { createdAt: "desc" } }, market: true, participants: true, sourceList: true },
+      include: { items: { orderBy: { createdAt: "desc" } }, market: true, participants: PARTICIPANTS_INCLUDE, sourceList: true },
     });
   }
 

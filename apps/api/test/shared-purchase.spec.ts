@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { ForbiddenException } from "@nestjs/common";
+import { ConflictException, ForbiddenException } from "@nestjs/common";
 import { purchaseAccessWhere } from "../src/purchases/purchase-access";
 import { PurchasesService } from "../src/purchases/purchases.service";
 
@@ -109,6 +109,38 @@ describe("shared list purchases", () => {
 
     assert.equal(cancelled.status, "cancelled");
     assert.deepEqual(events.map(({ event, payload }) => [event, payload.status, payload.byUserId]), [["purchaseTotalUpdated", "cancelled", "guest-1"]]);
+  });
+
+  it("lets a participant claim an item and blocks a second claim from someone else", async () => {
+    const purchase = sharedPurchase({ participants: [{ userId: "owner-1" }, { userId: "guest-1" }] });
+    let item: Record<string, unknown> = { id: "item-1", purchaseId: "purchase-1", productName: "Café", claimedByUserId: null };
+    const events: string[] = [];
+    const prisma = {
+      purchase: {
+        findFirst: async () => purchase,
+        findUniqueOrThrow: async () => ({ ...purchase, updatedAt: new Date() }),
+      },
+      purchaseItem: {
+        findFirst: async () => item,
+        update: async ({ data }: { data: Record<string, unknown> }) => {
+          item = { ...item, ...data };
+          return item;
+        },
+      },
+    };
+    const service = new PurchasesService(prisma as never, {} as never, {
+      emitToPurchase: (_id: string, event: string, payload: { action?: string }) => events.push(`${event}:${payload.action}`),
+      emitToList: () => undefined,
+    } as never);
+
+    await service.claimItem("guest-1", "purchase-1", "item-1", true);
+    assert.equal(item.claimedByUserId, "guest-1");
+    assert.deepEqual(events, ["purchaseItemUpdated:claimed"]);
+
+    await assert.rejects(() => service.claimItem("owner-1", "purchase-1", "item-1", true), ConflictException);
+
+    await service.claimItem("guest-1", "purchase-1", "item-1", false);
+    assert.equal(item.claimedByUserId, null);
   });
 
   it("only grants past participants access to list purchases that already ended", () => {

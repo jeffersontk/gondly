@@ -21,6 +21,7 @@ function purchaseErrorMessage(error: unknown) {
     if (error.status === 403) return "Você não tem permissão para editar esta compra.";
     if (error.status === 404) return "Não foi possível salvar o item: ele não está mais disponível nesta compra.";
     if (error.status === 400) return "Esta compra não pode mais ser editada.";
+    if (error.status === 409) return "Outra pessoa já vai pegar este item.";
   }
   return "Não foi possível salvar o item. Tente novamente.";
 }

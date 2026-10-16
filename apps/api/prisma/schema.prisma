@@ -155,6 +155,7 @@ model User {
   purchasedListItems     MarketListItem[]            @relation("PurchasedListItems")
   addedPurchaseItems     PurchaseItem[]              @relation("AddedPurchaseItems")
   updatedPurchaseItems   PurchaseItem[]              @relation("UpdatedPurchaseItems")
+  claimedPurchaseItems   PurchaseItem[]              @relation("ClaimedPurchaseItems")
   purchaseParticipations PurchaseParticipant[]
   subscription           Subscription?
   entitlements           UserEntitlement[]
@@ -333,6 +334,8 @@ model PurchaseItem {
   normalizedUnitLabel String?
   addedByUserId       String?
   updatedByUserId     String?
+  claimedByUserId     String?
+  claimedAt           DateTime?
   notes               String?
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
@@ -342,6 +345,7 @@ model PurchaseItem {
   brandRef            Brand?              @relation("PurchaseItemBrand", fields: [brandId], references: [id], onDelete: SetNull)
   addedByUser         User?               @relation("AddedPurchaseItems", fields: [addedByUserId], references: [id], onDelete: SetNull)
   updatedByUser       User?               @relation("UpdatedPurchaseItems", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  claimedByUser       User?               @relation("ClaimedPurchaseItems", fields: [claimedByUserId], references: [id], onDelete: SetNull)
   sharedPriceRecords  SharedPriceRecord[]
 
   @@index([purchaseId])

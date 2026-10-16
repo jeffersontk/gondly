@@ -4,6 +4,7 @@ import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import type { JwtUser } from "../common/auth.types";
 import {
+  ClaimPurchaseItemDto,
   CreatePurchaseItemDto,
   FinishPurchaseDto,
   StartPurchaseDto,
@@ -67,6 +68,16 @@ export class PurchasesController {
     @Body() dto: UpdatePurchaseItemDto,
   ) {
     return this.purchasesService.updateItem(user.id, id, itemId, dto);
+  }
+
+  @Put(":id/items/:itemId/claim")
+  claimItem(
+    @CurrentUser() user: JwtUser,
+    @Param("id") id: string,
+    @Param("itemId") itemId: string,
+    @Body() dto: ClaimPurchaseItemDto,
+  ) {
+    return this.purchasesService.claimItem(user.id, id, itemId, dto.claimed);
   }
 
   @Delete(":id/items/:itemId")

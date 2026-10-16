@@ -80,6 +80,11 @@ export class CreatePurchaseItemDto {
 
 export class UpdatePurchaseItemDto extends PartialType(CreatePurchaseItemDto) {}
 
+export class ClaimPurchaseItemDto {
+  @IsBoolean()
+  claimed!: boolean;
+}
+
 export class FinishPurchaseDto {
   @IsString()
   marketId!: string;
