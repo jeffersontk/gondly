@@ -5,6 +5,7 @@ import { Bell, Check, Hand, ChevronDown, ChevronRight, MessageCircle, Plus, Shop
 import { AppButton, ConfirmDialog, EmptyState, LoadingState, ScreenContainer, SearchBar, formatPackageSize } from "../../components";
 import { canAskNotificationPermission } from "../../components/FinishPurchaseReminder";
 import { notifyPurchaseError, onPurchaseError } from "../../lib/purchaseNotices";
+import { enablePushNotifications } from "../../lib/push";
 import { trackEvent, trackSafeSearch } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
@@ -276,7 +277,9 @@ export function ActivePurchasePage() {
             type="button"
             className="flex-none rounded-xl border border-mint/35 px-3 py-2 text-xs font-black text-mint"
             onClick={() => {
-              void Notification.requestPermission().finally(() => setCanAskNotifications(canAskNotificationPermission()));
+              void enablePushNotifications()
+                .catch(() => undefined)
+                .finally(() => setCanAskNotifications(canAskNotificationPermission()));
             }}
           >
             Ativar

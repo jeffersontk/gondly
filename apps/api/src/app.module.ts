@@ -14,6 +14,7 @@ import { PriceComparisonModule } from "./price-comparison/price-comparison.modul
 import { PrismaModule } from "./prisma/prisma.module";
 import { ProductsModule } from "./products/products.module";
 import { PurchasesModule } from "./purchases/purchases.module";
+import { PushModule } from "./push/push.module";
 import { RealtimeModule } from "./realtime/realtime.module";
 import { ReportsModule } from "./reports/reports.module";
 import { SharingModule } from "./sharing/sharing.module";
@@ -53,6 +54,7 @@ import { UsersModule } from "./users/users.module";
     ReportsModule,
     BillingModule,
     RealtimeModule,
+    PushModule,
   ],
   providers: [
     {

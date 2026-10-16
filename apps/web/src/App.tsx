@@ -25,6 +25,7 @@ import { AppButton, LoadingState } from "./components";
 import { FinishPurchaseReminder, usePurchaseWithCart } from "./components/FinishPurchaseReminder";
 import { trackEvent, usePageTracking } from "./lib/analytics";
 import { useAuth } from "./lib/auth";
+import { syncPushSubscription } from "./lib/push";
 import { promptPwaInstall, usePwaInstall } from "./lib/pwaInstall";
 
 const INSTALL_MODAL_SESSION_KEY = "gondly.installModalDismissed";
@@ -315,6 +316,11 @@ function PublicLandingRoute() {
 
 function ProtectedLayout({ children }: { children?: ReactNode }) {
   const { user, loading } = useAuth();
+
+  useEffect(() => {
+    // Links this device's push subscription (if any) to the account currently signed in.
+    if (user?.id) void syncPushSubscription();
+  }, [user?.id]);
 
   if (loading) return <LoadingState />;
   if (!user) {

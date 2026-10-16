@@ -44,3 +44,11 @@ services:
         value: "19.90"
       - key: REMOVE_ADS_CURRENCY
         value: BRL
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:contato@gondly.app
+      - key: CRON_SECRET
+        sync: false

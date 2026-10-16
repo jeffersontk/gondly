@@ -1,6 +1,7 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { trackEvent } from "./analytics";
 import { api, ApiError, getCachedApiRecord, isNetworkFailure, storeToken } from "./api";
+import { removePushSubscription } from "./push";
 import { clearHttpCache, clearOutbox } from "./db";
 import { clearPersistedQueryCache, queryClient } from "./queryClient";
 import type { User } from "../types";
@@ -105,6 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const source = options.source ?? "app";
 
     try {
+      await removePushSubscription();
       await api("/auth/logout", { method: "POST" });
       trackEvent("logout", { source });
     } finally {

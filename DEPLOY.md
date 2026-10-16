@@ -157,6 +157,28 @@ POST /billing/remove-ads/checkout
 
 O entitlement `no_ads` so e liberado depois que o webhook consulta o pagamento na API do Mercado Pago.
 
+## 4.1 Lembretes de finalizar compra (Web Push)
+
+O app avisa os participantes 1h e 2h depois do último item colocado no carrinho, se a compra continuar aberta.
+
+1. Gere as chaves VAPID localmente (não commitar):
+
+   ```bash
+   npx web-push generate-vapid-keys
+   ```
+
+2. No Render, configure `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` e um `CRON_SECRET` aleatório (ex.: `openssl rand -hex 32`).
+   Sem as chaves VAPID o push fica desligado e o app mantém só o lembrete dentro do app.
+3. No GitHub, em *Settings → Secrets and variables → Actions*, crie:
+   - `GONDLY_API_URL`: URL pública da API (ex.: `https://SEU-SERVICO-RENDER.onrender.com`);
+   - `GONDLY_CRON_SECRET`: o mesmo valor de `CRON_SECRET`.
+
+O workflow `.github/workflows/finish-reminders.yml` chama `POST /push/reminders/run` a cada 10 minutos, das 7h às 23h
+(horário de Brasília). Isso é necessário porque a instância free do Render dorme quando fica ociosa e o timer interno
+da API não roda enquanto ela dorme. Fora dessa janela os lembretes não são enviados (horário de silêncio).
+
+No iPhone, notificações push só funcionam com o app instalado na tela de início (iOS 16.4+).
+
 ## 5. Ordem Recomendada
 
 1. Subir o repositorio no GitHub.

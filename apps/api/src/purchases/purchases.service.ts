@@ -172,7 +172,7 @@ export class PurchasesService {
       },
     });
 
-    const updatedPurchase = await this.recalculateSubtotal(purchase.id);
+    const updatedPurchase = await this.recalculateSubtotal(purchase.id, dto.pricePaid > 0);
     this.realtime.emitToPurchase(purchase.id, "purchaseItemCreated", {
       purchaseId: purchase.id,
       item,
@@ -232,7 +232,7 @@ export class PurchasesService {
       },
     });
 
-    const updatedPurchase = await this.recalculateSubtotal(purchase.id);
+    const updatedPurchase = await this.recalculateSubtotal(purchase.id, nextPricePaid > 0);
     this.realtime.emitToPurchase(purchase.id, "purchaseItemUpdated", {
       purchaseId: purchase.id,
       item: updatedItem,
@@ -747,13 +747,14 @@ export class PurchasesService {
     });
   }
 
-  private async recalculateSubtotal(purchaseId: string) {
+  /** @param cartTouched an item was put in (or changed in) the cart: restarts the finish-purchase reminders. */
+  private async recalculateSubtotal(purchaseId: string, cartTouched = false) {
     const items = await this.prisma.purchaseItem.findMany({ where: { purchaseId } });
     const subtotal = roundMoney(items.reduce((sum, item) => sum + toNumber(item.pricePaid), 0));
 
     return this.prisma.purchase.update({
       where: { id: purchaseId },
-      data: { subtotalCalculated: subtotal },
+      data: { subtotalCalculated: subtotal, ...(cartTouched ? { lastCartActivityAt: new Date(), finishRemindersSent: 0 } : {}) },
       include: { items: { orderBy: { createdAt: "desc" } }, market: true, participants: PARTICIPANTS_INCLUDE, sourceList: true },
     });
   }
