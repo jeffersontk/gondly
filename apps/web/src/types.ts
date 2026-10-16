@@ -220,6 +220,16 @@ export type PurchaseItem = {
   updatedAt?: string;
 };
 
+export type PriceHint = {
+  normalizedUnitLabel: string;
+  lastUnitPrice: number;
+  averageUnitPrice: number;
+  minUnitPrice: number;
+  purchasesCount: number;
+  lastPurchasedAt?: string | null;
+  lastMarketName?: string | null;
+};
+
 export type PurchaseParticipant = {
   id: string;
   userId: string;

@@ -95,6 +95,11 @@ export class PurchasesController {
     return this.purchasesService.cancel(user.id, id);
   }
 
+  @Post(":id/missing-as-list")
+  missingAsList(@CurrentUser() user: JwtUser, @Param("id") id: string) {
+    return this.purchasesService.duplicateAsList(user.id, id, { onlyMissing: true });
+  }
+
   @Post(":id/duplicate-as-list")
   duplicateAsList(@CurrentUser() user: JwtUser, @Param("id") id: string) {
     return this.purchasesService.duplicateAsList(user.id, id);

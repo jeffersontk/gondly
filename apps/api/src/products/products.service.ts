@@ -4,7 +4,10 @@ import { Unit } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { toNumber, toOptionalNumber } from "../common/utils/money";
 import { normalizeSearchName, optionalNumber, optionalText } from "../common/utils/normalize";
+import { purchaseAccessWhere } from "../purchases/purchase-access";
 import { CreateProductDto, UpdateProductDto } from "./dto";
+
+const PRICE_HINT_SAMPLE = 20;
 
 @Injectable()
 export class ProductsService {
@@ -96,6 +99,43 @@ export class ProductsService {
   async remove(userId: string, id: string) {
     await this.get(userId, id);
     return this.prisma.product.update({ where: { id }, data: { deletedAt: new Date() } });
+  }
+
+  /**
+   * What the user usually pays for a product, from their completed purchases (own or shared). Matching is by name so it
+   * also works for items that reference another list member's product. Prices are normalized (per kg, per L, per unit).
+   */
+  async priceHint(userId: string, name: string) {
+    const productName = optionalText(name);
+    if (!productName) return null;
+
+    const items = await this.prisma.purchaseItem.findMany({
+      where: {
+        pricePaid: { gt: 0 },
+        unitPriceNormalized: { not: null },
+        normalizedUnitLabel: { not: null },
+        OR: [{ product: { normalizedName: normalizeSearchName(productName) } }, { productName: { equals: productName, mode: "insensitive" } }],
+        purchase: { ...purchaseAccessWhere(userId), status: "completed", deletedAt: null },
+      },
+      select: { unitPriceNormalized: true, normalizedUnitLabel: true, purchase: { select: { completedAt: true, market: { select: { name: true } } } } },
+      orderBy: { createdAt: "desc" },
+      take: PRICE_HINT_SAMPLE,
+    });
+    if (!items.length) return null;
+
+    // Only compare prices in the same unit as the most recent purchase.
+    const unitLabel = items[0].normalizedUnitLabel!;
+    const prices = items.filter((item) => item.normalizedUnitLabel === unitLabel).map((item) => toNumber(item.unitPriceNormalized));
+
+    return {
+      normalizedUnitLabel: unitLabel,
+      lastUnitPrice: prices[0],
+      averageUnitPrice: roundMoney(prices.reduce((sum, value) => sum + value, 0) / prices.length),
+      minUnitPrice: Math.min(...prices),
+      purchasesCount: prices.length,
+      lastPurchasedAt: items[0].purchase.completedAt,
+      lastMarketName: items[0].purchase.market?.name ?? null,
+    };
   }
 
   async summary(userId: string, id: string) {

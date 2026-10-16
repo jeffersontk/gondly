@@ -3,13 +3,14 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { MapPin } from "lucide-react";
+import { ListPlus, MapPin, Users } from "lucide-react";
 import { AppButton, AppInput, LoadingState, MarketSelect, MoneyInput, ScreenContainer } from "../../components";
 import { ItemFeedback } from "../../components/ItemFeedback";
 import { trackEvent } from "../../lib/analytics";
 import { api } from "../../lib/api";
+import { useAuth } from "../../lib/auth";
 import { useOutboxStatus } from "../../lib/offlineQueue";
-import type { Market, PriceSharingPreference, Purchase } from "../../types";
+import type { Market, MarketList, PriceSharingPreference, Purchase } from "../../types";
 import { decimalValue, finishSchema, FinishForm, formatBRL, MarketForm, marketSchema, removeActivePurchaseCache } from "../shared";
 
 type GeoFeedback = {
@@ -26,6 +27,8 @@ export function FinishPurchasePage() {
   const [showCreateMarket, setShowCreateMarket] = useState(false);
   const [geoPending, setGeoPending] = useState(false);
   const [geoFeedback, setGeoFeedback] = useState<GeoFeedback | null>(null);
+  const [createMissingList, setCreateMissingList] = useState(false);
+  const { user } = useAuth();
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   const priceSharingPreference = useQuery({
     queryKey: ["price-sharing-preference"],
@@ -43,8 +46,14 @@ export function FinishPurchasePage() {
   });
   const finish = useMutation({
     mutationFn: (values: FinishForm) => api<Purchase>(`/purchases/${purchase?.id}/finish`, { method: "POST", body: values }),
-    onSuccess: (saved, values) => {
+    onSuccess: async (saved, values) => {
       queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => removeActivePurchaseCache(current, saved.id));
+      if (createMissingList && saved.items.some((item) => Number(item.pricePaid ?? 0) <= 0)) {
+        // Best effort: the purchase is already saved even if the list cannot be created.
+        await api<MarketList>(`/purchases/${saved.id}/missing-as-list`, { method: "POST" })
+          .then(() => queryClient.invalidateQueries({ queryKey: ["lists"] }))
+          .catch(() => undefined);
+      }
       queryClient.setQueryData(["purchase", saved.id], saved);
       queryClient.setQueryData<Purchase[]>(["purchases"], (current) => (current ? [saved, ...current.filter((purchase) => purchase.id !== saved.id)] : current));
       queryClient.setQueryData<PriceSharingPreference>(["price-sharing-preference"], (current) =>
@@ -124,12 +133,61 @@ export function FinishPurchasePage() {
   const finalPaidAmount = decimalValue(form.watch("finalPaidAmount"));
   const difference = purchase.subtotalCalculated - finalPaidAmount;
   const sharePrices = Boolean(form.watch("sharePrices"));
+  const cartItems = purchase.items.filter((item) => Number(item.pricePaid ?? 0) > 0);
+  const missingItems = purchase.items.filter((item) => Number(item.pricePaid ?? 0) <= 0);
+  const participantNames = new Map((purchase.participants ?? []).flatMap((participant) => (participant.user ? [[participant.userId, participant.user.name.split(/s+/)[0]] as const] : [])));
+  const totalsByPerson =
+    participantNames.size > 1
+      ? [...cartItems.reduce((totals, item) => {
+          const personId = item.updatedByUserId ?? item.addedByUserId ?? "";
+          return totals.set(personId, (totals.get(personId) ?? 0) + Number(item.pricePaid ?? 0));
+        }, new Map<string, number>())].map(([personId, total]) => ({
+          name: personId === user?.id ? "Você" : participantNames.get(personId) ?? "Outro participante",
+          total,
+        }))
+      : [];
 
   return (
     <ScreenContainer title="Finalizar">
       <div className="mb-4 rounded-xl bg-ink p-4 text-white shadow-soft">
         <p className="text-xs text-white/60">Subtotal calculado</p>
         <p className="text-3xl font-black">{formatBRL(purchase.subtotalCalculated)}</p>
+      </div>
+      <div className="mb-4 space-y-3">
+        <div className="rounded-xl border border-line bg-white p-3 shadow-sm">
+          <p className="text-sm font-black text-ink">
+            {cartItems.length} {cartItems.length === 1 ? "item" : "itens"} no carrinho
+          </p>
+          {totalsByPerson.length ? (
+            <div className="mt-2 space-y-1">
+              <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.08em] text-ink/50">
+                <Users className="h-3.5 w-3.5" /> Quem pegou o quê
+              </p>
+              {totalsByPerson.map((entry) => (
+                <p key={entry.name} className="flex justify-between text-sm text-ink/70">
+                  <span>{entry.name}</span>
+                  <span className="font-black text-ink">{formatBRL(entry.total)}</span>
+                </p>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        {missingItems.length ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 shadow-sm">
+            <p className="text-sm font-black text-amber-800">
+              Ficaram de fora ({missingItems.length}): esqueceu algo?
+            </p>
+            <p className="mt-1 text-sm leading-5 text-amber-900/80">
+              {missingItems.slice(0, 6).map((item) => item.productName).join(", ")}
+              {missingItems.length > 6 ? ` e mais ${missingItems.length - 6}` : ""}
+            </p>
+            <label className="mt-3 flex items-center gap-2 text-sm font-bold text-amber-900">
+              <input type="checkbox" className="h-4 w-4 accent-amber-600" checked={createMissingList} onChange={(event) => setCreateMissingList(event.target.checked)} />
+              <ListPlus className="h-4 w-4" />
+              Criar uma lista com o que faltou
+            </label>
+          </div>
+        ) : null}
       </div>
       <form className="space-y-3" onSubmit={form.handleSubmit((values) => finish.mutate(values))}>
         {outbox.pendingCount > 0 ? (

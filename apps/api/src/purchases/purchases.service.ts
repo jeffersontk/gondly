@@ -390,15 +390,25 @@ export class PurchasesService {
     return { count: result.count };
   }
 
-  async duplicateAsList(userId: string, id: string) {
+  /** @param options.onlyMissing copy only the items that never went to the cart ("what was missing at the market"). */
+  async duplicateAsList(userId: string, id: string, options: { onlyMissing?: boolean } = {}) {
     const purchase = await this.assertPurchaseAccess(userId, id);
+    const date = new Date(purchase.startedAt).toLocaleDateString("pt-BR");
+    const items = options.onlyMissing ? purchase.items.filter((item) => toNumber(item.pricePaid) <= 0) : purchase.items;
+    if (options.onlyMissing && !items.length) {
+      throw new BadRequestException("This purchase has no missing items.");
+    }
 
     return this.prisma.$transaction(async (tx) => {
       const list = await tx.marketList.create({
         data: {
           userId,
-          name: `Compra ${new Date(purchase.startedAt).toLocaleDateString("pt-BR")}`,
-          description: purchase.market ? `Criada a partir da compra em ${purchase.market.name}` : "Criada a partir de uma compra",
+          name: options.onlyMissing ? `Faltou: ${purchase.sourceList?.name ?? "compra"} (${date})` : `Compra ${date}`,
+          description: options.onlyMissing
+            ? `Itens que ficaram de fora da compra${purchase.market ? ` em ${purchase.market.name}` : ""}`
+            : purchase.market
+              ? `Criada a partir da compra em ${purchase.market.name}`
+              : "Criada a partir de uma compra",
         },
       });
 
@@ -407,7 +417,7 @@ export class PurchasesService {
       });
 
       await tx.marketListItem.createMany({
-        data: purchase.items.map((item) => ({
+        data: items.map((item) => ({
           listId: list.id,
           productId: item.productId,
           productName: item.productName,
