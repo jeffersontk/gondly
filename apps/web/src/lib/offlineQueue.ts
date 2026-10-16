@@ -3,6 +3,7 @@ import type { Unit } from "@gondly/types";
 import { roundMoney } from "@gondly/utils";
 import { ApiError, api, getStoredToken, isNetworkFailure } from "./api";
 import { outboxDelete, outboxGetAll, outboxPut } from "./db";
+import { notifyPurchaseError } from "./purchaseNotices";
 import { queryClient } from "./queryClient";
 import type { Purchase } from "../types";
 
@@ -129,6 +130,7 @@ export async function syncOutbox() {
         notifyOutboxChanged();
       } catch (error) {
         if (isObsoleteQueuedWrite(error)) {
+          notifyPurchaseError(entry.purchaseId, error);
           await outboxDelete(entry.id);
           queryClient.invalidateQueries({ queryKey: ["active-purchases"] });
           notifyOutboxChanged();

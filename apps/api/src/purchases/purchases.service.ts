@@ -51,11 +51,27 @@ export class PurchasesService {
       orderBy: { startedAt: "desc" },
     });
 
+    const sourceList = dto.sourceListId ? await this.listsService.get(userId, dto.sourceListId) : null;
+
+    if (sourceList) {
+      // A shared list has a single in-progress purchase: members join it instead of starting a parallel one.
+      const listPurchase = await this.prisma.purchase.findFirst({
+        where: { sourceListId: sourceList.id, status: "in_progress", deletedAt: null },
+        orderBy: { startedAt: "desc" },
+        select: { id: true },
+      });
+
+      if (listPurchase) {
+        if (activePurchase && dto.cancelActive && activePurchase.id !== listPurchase.id) {
+          await this.prisma.purchase.update({ where: { id: activePurchase.id }, data: { status: "cancelled" } });
+        }
+        return this.joinPurchase(userId, listPurchase.id);
+      }
+    }
+
     if (activePurchase && !dto.cancelActive) {
       return activePurchase;
     }
-
-    const sourceList = dto.sourceListId ? await this.listsService.get(userId, dto.sourceListId) : null;
 
     const purchaseItems =
       sourceList?.items
@@ -142,7 +158,7 @@ export class PurchasesService {
   async update(userId: string, id: string, dto: UpdatePurchaseDto) {
     const purchase = await this.assertPurchaseEditable(userId, id);
     if (dto.marketId) {
-      await this.assertMarketAccessible(userId, dto.marketId);
+      await this.assertMarketAccessible(userId, dto.marketId, this.collaboratorIds(purchase));
     }
 
     return this.prisma.purchase.update({
@@ -154,7 +170,7 @@ export class PurchasesService {
 
   async addItem(userId: string, purchaseId: string, dto: CreatePurchaseItemDto) {
     const purchase = await this.assertPurchaseEditable(userId, purchaseId);
-    const snapshot = await this.resolveItemSnapshot(userId, dto);
+    const snapshot = await this.resolveItemSnapshot(userId, dto, this.collaboratorIds(purchase));
     const normalized = normalizePrice(dto.quantity, dto.unit, dto.pricePaid);
 
     const item = await this.prisma.purchaseItem.create({
@@ -206,7 +222,7 @@ export class PurchasesService {
           unit: nextUnit,
           packageSize: dto.packageSize ?? item.packageSize ?? undefined,
           packageUnit: dto.packageUnit ?? item.packageUnit ?? undefined,
-        })
+        }, this.collaboratorIds(purchase))
       : {
           productId: item.productId,
           productName: item.productName,
@@ -267,7 +283,7 @@ export class PurchasesService {
 
   async finish(userId: string, id: string, dto: FinishPurchaseDto) {
     const purchase = await this.assertPurchaseEditable(userId, id);
-    const market = await this.assertMarketAccessible(userId, dto.marketId);
+    const market = await this.assertMarketAccessible(userId, dto.marketId, this.collaboratorIds(purchase));
     const shouldSharePrices = dto.sharePrices === true;
 
     const finished = await this.prisma.$transaction(async (tx) => {
@@ -428,22 +444,67 @@ export class PurchasesService {
       throw new BadRequestException("Only active purchases can be edited.");
     }
 
-    if (purchase.userId === userId || purchase.participants.some((participant) => participant.userId === userId)) {
-      return purchase;
-    }
-
-    const member = purchase.sourceList?.members.find((entry) => entry.userId === userId && entry.status === "accepted");
-    if (!member || (member.role !== "owner" && member.role !== "editor")) {
+    if (!this.canEditPurchase(userId, purchase)) {
       throw new ForbiddenException("You cannot edit this purchase.");
     }
 
-    await this.prisma.purchaseParticipant.upsert({
-      where: { purchaseId_userId: { purchaseId: purchase.id, userId } },
-      update: { lastSeenAt: new Date() },
-      create: { purchaseId: purchase.id, userId },
-    });
+    if (!purchase.participants.some((participant) => participant.userId === userId)) {
+      await this.upsertParticipant(purchase.id, userId);
+    }
 
     return purchase;
+  }
+
+  private async joinPurchase(userId: string, purchaseId: string) {
+    const purchase = await this.assertPurchaseAccess(userId, purchaseId);
+    if (!this.canEditPurchase(userId, purchase) || purchase.participants.some((participant) => participant.userId === userId)) {
+      return purchase;
+    }
+
+    await this.upsertParticipant(purchase.id, userId);
+    return this.assertPurchaseAccess(userId, purchaseId);
+  }
+
+  private upsertParticipant(purchaseId: string, userId: string) {
+    return this.prisma.purchaseParticipant.upsert({
+      where: { purchaseId_userId: { purchaseId, userId } },
+      update: { lastSeenAt: new Date() },
+      create: { purchaseId, userId },
+    });
+  }
+
+  private canEditPurchase(
+    userId: string,
+    purchase: {
+      userId: string;
+      participants: { userId: string }[];
+      sourceList?: { userId: string; members: { userId: string; status: string; role: string }[] } | null;
+    },
+  ) {
+    if (purchase.userId === userId) return true;
+
+    // For list purchases, the current list membership is the source of truth, so removed or demoted members lose edit access.
+    if (purchase.sourceList) {
+      if (purchase.sourceList.userId === userId) return true;
+      const member = purchase.sourceList.members.find((entry) => entry.userId === userId && entry.status === "accepted");
+      return Boolean(member && (member.role === "owner" || member.role === "editor"));
+    }
+
+    return purchase.participants.some((participant) => participant.userId === userId);
+  }
+
+  // Users whose products and markets can be referenced inside a shared purchase.
+  private collaboratorIds(purchase: {
+    userId: string;
+    participants: { userId: string }[];
+    sourceList?: { userId: string; members: { userId: string; status: string }[] } | null;
+  }) {
+    const ids = new Set([purchase.userId, ...purchase.participants.map((participant) => participant.userId)]);
+    if (purchase.sourceList) {
+      ids.add(purchase.sourceList.userId);
+      purchase.sourceList.members.filter((member) => member.status === "accepted").forEach((member) => ids.add(member.userId));
+    }
+    return [...ids];
   }
 
   private async assertItemInPurchase(purchaseId: string, itemId: string) {
@@ -454,9 +515,9 @@ export class PurchasesService {
     return item;
   }
 
-  private async assertMarketAccessible(userId: string, marketId: string) {
+  private async assertMarketAccessible(userId: string, marketId: string, ownerIds: string[] = [userId]) {
     const market = await this.prisma.market.findFirst({
-      where: { id: marketId, deletedAt: null, OR: [{ createdByUserId: userId }, { createdByUserId: null }] },
+      where: { id: marketId, deletedAt: null, OR: [{ createdByUserId: { in: ownerIds } }, { createdByUserId: null }] },
     });
     if (!market) {
       throw new NotFoundException("Market not found.");
@@ -499,13 +560,14 @@ export class PurchasesService {
     });
   }
 
-  private async resolveItemSnapshot(userId: string, dto: ItemProductInput) {
+  private async resolveItemSnapshot(userId: string, dto: ItemProductInput, ownerIds: string[] = [userId]) {
     if (!dto.productId) {
       const product = await this.findOrCreateProduct(userId, dto);
       return this.snapshotFromProduct(dto, product);
     }
 
-    const product = await this.prisma.product.findFirst({ where: { id: dto.productId, userId, deletedAt: null } });
+    // Items on a shared list may reference products created by any collaborator, not only the current user.
+    const product = await this.prisma.product.findFirst({ where: { id: dto.productId, userId: { in: ownerIds }, deletedAt: null } });
     if (!product) {
       throw new NotFoundException("Product not found.");
     }

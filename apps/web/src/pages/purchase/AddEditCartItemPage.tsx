@@ -9,6 +9,7 @@ import { AppButton, AppInput, BrandSelect, MoneyInput, ProductSearchInput, Quant
 import { sanitizeAnalyticsCategory, trackEvent } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import { isLocalId, queuePurchaseItemUpsert, syncOutbox, type PurchaseItemPayload } from "../../lib/offlineQueue";
+import { notifyPurchaseError } from "../../lib/purchaseNotices";
 import type { Purchase } from "../../types";
 import {
   calculatePurchaseItemTotal,
@@ -106,6 +107,8 @@ export function AddEditCartItemPage() {
       if (context?.previousActivePurchases) {
         queryClient.setQueryData(["active-purchases"], context.previousActivePurchases);
       }
+      notifyPurchaseError(purchaseId, error);
+      void queryClient.invalidateQueries({ queryKey: ["active-purchases"] });
     },
   });
   const sheetTitle = itemId ? "Editar item" : "Adicionar item";

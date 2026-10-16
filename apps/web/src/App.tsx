@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { AppButton, LoadingState } from "./components";
+import { FinishPurchaseReminder, usePurchaseWithCart } from "./components/FinishPurchaseReminder";
 import { trackEvent, usePageTracking } from "./lib/analytics";
 import { useAuth } from "./lib/auth";
 import { promptPwaInstall, usePwaInstall } from "./lib/pwaInstall";
@@ -325,6 +326,7 @@ function ProtectedLayout({ children }: { children?: ReactNode }) {
       <AppChrome />
       {children ?? <Outlet />}
       <BottomNav />
+      <FinishPurchaseReminder />
     </>
   );
 }
@@ -450,10 +452,11 @@ function InstallAppModal({ onInstall, onClose }: { onInstall: () => void; onClos
 
 function BottomNav() {
   const location = useLocation();
+  const openPurchase = usePurchaseWithCart();
   const items = [
     { to: "/app/home", label: "Início", icon: Home },
     { to: "/app/lists", label: "Listas", icon: ListChecks },
-    { to: "/app/purchase/start", label: "Compra", icon: ShoppingCart },
+    { to: openPurchase ? `/app/purchase/${openPurchase.id}` : "/app/purchase/start", label: "Compra", icon: ShoppingCart },
     { to: "/app/history", label: "Historico", icon: History },
     { to: "/app/compare", label: "Comparar", icon: BarChart3 },
   ];
@@ -476,7 +479,12 @@ function BottomNav() {
               ].join(" ")}
               aria-current={isActive ? "page" : undefined}
             >
-              <Icon className="h-5 w-5" />
+              <span className="relative">
+                <Icon className="h-5 w-5" />
+                {label === "Compra" && openPurchase ? (
+                  <span className="absolute -right-1.5 -top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-tomato" aria-label="Compra em aberto" />
+                ) : null}
+              </span>
               <span>{label}</span>
             </NavLink>
           );
@@ -488,7 +496,7 @@ function BottomNav() {
 
 function isBottomNavActive(pathname: string, to: string) {
   if (to === "/app/home") return pathname === "/app/home";
-  if (to === "/app/purchase/start")
+  if (to.startsWith("/app/purchase"))
     return (
       pathname.startsWith("/app/purchase") || pathname.startsWith("/purchase")
     );

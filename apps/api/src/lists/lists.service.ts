@@ -133,8 +133,9 @@ export class ListsService {
   }
 
   async addItem(userId: string, listId: string, dto: CreateListItemDto) {
-    await this.assertCanEdit(userId, listId);
-    const snapshot = await this.resolveItemSnapshot(userId, dto);
+    const list = await this.assertCanEdit(userId, listId);
+    const collaboratorIds = [list.userId, ...list.members.filter((member) => member.status === "accepted").map((member) => member.userId)];
+    const snapshot = await this.resolveItemSnapshot(userId, dto, collaboratorIds);
 
     const item = await this.prisma.marketListItem.create({
       data: {
@@ -732,13 +733,13 @@ export class ListsService {
     });
   }
 
-  private async resolveItemSnapshot(userId: string, dto: ItemProductInput) {
+  private async resolveItemSnapshot(userId: string, dto: ItemProductInput, ownerIds: string[] = [userId]) {
     if (!dto.productId) {
       const product = await this.findOrCreateProduct(userId, dto);
       return this.snapshotFromProduct(dto, product);
     }
 
-    const product = await this.prisma.product.findFirst({ where: { id: dto.productId, userId, deletedAt: null } });
+    const product = await this.prisma.product.findFirst({ where: { id: dto.productId, userId: { in: ownerIds }, deletedAt: null } });
     if (!product) {
       throw new NotFoundException("Product not found.");
     }

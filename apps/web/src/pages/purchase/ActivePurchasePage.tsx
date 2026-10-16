@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronRight, MessageCircle, Plus, ShoppingCart, Tags, X } from "lucide-react";
+import { Bell, Check, ChevronDown, ChevronRight, MessageCircle, Plus, ShoppingCart, Tags, X } from "lucide-react";
 import type { Socket } from "socket.io-client";
-import { AppButton, EmptyState, LoadingState, ScreenContainer, SearchBar, formatPackageSize } from "../../components";
+import { AppButton, ConfirmDialog, EmptyState, LoadingState, ScreenContainer, SearchBar, formatPackageSize } from "../../components";
+import { canAskNotificationPermission } from "../../components/FinishPurchaseReminder";
+import { onPurchaseError } from "../../lib/purchaseNotices";
 import { trackEvent, trackSafeSearch } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
@@ -38,6 +40,10 @@ export function ActivePurchasePage() {
   const [purchaseSearch, setPurchaseSearch] = useState("");
   const [purchaseView, setPurchaseView] = useState<PurchaseViewFilter>("list");
   const [realtimeNotice, setRealtimeNotice] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [endedNotice, setEndedNotice] = useState<string | null>(null);
+  const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+  const [canAskNotifications, setCanAskNotifications] = useState(canAskNotificationPermission);
   const [showStickySummary, setShowStickySummary] = useState(false);
   const [expandedPurchaseCategories, setExpandedPurchaseCategories] = useState<Set<string>>(() => new Set());
   const [chatOpen, setChatOpen] = useState(false);
@@ -159,6 +165,11 @@ export function ActivePurchasePage() {
     };
     const handlePurchaseTotalUpdated = (payload: PurchaseItemRealtimePayload) => {
       if (payload.purchaseId !== purchase.id) return;
+      const endedByOther = payload.status && payload.status !== "in_progress" && realtimeActorId(payload) !== user?.id;
+      if (endedByOther) {
+        const actorName = payload.by?.name ?? "Outro participante";
+        setEndedNotice(`${actorName} ${payload.status === "completed" ? "finalizou" : "cancelou"} esta compra.`);
+      }
       if (typeof payload.subtotalCalculated !== "number" && !payload.status) {
         schedulePurchaseRefetch();
         return;
@@ -180,9 +191,13 @@ export function ActivePurchasePage() {
       });
       if (!handled) schedulePurchaseRefetch();
     };
+    let hasConnected = false;
     socket.on("connect", () => {
       socket.emit("joinPurchase", { purchaseId: purchase.id });
       if (sourceListId) socket.emit("joinList", { listId: sourceListId });
+      // Events emitted while the socket was down (screen locked, weak signal) are lost, so resync after reconnecting.
+      if (hasConnected) schedulePurchaseRefetch();
+      hasConnected = true;
     });
     socket.on("purchaseItemsSynced", refreshPurchase);
     socket.on("purchaseItemCreated", handlePurchaseItemCreated);
@@ -209,6 +224,13 @@ export function ActivePurchasePage() {
       if (realtimeNoticeTimeoutRef.current) window.clearTimeout(realtimeNoticeTimeoutRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!purchase?.id) return;
+    return onPurchaseError((detail) => {
+      if (detail.purchaseId === purchase.id) setSaveError(detail.message);
+    });
+  }, [purchase?.id]);
 
   useEffect(() => {
     setPurchaseSearch("");
@@ -247,7 +269,7 @@ export function ActivePurchasePage() {
   if (!purchase) {
     return (
       <ScreenContainer title="Compra ativa">
-        <EmptyState title="Adicione produtos ao carrinho para começar sua compra." action={<AppButton onClick={() => navigate("/app/purchase/start")}>Iniciar compra</AppButton>} />
+        <EmptyState title={endedNotice ?? "Adicione produtos ao carrinho para começar sua compra."} action={<AppButton onClick={() => navigate("/app/purchase/start")}>Iniciar compra</AppButton>} />
       </ScreenContainer>
     );
   }
@@ -276,6 +298,8 @@ export function ActivePurchasePage() {
 
   const purchaseTitle = purchase.sourceList?.name ?? "Compra sem lista";
   const cartItemsShortLabel = `${cartItemsCount} ${cartItemsCount === 1 ? "item" : "itens"}`;
+  const isSharedPurchase = (purchase.participants?.length ?? 0) > 1;
+  const allItemsInCart = purchase.items.length > 0 && cartItemsCount === purchase.items.length;
 
   return (
     <ScreenContainer
@@ -354,10 +378,51 @@ export function ActivePurchasePage() {
         >
           Finalizar compra
         </AppButton>
-        <AppButton variant="secondary" icon={<X className="h-4 w-4" />} onClick={() => cancel.mutate()} loading={cancel.isPending} loadingLabel="Cancelando">
+        <AppButton
+          variant="secondary"
+          icon={<X className="h-4 w-4" />}
+          onClick={() => (isSharedPurchase ? setConfirmCancelOpen(true) : cancel.mutate())}
+          loading={cancel.isPending}
+          loadingLabel="Cancelando"
+        >
           Cancelar
         </AppButton>
       </div>
+
+      {allItemsInCart ? (
+        <div className="mt-3 flex items-center gap-3 rounded-2xl border border-mint/25 bg-mint/10 p-3 shadow-sm" role="status">
+          <Check className="h-5 w-5 flex-none text-mint" />
+          <p className="min-w-0 flex-1 text-sm font-bold text-ink">Tudo no carrinho! Depois de pagar no caixa, finalize a compra aqui.</p>
+          <AppButton className="flex-none" onClick={() => navigate(`/app/purchase/${purchase.id}/finish`)} disabled={outbox.pendingCount > 0}>
+            Finalizar
+          </AppButton>
+        </div>
+      ) : null}
+
+      {cartItemsCount > 0 && canAskNotifications ? (
+        <div className="mt-3 flex items-center gap-3 rounded-2xl border border-line bg-white p-3 shadow-sm">
+          <Bell className="h-5 w-5 flex-none text-mint" />
+          <p className="min-w-0 flex-1 text-xs font-semibold leading-5 text-ink/70">Quer um lembrete para finalizar a compra se esquecer depois do caixa?</p>
+          <button
+            type="button"
+            className="flex-none rounded-xl border border-mint/35 px-3 py-2 text-xs font-black text-mint"
+            onClick={() => {
+              void Notification.requestPermission().finally(() => setCanAskNotifications(canAskNotificationPermission()));
+            }}
+          >
+            Ativar
+          </button>
+        </div>
+      ) : null}
+
+      {saveError ? (
+        <div className="mt-3 flex items-center gap-2 rounded-xl border border-tomato/25 bg-tomato/10 p-3 text-sm font-bold text-tomato shadow-sm" role="alert">
+          <span className="min-w-0 flex-1">{saveError}</span>
+          <button type="button" className="flex-none" onClick={() => setSaveError(null)} aria-label="Fechar aviso">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ) : null}
 
       <div className="mt-3 grid grid-cols-2 gap-1.5 rounded-2xl border border-line bg-white p-1.5 shadow-sm" role="tablist" aria-label="Alternar entre lista e carrinho">
         <button
@@ -470,6 +535,15 @@ export function ActivePurchasePage() {
           );
         })}
       </div>
+
+      <ConfirmDialog
+        open={confirmCancelOpen}
+        title="Cancelar compra compartilhada"
+        description="Esta compra será cancelada para todos os participantes, e o carrinho de todos será descartado."
+        onCancel={() => setConfirmCancelOpen(false)}
+        onConfirm={() => cancel.mutate(undefined, { onSettled: () => setConfirmCancelOpen(false) })}
+        confirmLoading={cancel.isPending}
+      />
 
       <ListChatDrawer
         open={chatOpen}

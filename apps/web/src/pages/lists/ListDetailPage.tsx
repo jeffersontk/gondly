@@ -78,7 +78,9 @@ export function ListDetailPage() {
   const list = useQuery({ queryKey: ["list", id], queryFn: () => api<MarketList>(`/lists/${id}`), enabled: Boolean(id) });
   const chat = useListChat(id, realtimeSocket);
   const activePurchases = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
-  const activePurchase = activePurchases.data?.[0];
+  // Only the user's own purchase can be replaced; a purchase someone else opened for this list is joined instead.
+  const activePurchase = activePurchases.data?.find((purchase) => !purchase.userId || purchase.userId === user?.id);
+  const listPurchase = activePurchases.data?.find((purchase) => purchase.sourceListId === id);
   const removeItem = useMutation({
     mutationFn: (itemId: string) => api<MarketListItem>(`/lists/${id}/items/${itemId}`, { method: "DELETE" }),
     onSuccess: (_item, itemId) => queryClient.setQueryData<MarketList>(["list", id], (current) => removeListItemCache(current, itemId)),
@@ -304,7 +306,16 @@ export function ListDetailPage() {
     const directListItemEvents = ["listItemUpdated", "itemAssigned", "itemPurchased", "itemSkipped"];
     const fallbackListEvents = ["listItemsImported", "accessRequested", "memberApproved", "memberRemoved"];
 
-    socket.on("connect", () => socket.emit("joinList", { listId: id }));
+    let hasConnected = false;
+    socket.on("connect", () => {
+      socket.emit("joinList", { listId: id });
+      // Resync anything missed while the socket was disconnected.
+      if (hasConnected) {
+        refetchListFallback();
+        refetchActivePurchasesFallback();
+      }
+      hasConnected = true;
+    });
     directListItemEvents.forEach((event) => socket.on(event, handleListItemRealtime));
     fallbackListEvents.forEach((event) => socket.on(event, refetchListFallback));
     socket.on("purchaseItemChanged", handlePurchaseItemChanged);
@@ -390,6 +401,11 @@ export function ListDetailPage() {
   }
 
   function handleStartPurchaseFromList() {
+    if (listPurchase) {
+      navigate(`/app/purchase/${listPurchase.id}`);
+      return;
+    }
+
     if (activePurchase && activePurchase.sourceListId !== id) {
       setReplacePurchaseOpen(true);
       return;
@@ -402,7 +418,7 @@ export function ListDetailPage() {
     <ScreenContainer title={currentList.name} subtitle={currentList.description ?? undefined}>
       <div className="grid grid-cols-[1fr_auto_auto] gap-2">
         <AppButton icon={<ShoppingCart className="h-5 w-5" />} onClick={handleStartPurchaseFromList} loading={start.isPending} loadingLabel="Iniciando">
-          Comprar
+          {listPurchase ? (listPurchase.userId && listPurchase.userId !== user?.id ? "Entrar na compra" : "Continuar compra") : "Comprar"}
         </AppButton>
         <AppButton className="relative w-14 px-0" variant="secondary" icon={<MessageCircle className="h-5 w-5" />} onClick={() => setChatOpen(true)} aria-label="Abrir mensagens da lista">
           <span className="sr-only">Mensagens</span>

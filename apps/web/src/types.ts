@@ -218,6 +218,7 @@ export type PurchaseItem = {
 
 export type Purchase = {
   id: string;
+  userId?: string;
   marketId?: string | null;
   sourceListId?: string | null;
   status: PurchaseStatus;
