@@ -157,25 +157,32 @@ POST /billing/remove-ads/checkout
 
 O entitlement `no_ads` so e liberado depois que o webhook consulta o pagamento na API do Mercado Pago.
 
-## 4.1 Lembretes de finalizar compra (Web Push)
+## 4.1 Lembretes de finalizar compra (Web Push) na VPS
 
 O app avisa os participantes 1h e 2h depois do último item colocado no carrinho, se a compra continuar aberta.
+A própria API verifica as compras a cada 5 minutos; como ela roda continuamente na VPS, não é preciso agendador externo.
+Entre 23h e 7h (horário de Brasília) nada é enviado, e compras abertas há mais de 12h não geram lembrete.
 
-1. Gere as chaves VAPID localmente (não commitar):
+1. Gere as chaves VAPID uma única vez, fora do repositório (não commitar):
 
    ```bash
    npx web-push generate-vapid-keys
    ```
 
-2. No Render, configure `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` e um `CRON_SECRET` aleatório (ex.: `openssl rand -hex 32`).
-   Sem as chaves VAPID o push fica desligado e o app mantém só o lembrete dentro do app.
-3. No GitHub, em *Settings → Secrets and variables → Actions*, crie:
-   - `GONDLY_API_URL`: URL pública da API (ex.: `https://SEU-SERVICO-RENDER.onrender.com`);
-   - `GONDLY_CRON_SECRET`: o mesmo valor de `CRON_SECRET`.
+2. No arquivo de ambiente da API na VPS (o mesmo que contém `DATABASE_URL`), acrescente:
 
-O workflow `.github/workflows/finish-reminders.yml` chama `POST /push/reminders/run` a cada 10 minutos, das 7h às 23h
-(horário de Brasília). Isso é necessário porque a instância free do Render dorme quando fica ociosa e o timer interno
-da API não roda enquanto ela dorme. Fora dessa janela os lembretes não são enviados (horário de silêncio).
+   ```dotenv
+   VAPID_PUBLIC_KEY=...
+   VAPID_PRIVATE_KEY=...
+   VAPID_SUBJECT=mailto:contato@gondly.app
+   ```
+
+   Sem as chaves o push fica desligado e o app mantém só o lembrete dentro do app. Não troque as chaves depois:
+   isso invalida as inscrições dos aparelhos.
+   Opcional: `CRON_SECRET` habilita `POST /push/reminders/run` (header `x-cron-secret`) para disparar a verificação manualmente.
+
+3. Esta entrega tem migrations novas (`purchase_item_claims` e `push_reminders`). Aplique `prisma migrate deploy`
+   com o novo código antes de subir a API, como no fluxo atual de deploy da VPS.
 
 No iPhone, notificações push só funcionam com o app instalado na tela de início (iOS 16.4+).
 

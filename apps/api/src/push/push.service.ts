@@ -43,8 +43,8 @@ export class PushService implements OnModuleInit, OnModuleDestroy {
 
     webpush.setVapidDetails(this.config.get<string>("VAPID_SUBJECT") ?? "mailto:contato@gondly.app", publicKey, privateKey);
     this.publicKey = publicKey;
-    // Covers the time the API is awake. A free Render instance sleeps when idle, so an external scheduler also
-    // calls POST /push/reminders/run (see .github/workflows/finish-reminders.yml).
+    // The API runs continuously on the VPS, so an in-process timer is enough. POST /push/reminders/run can trigger
+    // the same check manually; each reminder stage is reserved before sending, so overlapping runs never double-send.
     this.interval = setInterval(() => void this.runFinishReminders(), IN_PROCESS_INTERVAL);
     this.interval.unref();
   }

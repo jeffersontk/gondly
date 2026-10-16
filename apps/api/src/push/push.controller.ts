@@ -37,7 +37,7 @@ export class PushController {
     return this.pushService.unsubscribe(user.id, dto.endpoint);
   }
 
-  // Called by an external scheduler (no user session), authenticated with the shared CRON_SECRET.
+  // Optional manual/external trigger (no user session), authenticated with CRON_SECRET; disabled when it is not set.
   @Post("reminders/run")
   @HttpCode(200)
   runReminders(@Headers("x-cron-secret") secret?: string) {
