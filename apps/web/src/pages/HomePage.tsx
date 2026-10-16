@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, BarChart3, ChevronRight, CircleDollarSign, History, Loader2, Package, Plus, ShoppingCart, Sparkles, Store, TrendingUp } from "lucide-react";
+import { ArrowRight, BarChart3, ChevronRight, CircleDollarSign, History, Loader2, Package, Plus, RefreshCcw, ShoppingCart, Sparkles, Store, TrendingUp } from "lucide-react";
 import { AppButton, EmptyState, ErrorState, LoadingState, ScreenContainer } from "../components";
 import { AdSlot } from "../ads/AdSlot";
 import { trackEvent } from "../lib/analytics";
@@ -41,6 +41,20 @@ export function HomePage() {
         cart_items_count: purchase.items.filter((item) => Number(item.pricePaid ?? 0) > 0).length,
       });
       navigate(`/app/purchase/${purchase.id}`);
+    },
+  });
+
+  // "Buy again": reuse the list the last purchase came from, or create one from the purchase when it is gone.
+  const repeatPurchase = useMutation({
+    mutationFn: async (purchase: Purchase) => {
+      const sourceList = lists.data?.find((list) => list.id === purchase.sourceListId);
+      if (sourceList) return sourceList;
+      return api<MarketList>(`/purchases/${purchase.id}/duplicate-as-list`, { method: "POST" });
+    },
+    onSuccess: (list, purchase) => {
+      queryClient.setQueryData<MarketList[]>(["lists"], (current) => addListCache(current, list));
+      trackEvent("repeat_purchase", { purchase_id: purchase.id, source: "home", reused_list: list.id === purchase.sourceListId });
+      navigate(`/app/lists/${list.id}`);
     },
   });
 
@@ -204,6 +218,19 @@ export function HomePage() {
               <ChevronRight className="h-5 w-5" />
             </span>
           </button>
+        ) : null}
+        {data?.lastPurchase ? (
+          <AppButton
+            className="mt-2"
+            full
+            variant="secondary"
+            icon={<RefreshCcw className="h-4 w-4" />}
+            onClick={() => data.lastPurchase && repeatPurchase.mutate(data.lastPurchase)}
+            loading={repeatPurchase.isPending}
+            loadingLabel="Preparando lista"
+          >
+            Repetir esta compra
+          </AppButton>
         ) : (
           <div className="rounded-2xl border border-line bg-white p-4 text-sm font-semibold text-ink/55 shadow-sm">
             Nenhuma compra registrada ainda.

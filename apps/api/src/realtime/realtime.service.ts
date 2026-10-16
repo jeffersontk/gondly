@@ -1,23 +1,57 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import { randomUUID } from "crypto";
 import type { Server } from "socket.io";
+import { PrismaService } from "../prisma/prisma.service";
 
 type RealtimePayload = Record<string, unknown>;
+
+const ACTOR_NAME_TTL = 10 * 60_000;
 
 @Injectable()
 export class RealtimeService {
   private server?: Server;
+  // Caches the lookup promise (not the value) so events from the same actor keep their emit order.
+  private readonly actorNames = new Map<string, { name: Promise<string | undefined>; expiresAt: number }>();
+
+  constructor(@Optional() private readonly prisma?: PrismaService) {}
 
   bindServer(server: Server) {
     this.server = server;
   }
 
   emitToList(listId: string, event: string, payload: unknown) {
-    this.server?.to(`list:${listId}`).emit(event, this.buildEventPayload(event, payload));
+    void this.emit(`list:${listId}`, event, payload);
   }
 
   emitToPurchase(purchaseId: string, event: string, payload: unknown) {
-    this.server?.to(`purchase:${purchaseId}`).emit(event, this.buildEventPayload(event, payload));
+    void this.emit(`purchase:${purchaseId}`, event, payload);
+  }
+
+  private async emit(room: string, event: string, payload: unknown) {
+    if (!this.server) return;
+    const enriched = await this.withActorName(payload);
+    this.server.to(room).emit(event, this.buildEventPayload(event, enriched));
+  }
+
+  // Server-side events only carry byUserId; clients need the name to say who changed what.
+  private async withActorName(payload: unknown) {
+    if (!this.isPayloadObject(payload) || this.objectValue(payload.by)) return payload;
+    const userId = this.stringValue(payload.byUserId);
+    if (!userId || !this.prisma) return payload;
+
+    const name = await this.actorName(userId);
+    return name ? { ...payload, by: { userId, name } } : payload;
+  }
+
+  private actorName(userId: string) {
+    const cached = this.actorNames.get(userId);
+    if (cached && cached.expiresAt > Date.now()) return cached.name;
+
+    const name = this.prisma!.user.findUnique({ where: { id: userId }, select: { name: true } })
+      .then((user) => user?.name ?? undefined)
+      .catch(() => undefined);
+    this.actorNames.set(userId, { name, expiresAt: Date.now() + ACTOR_NAME_TTL });
+    return name;
   }
 
   buildEventPayload(event: string, payload: unknown) {

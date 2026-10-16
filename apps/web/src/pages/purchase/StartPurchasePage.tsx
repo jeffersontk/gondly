@@ -5,6 +5,7 @@ import { ShoppingCart } from "lucide-react";
 import { AppButton, EmptyState, MarketListCard, ScreenContainer, SectionHeader } from "../../components";
 import { trackEvent } from "../../lib/analytics";
 import { api } from "../../lib/api";
+import { useAuth } from "../../lib/auth";
 import { discardQueuedPurchaseChanges } from "../../lib/offlineQueue";
 import type { MarketList, Purchase } from "../../types";
 import { addListCache, setActivePurchaseCache } from "../shared";
@@ -22,7 +23,9 @@ export function StartPurchasePage() {
   const [titleDialogRequest, setTitleDialogRequest] = useState<{ cancelActive?: boolean } | null>(null);
   const lists = useQuery({ queryKey: ["lists"], queryFn: () => api<MarketList[]>("/lists") });
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
-  const activePurchase = active.data?.[0];
+  const { user } = useAuth();
+  // Only the user's own purchase is offered for replacement; shared purchases from other members are joined.
+  const activePurchase = active.data?.find((purchase) => !purchase.userId || purchase.userId === user?.id);
   const start = useMutation({
     mutationFn: async (payload: StartPurchaseInput = {}) => {
       if (payload.title) {
@@ -108,7 +111,14 @@ export function StartPurchasePage() {
           <MarketListCard
             key={list.id}
             list={list}
-            onClick={() => start.mutate({ sourceListId: list.id, cancelActive: Boolean(activePurchase && activePurchase.sourceListId !== list.id) })}
+            onClick={() => {
+              const listPurchase = active.data?.find((purchase) => purchase.sourceListId === list.id);
+              if (listPurchase) {
+                navigate(`/app/purchase/${listPurchase.id}`);
+                return;
+              }
+              start.mutate({ sourceListId: list.id, cancelActive: Boolean(activePurchase && activePurchase.sourceListId !== list.id) });
+            }}
             loading={start.isPending && start.variables?.sourceListId === list.id}
             disabled={start.isPending && start.variables?.sourceListId !== list.id}
           />

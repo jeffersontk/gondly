@@ -43,4 +43,28 @@ describe("RealtimeService events", () => {
     assert.equal(event.purchaseId, "purchase-1");
     assert.equal(event.itemId, "item-1");
   });
+
+  it("adds the actor name to server events and keeps their order", async () => {
+    let lookups = 0;
+    const prisma = {
+      user: {
+        findUnique: async () => {
+          lookups += 1;
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          return { name: "Ana" };
+        },
+      },
+    };
+    const emitted: Array<{ event: string; payload: Record<string, unknown> }> = [];
+    const service = new RealtimeService(prisma as never);
+    service.bindServer({ to: () => ({ emit: (event: string, payload: Record<string, unknown>) => emitted.push({ event, payload }) }) } as never);
+
+    service.emitToPurchase("purchase-1", "purchaseItemCreated", { purchaseId: "purchase-1", item: { id: "item-1" }, byUserId: "user-1" });
+    service.emitToPurchase("purchase-1", "purchaseTotalUpdated", { purchaseId: "purchase-1", subtotalCalculated: 10, byUserId: "user-1" });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    assert.deepEqual(emitted.map((entry) => entry.event), ["purchaseItemCreated", "purchaseTotalUpdated"]);
+    assert.deepEqual(emitted[0].payload.by, { userId: "user-1", name: "Ana" });
+    assert.equal(lookups, 1);
+  });
 });

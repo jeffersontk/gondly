@@ -1,59 +1,81 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronRight, MessageCircle, Plus, ShoppingCart, Tags, X } from "lucide-react";
-import type { Socket } from "socket.io-client";
-import { AppButton, EmptyState, LoadingState, ScreenContainer, SearchBar, formatPackageSize } from "../../components";
+import { Bell, Check, Hand, ChevronDown, ChevronRight, MessageCircle, Plus, ShoppingCart, Tags, X } from "lucide-react";
+import { AppButton, ConfirmDialog, EmptyState, LoadingState, ScreenContainer, SearchBar, formatPackageSize } from "../../components";
+import { canAskNotificationPermission } from "../../components/FinishPurchaseReminder";
+import { notifyPurchaseError, onPurchaseError } from "../../lib/purchaseNotices";
+import { enablePushNotifications } from "../../lib/push";
 import { trackEvent, trackSafeSearch } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { getListLastMessageReadAt, setListLastMessageReadAt } from "../../lib/listActivity";
 import { discardQueuedPurchaseChanges, useOutboxStatus } from "../../lib/offlineQueue";
-import { createRealtimeSocket } from "../../lib/realtime";
 import { ListChatDrawer } from "../lists/ListChatDrawer";
 import { useListChat } from "../lists/useListChat";
+import { usePurchaseRealtime } from "./usePurchaseRealtime";
 import type { Purchase, PurchaseItem } from "../../types";
 import {
-  createRealtimeApplyState,
   formatBRL,
   groupItemsByCategory,
-  PurchaseItemRealtimePayload,
   PurchaseViewFilter,
   purchaseItemPriceDescription,
-  realtimeActorId,
   removeActivePurchaseCache,
-  removeRealtimePurchaseItemCache,
-  shouldApplyRealtimeEvent,
-  updateRealtimePurchaseTotalCache,
-  upsertRealtimePurchaseItemCache,
   useDebouncedValue,
 } from "../shared";
 
 export function ActivePurchasePage() {
   const routeParams = useParams();
   const [params] = useSearchParams();
-  const { token, user } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [purchaseSearch, setPurchaseSearch] = useState("");
   const [purchaseView, setPurchaseView] = useState<PurchaseViewFilter>("list");
-  const [realtimeNotice, setRealtimeNotice] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+  const [canAskNotifications, setCanAskNotifications] = useState(canAskNotificationPermission);
   const [showStickySummary, setShowStickySummary] = useState(false);
   const [expandedPurchaseCategories, setExpandedPurchaseCategories] = useState<Set<string>>(() => new Set());
   const [chatOpen, setChatOpen] = useState(false);
   const [chatUnread, setChatUnread] = useState(false);
-  const [realtimeSocket, setRealtimeSocket] = useState<Socket | undefined>(undefined);
   const debouncedPurchaseSearch = useDebouncedValue(purchaseSearch);
   const totalCardRef = useRef<HTMLDivElement | null>(null);
-  const realtimeNoticeTimeoutRef = useRef<number | undefined>(undefined);
-  const realtimeRefetchTimeoutRef = useRef<number | undefined>(undefined);
-  const realtimeStateRef = useRef(createRealtimeApplyState());
   const purchaseId = routeParams.purchaseId ?? params.get("purchaseId");
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   const purchase = useMemo(() => active.data?.find((entry) => entry.id === purchaseId) ?? active.data?.[0], [active.data, purchaseId]);
   const sourceListId = purchase?.sourceListId ?? undefined;
+  const { socket: realtimeSocket, notice: realtimeNotice, endedNotice } = usePurchaseRealtime(purchase?.id, sourceListId);
   const chat = useListChat(sourceListId, realtimeSocket);
   const outbox = useOutboxStatus(purchase?.id);
+  const participantNames = useMemo(
+    () => new Map((purchase?.participants ?? []).flatMap((participant) => (participant.user ? [[participant.userId, firstName(participant.user.name)] as const] : []))),
+    [purchase?.participants],
+  );
+  const claim = useMutation({
+    mutationFn: ({ itemId, claimed }: { itemId: string; claimed: boolean }) =>
+      api<Purchase>(`/purchases/${purchase?.id}/items/${itemId}/claim`, { method: "PUT", body: { claimed } }),
+    onMutate: async ({ itemId, claimed }) => {
+      await queryClient.cancelQueries({ queryKey: ["active-purchases"] });
+      const previous = queryClient.getQueryData<Purchase[]>(["active-purchases"]);
+      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) =>
+        current?.map((entry) =>
+          entry.id !== purchase?.id
+            ? entry
+            : { ...entry, items: entry.items.map((item) => (item.id === itemId ? { ...item, claimedByUserId: claimed ? user?.id ?? null : null } : item)) },
+        ),
+      );
+      return { previous };
+    },
+    onSuccess: (saved) => {
+      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => current?.map((entry) => (entry.id === saved.id ? saved : entry)));
+    },
+    onError: (error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(["active-purchases"], context.previous);
+      if (purchase?.id) notifyPurchaseError(purchase.id, error);
+      void queryClient.invalidateQueries({ queryKey: ["active-purchases"] });
+    },
+  });
   const cancel = useMutation({
     mutationFn: () => api<Purchase>(`/purchases/${purchase?.id}/cancel`, { method: "POST" }),
     onSuccess: (cancelled) => {
@@ -69,146 +91,11 @@ export function ActivePurchasePage() {
   });
 
   useEffect(() => {
-    if (!purchase?.id || !token) return;
-
-    const socket = createRealtimeSocket(token);
-    setRealtimeSocket(socket);
-    const schedulePurchaseRefetch = () => {
-      if (realtimeRefetchTimeoutRef.current) window.clearTimeout(realtimeRefetchTimeoutRef.current);
-      realtimeRefetchTimeoutRef.current = window.setTimeout(() => {
-        void queryClient.refetchQueries({ queryKey: ["active-purchases"], type: "active" });
-      }, 350);
-    };
-    const notifyIfFromAnotherUser = (payload: PurchaseItemRealtimePayload, message: string) => {
-      const actorId = realtimeActorId(payload);
-      if (!actorId || actorId === user?.id) return;
-
-      const actorName = payload.by?.name;
-      setRealtimeNotice(actorName ? `${actorName}: ${message}` : message);
-      if (realtimeNoticeTimeoutRef.current) window.clearTimeout(realtimeNoticeTimeoutRef.current);
-      realtimeNoticeTimeoutRef.current = window.setTimeout(() => setRealtimeNotice(null), 4_000);
-    };
-    const refreshPurchase = (payload?: PurchaseItemRealtimePayload) => {
-      if (!payload || payload.purchaseId === purchase.id) schedulePurchaseRefetch();
-    };
-    const handlePurchaseItemCreated = (payload: PurchaseItemRealtimePayload) => {
-      if (payload.purchaseId !== purchase.id || !payload.item) return;
-      const updatedAt = payload.purchaseUpdatedAt ?? payload.purchase?.updatedAt ?? payload.updatedAt;
-      let applied = false;
-      let handled = false;
-      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => {
-        const currentPurchase = current?.find((entry) => entry.id === purchase.id);
-        if (!currentPurchase) return current;
-
-        const currentItem = currentPurchase.items.find((entry) => entry.id === payload.item!.id);
-        if (!shouldApplyRealtimeEvent(realtimeStateRef.current, payload, currentItem?.updatedAt, { entityType: "purchaseItem", entityId: payload.item!.id })) {
-          handled = true;
-          return current;
-        }
-
-        handled = true;
-        applied = true;
-        return upsertRealtimePurchaseItemCache(current, purchase.id, payload.item!, payload.subtotalCalculated, updatedAt);
-      });
-      if (!handled) schedulePurchaseRefetch();
-      else if (applied) notifyIfFromAnotherUser(payload, `${payload.item.productName} foi adicionado ao carrinho.`);
-    };
-    const handlePurchaseItemUpdated = (payload: PurchaseItemRealtimePayload) => {
-      if (payload.purchaseId !== purchase.id || !payload.item) return;
-      const updatedAt = payload.purchaseUpdatedAt ?? payload.purchase?.updatedAt ?? payload.updatedAt;
-      let applied = false;
-      let handled = false;
-      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => {
-        const currentPurchase = current?.find((entry) => entry.id === purchase.id);
-        if (!currentPurchase) return current;
-
-        const currentItem = currentPurchase.items.find((entry) => entry.id === payload.item!.id);
-        if (!shouldApplyRealtimeEvent(realtimeStateRef.current, payload, currentItem?.updatedAt, { entityType: "purchaseItem", entityId: payload.item!.id })) {
-          handled = true;
-          return current;
-        }
-
-        handled = true;
-        applied = true;
-        return upsertRealtimePurchaseItemCache(current, purchase.id, payload.item!, payload.subtotalCalculated, updatedAt);
-      });
-      if (!handled) schedulePurchaseRefetch();
-      else if (applied) notifyIfFromAnotherUser(payload, `${payload.item.productName} foi atualizado no carrinho.`);
-    };
-    const handlePurchaseItemDeleted = (payload: PurchaseItemRealtimePayload) => {
-      if (payload.purchaseId !== purchase.id || !payload.itemId) return;
-      const updatedAt = payload.purchaseUpdatedAt ?? payload.purchase?.updatedAt ?? payload.updatedAt;
-      let applied = false;
-      let handled = false;
-      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => {
-        const currentPurchase = current?.find((entry) => entry.id === purchase.id);
-        if (!currentPurchase) return current;
-
-        const currentItem = currentPurchase.items.find((entry) => entry.id === payload.itemId);
-        if (!shouldApplyRealtimeEvent(realtimeStateRef.current, payload, currentItem?.updatedAt, { entityType: "purchaseItem", entityId: payload.itemId })) {
-          handled = true;
-          return current;
-        }
-
-        handled = true;
-        applied = true;
-        return removeRealtimePurchaseItemCache(current, purchase.id, payload.itemId!, payload.subtotalCalculated, updatedAt);
-      });
-      if (!handled) schedulePurchaseRefetch();
-      else if (applied) notifyIfFromAnotherUser(payload, "Um item foi removido do carrinho.");
-    };
-    const handlePurchaseTotalUpdated = (payload: PurchaseItemRealtimePayload) => {
-      if (payload.purchaseId !== purchase.id) return;
-      if (typeof payload.subtotalCalculated !== "number" && !payload.status) {
-        schedulePurchaseRefetch();
-        return;
-      }
-
-      const updatedAt = payload.purchase?.updatedAt ?? payload.purchaseUpdatedAt ?? payload.updatedAt;
-      let handled = false;
-      queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => {
-        const currentPurchase = current?.find((entry) => entry.id === purchase.id);
-        if (!currentPurchase) return current;
-
-        if (!shouldApplyRealtimeEvent(realtimeStateRef.current, payload, currentPurchase.updatedAt, { entityType: "purchase", entityId: purchase.id })) {
-          handled = true;
-          return current;
-        }
-
-        handled = true;
-        return updateRealtimePurchaseTotalCache(current, purchase.id, payload.subtotalCalculated, payload.status, updatedAt);
-      });
-      if (!handled) schedulePurchaseRefetch();
-    };
-    socket.on("connect", () => {
-      socket.emit("joinPurchase", { purchaseId: purchase.id });
-      if (sourceListId) socket.emit("joinList", { listId: sourceListId });
+    if (!purchase?.id) return;
+    return onPurchaseError((detail) => {
+      if (detail.purchaseId === purchase.id) setSaveError(detail.message);
     });
-    socket.on("purchaseItemsSynced", refreshPurchase);
-    socket.on("purchaseItemCreated", handlePurchaseItemCreated);
-    socket.on("purchaseItemUpdated", handlePurchaseItemUpdated);
-    socket.on("purchaseItemDeleted", handlePurchaseItemDeleted);
-    socket.on("purchaseTotalUpdated", handlePurchaseTotalUpdated);
-
-    return () => {
-      socket.emit("leavePurchase", { purchaseId: purchase.id });
-      if (sourceListId) socket.emit("leaveList", { listId: sourceListId });
-      socket.off("purchaseItemsSynced", refreshPurchase);
-      socket.off("purchaseItemCreated", handlePurchaseItemCreated);
-      socket.off("purchaseItemUpdated", handlePurchaseItemUpdated);
-      socket.off("purchaseItemDeleted", handlePurchaseItemDeleted);
-      socket.off("purchaseTotalUpdated", handlePurchaseTotalUpdated);
-      socket.disconnect();
-      setRealtimeSocket(undefined);
-      if (realtimeRefetchTimeoutRef.current) window.clearTimeout(realtimeRefetchTimeoutRef.current);
-    };
-  }, [purchase?.id, queryClient, sourceListId, token, user?.id]);
-
-  useEffect(() => {
-    return () => {
-      if (realtimeNoticeTimeoutRef.current) window.clearTimeout(realtimeNoticeTimeoutRef.current);
-    };
-  }, []);
+  }, [purchase?.id]);
 
   useEffect(() => {
     setPurchaseSearch("");
@@ -247,7 +134,7 @@ export function ActivePurchasePage() {
   if (!purchase) {
     return (
       <ScreenContainer title="Compra ativa">
-        <EmptyState title="Adicione produtos ao carrinho para começar sua compra." action={<AppButton onClick={() => navigate("/app/purchase/start")}>Iniciar compra</AppButton>} />
+        <EmptyState title={endedNotice ?? "Adicione produtos ao carrinho para começar sua compra."} action={<AppButton onClick={() => navigate("/app/purchase/start")}>Iniciar compra</AppButton>} />
       </ScreenContainer>
     );
   }
@@ -276,6 +163,13 @@ export function ActivePurchasePage() {
 
   const purchaseTitle = purchase.sourceList?.name ?? "Compra sem lista";
   const cartItemsShortLabel = `${cartItemsCount} ${cartItemsCount === 1 ? "item" : "itens"}`;
+  const isSharedPurchase = (purchase.participants?.length ?? 0) > 1;
+  const collaboration: ItemCollaboration = {
+    currentUserId: user?.id,
+    names: participantNames,
+    onClaim: (item, claimed) => claim.mutate({ itemId: item.id, claimed }),
+  };
+  const allItemsInCart = purchase.items.length > 0 && cartItemsCount === purchase.items.length;
 
   return (
     <ScreenContainer
@@ -354,10 +248,53 @@ export function ActivePurchasePage() {
         >
           Finalizar compra
         </AppButton>
-        <AppButton variant="secondary" icon={<X className="h-4 w-4" />} onClick={() => cancel.mutate()} loading={cancel.isPending} loadingLabel="Cancelando">
+        <AppButton
+          variant="secondary"
+          icon={<X className="h-4 w-4" />}
+          onClick={() => (isSharedPurchase ? setConfirmCancelOpen(true) : cancel.mutate())}
+          loading={cancel.isPending}
+          loadingLabel="Cancelando"
+        >
           Cancelar
         </AppButton>
       </div>
+
+      {allItemsInCart ? (
+        <div className="mt-3 flex items-center gap-3 rounded-2xl border border-mint/25 bg-mint/10 p-3 shadow-sm" role="status">
+          <Check className="h-5 w-5 flex-none text-mint" />
+          <p className="min-w-0 flex-1 text-sm font-bold text-ink">Tudo no carrinho! Depois de pagar no caixa, finalize a compra aqui.</p>
+          <AppButton className="flex-none" onClick={() => navigate(`/app/purchase/${purchase.id}/finish`)} disabled={outbox.pendingCount > 0}>
+            Finalizar
+          </AppButton>
+        </div>
+      ) : null}
+
+      {cartItemsCount > 0 && canAskNotifications ? (
+        <div className="mt-3 flex items-center gap-3 rounded-2xl border border-line bg-white p-3 shadow-sm">
+          <Bell className="h-5 w-5 flex-none text-mint" />
+          <p className="min-w-0 flex-1 text-xs font-semibold leading-5 text-ink/70">Quer um lembrete para finalizar a compra se esquecer depois do caixa?</p>
+          <button
+            type="button"
+            className="flex-none rounded-xl border border-mint/35 px-3 py-2 text-xs font-black text-mint"
+            onClick={() => {
+              void enablePushNotifications()
+                .catch(() => undefined)
+                .finally(() => setCanAskNotifications(canAskNotificationPermission()));
+            }}
+          >
+            Ativar
+          </button>
+        </div>
+      ) : null}
+
+      {saveError ? (
+        <div className="mt-3 flex items-center gap-2 rounded-xl border border-tomato/25 bg-tomato/10 p-3 text-sm font-bold text-tomato shadow-sm" role="alert">
+          <span className="min-w-0 flex-1">{saveError}</span>
+          <button type="button" className="flex-none" onClick={() => setSaveError(null)} aria-label="Fechar aviso">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ) : null}
 
       <div className="mt-3 grid grid-cols-2 gap-1.5 rounded-2xl border border-line bg-white p-1.5 shadow-sm" role="tablist" aria-label="Alternar entre lista e carrinho">
         <button
@@ -462,7 +399,7 @@ export function ActivePurchasePage() {
               {expanded ? (
                 <div id={categoryId} className="divide-y divide-line/80 border-t border-line bg-white">
                   {group.items.map((item) => (
-                    <ActivePurchaseItemRow key={item.id} purchaseId={purchase.id} item={item} />
+                    <ActivePurchaseItemRow key={item.id} purchaseId={purchase.id} item={item} collaboration={isSharedPurchase ? collaboration : undefined} />
                   ))}
                 </div>
               ) : null}
@@ -470,6 +407,15 @@ export function ActivePurchasePage() {
           );
         })}
       </div>
+
+      <ConfirmDialog
+        open={confirmCancelOpen}
+        title="Cancelar compra compartilhada"
+        description="Esta compra será cancelada para todos os participantes, e o carrinho de todos será descartado."
+        onCancel={() => setConfirmCancelOpen(false)}
+        onConfirm={() => cancel.mutate(undefined, { onSettled: () => setConfirmCancelOpen(false) })}
+        confirmLoading={cancel.isPending}
+      />
 
       <ListChatDrawer
         open={chatOpen}
@@ -483,40 +429,78 @@ export function ActivePurchasePage() {
   );
 }
 
-function ActivePurchaseItemRow({ purchaseId, item }: { purchaseId: string; item: PurchaseItem }) {
+type ItemCollaboration = {
+  currentUserId?: string;
+  names: Map<string, string>;
+  onClaim: (item: PurchaseItem, claimed: boolean) => void;
+};
+
+function ActivePurchaseItemRow({ purchaseId, item, collaboration }: { purchaseId: string; item: PurchaseItem; collaboration?: ItemCollaboration }) {
   const navigate = useNavigate();
   const isPending = item.id.startsWith("local-");
   const pricePaid = Number(item.pricePaid ?? 0);
   const added = Number(item.pricePaid ?? 0) > 0;
   const itemMeta = purchaseItemPriceDescription(item);
   const identity = [item.brandNameSnapshot ?? item.brand, formatPackageSize(item.packageSize, item.packageUnit)].filter(Boolean).join(" · ");
+  const personName = (userId?: string | null) =>
+    !userId ? undefined : userId === collaboration?.currentUserId ? "Você" : collaboration?.names.get(userId);
+  const pickedBy = added ? personName(item.updatedByUserId ?? item.addedByUserId) : undefined;
+  const claimedBy = !added ? personName(item.claimedByUserId) : undefined;
+  const claimedByMe = Boolean(item.claimedByUserId && item.claimedByUserId === collaboration?.currentUserId);
+  const canClaim = Boolean(collaboration && !added && !isPending && (!item.claimedByUserId || claimedByMe));
+  const collaborationLabel = pickedBy ? `${pickedBy} pegou` : claimedBy ? `${claimedBy} vai pegar` : null;
 
   return (
-    <button
-      type="button"
-      className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition hover:bg-paper/80 active:bg-paper"
-      onClick={() => navigate(`/app/purchase/${purchaseId}/item?itemId=${item.id}`)}
-      aria-label={added ? `Editar ${item.productName} no carrinho` : `Adicionar ${item.productName} ao carrinho`}
-    >
-      <span className="min-w-0">
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-black tracking-[-0.01em] text-ink">{item.productName}</span>
-          {isPending ? <span className="rounded-full bg-mint/10 px-2 py-0.5 text-[10px] font-black text-mint">Pendente</span> : null}
+    <div className="flex w-full items-center gap-2 px-3.5 py-3 transition hover:bg-paper/80">
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left active:opacity-80"
+        onClick={() => navigate(`/app/purchase/${purchaseId}/item?itemId=${item.id}`)}
+        aria-label={added ? `Editar ${item.productName} no carrinho` : `Adicionar ${item.productName} ao carrinho`}
+      >
+        <span className="min-w-0">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-sm font-black tracking-[-0.01em] text-ink">{item.productName}</span>
+            {isPending ? <span className="rounded-full bg-mint/10 px-2 py-0.5 text-[10px] font-black text-mint">Pendente</span> : null}
+          </span>
+          <span className="mt-0.5 block truncate text-xs font-medium text-ink/55">{[identity, itemMeta].filter(Boolean).join(" · ")}</span>
+          {collaborationLabel ? (
+            <span className={["mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-black", added ? "bg-paper text-ink/60" : "bg-amber-50 text-amber-700"].join(" ")}>
+              {collaborationLabel}
+            </span>
+          ) : null}
         </span>
-        <span className="mt-0.5 block truncate text-xs font-medium text-ink/55">{[identity, itemMeta].filter(Boolean).join(" · ")}</span>
-      </span>
-      <span className="flex flex-none flex-col items-end gap-1">
-        <span
+        <span className="flex flex-none flex-col items-end gap-1">
+          <span
+            className={[
+              "inline-flex h-9 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-black transition",
+              added ? "bg-emerald-50 text-emerald-700" : "border border-mint/35 bg-white text-mint shadow-sm",
+            ].join(" ")}
+          >
+            {added ? <Check className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+            {added ? "Adicionado" : "Adicionar"}
+          </span>
+          {added ? <span className="pr-1 text-xs font-black text-ink">{formatBRL(pricePaid)}</span> : null}
+        </span>
+      </button>
+      {canClaim ? (
+        <button
+          type="button"
           className={[
-            "inline-flex h-9 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-black transition",
-            added ? "bg-emerald-50 text-emerald-700" : "border border-mint/35 bg-white text-mint shadow-sm",
+            "inline-flex h-9 flex-none items-center gap-1 rounded-xl px-2.5 text-xs font-black transition",
+            claimedByMe ? "bg-amber-50 text-amber-700" : "border border-line bg-white text-ink/70 hover:border-mint/30",
           ].join(" ")}
+          onClick={() => collaboration?.onClaim(item, !claimedByMe)}
+          aria-label={claimedByMe ? `Desistir de pegar ${item.productName}` : `Eu pego ${item.productName}`}
         >
-          {added ? <Check className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-          {added ? "Adicionado" : "Adicionar"}
-        </span>
-        {added ? <span className="pr-1 text-xs font-black text-ink">{formatBRL(pricePaid)}</span> : null}
-      </span>
-    </button>
+          <Hand className="h-3.5 w-3.5" />
+          {claimedByMe ? "Soltar" : "Eu pego"}
+        </button>
+      ) : null}
+    </div>
   );
+}
+
+function firstName(name: string) {
+  return name.trim().split(/s+/)[0] || name;
 }

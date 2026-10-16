@@ -212,12 +212,34 @@ export type PurchaseItem = {
   unitPriceNormalized?: number | null;
   normalizedUnitLabel?: string | null;
   notes?: string | null;
+  addedByUserId?: string | null;
+  updatedByUserId?: string | null;
+  claimedByUserId?: string | null;
+  claimedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };
 
+export type PriceHint = {
+  normalizedUnitLabel: string;
+  lastUnitPrice: number;
+  averageUnitPrice: number;
+  minUnitPrice: number;
+  purchasesCount: number;
+  lastPurchasedAt?: string | null;
+  lastMarketName?: string | null;
+};
+
+export type PurchaseParticipant = {
+  id: string;
+  userId: string;
+  lastSeenAt: string;
+  user?: { id: string; name: string; photoUrl?: string | null };
+};
+
 export type Purchase = {
   id: string;
+  userId?: string;
   marketId?: string | null;
   sourceListId?: string | null;
   status: PurchaseStatus;
@@ -231,7 +253,7 @@ export type Purchase = {
   items: PurchaseItem[];
   market?: Market | null;
   sourceList?: MarketList | null;
-  participants?: Array<{ id: string; userId: string; lastSeenAt: string }>;
+  participants?: PurchaseParticipant[];
 };
 
 export type DashboardReport = {

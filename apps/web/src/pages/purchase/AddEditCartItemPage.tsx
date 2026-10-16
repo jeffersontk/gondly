@@ -5,11 +5,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ShoppingCart, X } from "lucide-react";
 import type { Unit } from "@gondly/types";
+import { calculateNormalizedPrice, formatPricePerUnitLabel } from "@gondly/utils";
 import { AppButton, AppInput, BrandSelect, MoneyInput, ProductSearchInput, QuantityInput, UnitSelect, unitLabels } from "../../components";
 import { sanitizeAnalyticsCategory, trackEvent } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import { isLocalId, queuePurchaseItemUpsert, syncOutbox, type PurchaseItemPayload } from "../../lib/offlineQueue";
-import type { Purchase } from "../../types";
+import { notifyPurchaseError } from "../../lib/purchaseNotices";
+import type { PriceHint, Purchase } from "../../types";
 import {
   calculatePurchaseItemTotal,
   cartItemSchema,
@@ -24,6 +26,7 @@ import {
   reconcilePurchaseCache,
   roundMoney,
   toPurchaseItemPayload,
+  useDebouncedValue,
 } from "../shared";
 
 export function AddEditCartItemPage() {
@@ -106,6 +109,8 @@ export function AddEditCartItemPage() {
       if (context?.previousActivePurchases) {
         queryClient.setQueryData(["active-purchases"], context.previousActivePurchases);
       }
+      notifyPurchaseError(purchaseId, error);
+      void queryClient.invalidateQueries({ queryKey: ["active-purchases"] });
     },
   });
   const sheetTitle = itemId ? "Editar item" : "Adicionar item";
@@ -143,6 +148,18 @@ export function AddEditCartItemPage() {
   }, [form, supportsKgPrice, watchedUnit]);
 
   const estimatedItemTotal = calculatePurchaseItemTotal(watchedQuantity, watchedUnit, watchedUnitPrice, watchedPriceInputMode);
+  const hintProductName = useDebouncedValue(productName.trim());
+  const priceHint = useQuery({
+    queryKey: ["price-hint", hintProductName.toLocaleLowerCase("pt-BR")],
+    queryFn: () => api<PriceHint | null>(`/products/price-hint?name=${encodeURIComponent(hintProductName)}`),
+    enabled: hintProductName.length >= 2,
+    staleTime: 10 * 60_000,
+  });
+  const currentNormalized = estimatedItemTotal > 0 ? calculateNormalizedPrice(watchedQuantity, watchedUnit, estimatedItemTotal) : null;
+  const priceDifference =
+    priceHint.data && currentNormalized?.unitPriceNormalized && currentNormalized.normalizedUnitLabel === priceHint.data.normalizedUnitLabel
+      ? (currentNormalized.unitPriceNormalized - priceHint.data.averageUnitPrice) / priceHint.data.averageUnitPrice
+      : null;
   const quantityInKg = watchedUnit === "g" ? watchedQuantity / 1000 : watchedUnit === "kg" ? watchedQuantity : null;
   const estimatedPricePerKg = quantityInKg && quantityInKg > 0 ? roundMoney(estimatedItemTotal / quantityInKg) : null;
   const priceInputLabel =
@@ -278,6 +295,7 @@ export function AddEditCartItemPage() {
               </p>
             ) : null}
           </div>
+          {priceHint.data ? <PriceHintCard hint={priceHint.data} difference={priceDifference} /> : null}
           <AppInput label="Observação opcional" {...form.register("notes")} />
           <AppButton
             type="submit"
@@ -291,5 +309,33 @@ export function AddEditCartItemPage() {
         </form>
       </section>
     </main>
+  );
+}
+
+// Compares the price being typed with what the user usually pays (same normalized unit, e.g. R$/kg).
+function PriceHintCard({ hint, difference }: { hint: PriceHint; difference: number | null }) {
+  const percent = difference === null ? 0 : Math.round(Math.abs(difference) * 100);
+  const tone = difference === null || percent < 10 ? "neutral" : difference > 0 ? "expensive" : "cheap";
+  const styles = {
+    neutral: "border-line bg-white text-ink/70",
+    expensive: "border-amber-200 bg-amber-50 text-amber-800",
+    cheap: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  };
+  const average = formatPricePerUnitLabel(hint.averageUnitPrice, hint.normalizedUnitLabel);
+  const message =
+    tone === "expensive"
+      ? `${percent}% mais caro que sua média (${average}).`
+      : tone === "cheap"
+        ? `${percent}% mais barato que sua média (${average}).`
+        : `Você costuma pagar ${average}.`;
+
+  return (
+    <div className={["rounded-2xl border p-3 text-sm shadow-sm", styles[tone]].join(" ")} role="status">
+      <p className="font-black">{message}</p>
+      <p className="mt-0.5 text-xs opacity-80">
+        Última vez: {formatPricePerUnitLabel(hint.lastUnitPrice, hint.normalizedUnitLabel)}
+        {hint.lastMarketName ? ` no ${hint.lastMarketName}` : ""} · {hint.purchasesCount} {hint.purchasesCount === 1 ? "compra" : "compras"}
+      </p>
+    </div>
   );
 }

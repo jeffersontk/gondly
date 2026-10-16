@@ -28,6 +28,11 @@ export class ProductsController {
     return this.productsService.search(user.id, q);
   }
 
+  @Get("price-hint")
+  priceHint(@CurrentUser() user: JwtUser, @Query("name") name = "") {
+    return this.productsService.priceHint(user.id, name);
+  }
+
   @Get("barcode/:barcode")
   findBarcode(@CurrentUser() user: JwtUser, @Param("barcode") barcode: string) {
     return this.productsService.findBarcode(user.id, barcode);

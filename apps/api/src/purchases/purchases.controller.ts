@@ -4,6 +4,7 @@ import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import type { JwtUser } from "../common/auth.types";
 import {
+  ClaimPurchaseItemDto,
   CreatePurchaseItemDto,
   FinishPurchaseDto,
   StartPurchaseDto,
@@ -69,6 +70,16 @@ export class PurchasesController {
     return this.purchasesService.updateItem(user.id, id, itemId, dto);
   }
 
+  @Put(":id/items/:itemId/claim")
+  claimItem(
+    @CurrentUser() user: JwtUser,
+    @Param("id") id: string,
+    @Param("itemId") itemId: string,
+    @Body() dto: ClaimPurchaseItemDto,
+  ) {
+    return this.purchasesService.claimItem(user.id, id, itemId, dto.claimed);
+  }
+
   @Delete(":id/items/:itemId")
   removeItem(@CurrentUser() user: JwtUser, @Param("id") id: string, @Param("itemId") itemId: string) {
     return this.purchasesService.removeItem(user.id, id, itemId);
@@ -82,6 +93,11 @@ export class PurchasesController {
   @Post(":id/cancel")
   cancel(@CurrentUser() user: JwtUser, @Param("id") id: string) {
     return this.purchasesService.cancel(user.id, id);
+  }
+
+  @Post(":id/missing-as-list")
+  missingAsList(@CurrentUser() user: JwtUser, @Param("id") id: string) {
+    return this.purchasesService.duplicateAsList(user.id, id, { onlyMissing: true });
   }
 
   @Post(":id/duplicate-as-list")

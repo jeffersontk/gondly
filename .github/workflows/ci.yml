@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Typecheck, unit tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:generate
+      - name: Build shared packages
+        run: npm run build --workspace @gondly/types && npm run build --workspace @gondly/utils
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build --workspace @gondly/web
+
+  e2e:
+    name: Shared purchase e2e (API + realtime + Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: gondly_e2e
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gondly_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/gondly_e2e?schema=public
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/gondly_e2e?schema=public
+      JWT_SECRET: e2e-secret
+      ALLOW_DEV_LOGIN: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:generate
+      - name: Build shared packages
+        run: npm run build --workspace @gondly/types && npm run build --workspace @gondly/utils
+      - run: npm run prisma:deploy
+      - run: npm run test:e2e --workspace @gondly/api

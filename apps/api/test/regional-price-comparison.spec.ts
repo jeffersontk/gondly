@@ -335,6 +335,7 @@ describe("PriceComparisonService.regional", () => {
       minPrice: 24,
       avgPrice: 28,
       medianPrice: 28,
+      maxPrice: 32,
       normalizedMinPrice: 24,
       normalizedAvgPrice: 28,
       normalizedUnit: "kg",

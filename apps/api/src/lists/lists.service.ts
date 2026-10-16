@@ -1,46 +1,26 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { ListItemStatus, Prisma, SharedRole, Unit } from "@prisma/client";
+import { ListItemStatus, SharedRole, Unit } from "@prisma/client";
 import { normalizePrice } from "@gondly/utils";
 import { randomUUID } from "crypto";
 import { BillingService } from "../billing/billing.service";
 import { addDays } from "../common/utils/date";
 import { normalizeSearchName, optionalNumber, optionalText } from "../common/utils/normalize";
 import { PrismaService } from "../prisma/prisma.service";
+import { ItemSnapshotResolver, type ItemProductInput, type ProductSnapshot } from "../products/item-snapshot.resolver";
 import { RealtimeService } from "../realtime/realtime.service";
 import { CreateInviteDto, CreateListDto, CreateListItemDto, ImportListItemsDto, UpdateListDto, UpdateListItemDto } from "./dto";
 
-type BrandInput = {
-  brandId?: string;
-  brand?: string;
-  brandNameSnapshot?: string;
-};
-
-type ItemProductInput = BrandInput & {
-  productId?: string;
-  productName: string;
-  category?: string;
-  unit?: Unit;
-  packageSize?: number;
-  packageUnit?: Unit;
-};
-
-type ProductSnapshot = {
-  id: string;
-  name: string;
-  brandId: string | null;
-  brand: string | null;
-  category: string | null;
-  packageSize: number | null;
-  packageUnit: Unit | null;
-};
-
 @Injectable()
 export class ListsService {
+  private readonly snapshots: ItemSnapshotResolver;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly billingService: BillingService,
     private readonly realtime: RealtimeService,
-  ) {}
+  ) {
+    this.snapshots = new ItemSnapshotResolver(prisma);
+  }
 
   list(userId: string) {
     return this.prisma.marketList.findMany({
@@ -133,8 +113,9 @@ export class ListsService {
   }
 
   async addItem(userId: string, listId: string, dto: CreateListItemDto) {
-    await this.assertCanEdit(userId, listId);
-    const snapshot = await this.resolveItemSnapshot(userId, dto);
+    const list = await this.assertCanEdit(userId, listId);
+    const collaboratorIds = [list.userId, ...list.members.filter((member) => member.status === "accepted").map((member) => member.userId)];
+    const snapshot = await this.snapshots.resolve(userId, dto, collaboratorIds);
 
     const item = await this.prisma.marketListItem.create({
       data: {
@@ -173,7 +154,7 @@ export class ListsService {
       const missingProducts = [];
       for (const [key, item] of uniqueItems.entries()) {
         if (productsByKey.has(key)) continue;
-        const brand = await this.resolveBrandFields(item, tx);
+        const brand = await this.snapshots.resolveBrandFields(item, tx);
         missingProducts.push({
           userId,
           name: item.productName,
@@ -203,7 +184,7 @@ export class ListsService {
       const productIdsByKey = new Map(products.map((product) => [this.productIdentityKeyFromProduct(product), product.id]));
       const itemSnapshots = [];
       for (const item of dto.items) {
-        itemSnapshots.push({ item, brand: await this.resolveBrandFields(item, tx) });
+        itemSnapshots.push({ item, brand: await this.snapshots.resolveBrandFields(item, tx) });
       }
 
       await tx.marketListItem.createMany({
@@ -695,94 +676,6 @@ export class ListsService {
         byUserId: userId,
       });
     }
-  }
-
-  private async findOrCreateProduct(userId: string, dto: ItemProductInput) {
-    const normalizedName = this.normalizeProductName(dto.productName);
-    const brand = await this.resolveBrandFields(dto);
-    const packageSize = optionalNumber(dto.packageSize) ?? null;
-    const packageUnit = dto.packageUnit ?? null;
-    const existing = await this.prisma.product.findFirst({
-      where: {
-        userId,
-        deletedAt: null,
-        normalizedName,
-        brandId: brand.brandId ?? null,
-        packageSize,
-        packageUnit,
-      },
-    });
-
-    if (existing) {
-      return existing;
-    }
-
-    return this.prisma.product.create({
-      data: {
-        userId,
-        name: dto.productName,
-        normalizedName,
-        brand: brand.brandNameSnapshot,
-        brandId: brand.brandId,
-        category: optionalText(dto.category),
-        defaultUnit: dto.unit ?? "un",
-        packageSize,
-        packageUnit,
-      },
-    });
-  }
-
-  private async resolveItemSnapshot(userId: string, dto: ItemProductInput) {
-    if (!dto.productId) {
-      const product = await this.findOrCreateProduct(userId, dto);
-      return this.snapshotFromProduct(dto, product);
-    }
-
-    const product = await this.prisma.product.findFirst({ where: { id: dto.productId, userId, deletedAt: null } });
-    if (!product) {
-      throw new NotFoundException("Product not found.");
-    }
-
-    return this.snapshotFromProduct(dto, product);
-  }
-
-  private async snapshotFromProduct(dto: ItemProductInput, product: ProductSnapshot) {
-    const explicitBrand = await this.resolveBrandFields(dto);
-    const brandId = explicitBrand.brandId ?? product.brandId ?? null;
-    const brandNameSnapshot = explicitBrand.brandNameSnapshot ?? product.brand ?? null;
-    const packageSize = optionalNumber(dto.packageSize) ?? product.packageSize ?? null;
-    const packageUnit = dto.packageUnit ?? product.packageUnit ?? null;
-
-    return {
-      productId: product.id,
-      productName: dto.productName,
-      brand: brandNameSnapshot,
-      brandId,
-      brandNameSnapshot,
-      category: optionalText(dto.category) ?? product.category ?? null,
-      packageSize,
-      packageUnit,
-    };
-  }
-
-  private async resolveBrandFields(dto: BrandInput, client: PrismaService | Prisma.TransactionClient = this.prisma) {
-    const brandId = optionalText(dto.brandId);
-    if (brandId) {
-      const brand = await client.brand.findUnique({ where: { id: brandId } });
-      if (!brand) throw new NotFoundException("Brand not found.");
-      return { brandId: brand.id, brandNameSnapshot: brand.name };
-    }
-
-    const brandName = optionalText(dto.brandNameSnapshot) ?? optionalText(dto.brand);
-    if (!brandName) return { brandId: null, brandNameSnapshot: null };
-
-    const normalizedName = normalizeSearchName(brandName);
-    const brand = await client.brand.upsert({
-      where: { normalizedName },
-      create: { name: brandName, normalizedName },
-      update: {},
-    });
-    return { brandId: brand.id, brandNameSnapshot: brand.name };
   }
 
   private listInclude() {

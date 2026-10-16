@@ -155,7 +155,9 @@ model User {
   purchasedListItems     MarketListItem[]            @relation("PurchasedListItems")
   addedPurchaseItems     PurchaseItem[]              @relation("AddedPurchaseItems")
   updatedPurchaseItems   PurchaseItem[]              @relation("UpdatedPurchaseItems")
+  claimedPurchaseItems   PurchaseItem[]              @relation("ClaimedPurchaseItems")
   purchaseParticipations PurchaseParticipant[]
+  pushSubscriptions      PushSubscription[]
   subscription           Subscription?
   entitlements           UserEntitlement[]
   oneTimePurchases       OneTimePurchase[]
@@ -289,29 +291,33 @@ model MarketListItem {
 }
 
 model Purchase {
-  id                 String                @id @default(cuid())
-  userId             String
-  marketId           String?
-  sourceListId       String?
-  status             PurchaseStatus        @default(in_progress)
-  startedAt          DateTime              @default(now())
-  completedAt        DateTime?
-  subtotalCalculated Decimal               @default(0) @db.Decimal(12, 2)
-  finalPaidAmount    Decimal?              @db.Decimal(12, 2)
-  discountAmount     Decimal?              @db.Decimal(12, 2)
-  notes              String?
-  createdAt          DateTime              @default(now())
-  updatedAt          DateTime              @updatedAt
-  deletedAt          DateTime?
-  user               User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  market             Market?               @relation(fields: [marketId], references: [id], onDelete: SetNull)
-  sourceList         MarketList?           @relation(fields: [sourceListId], references: [id], onDelete: SetNull)
-  items              PurchaseItem[]
-  participants       PurchaseParticipant[]
-  sharedPriceRecords SharedPriceRecord[]
+  id                  String                @id @default(cuid())
+  userId              String
+  marketId            String?
+  sourceListId        String?
+  status              PurchaseStatus        @default(in_progress)
+  startedAt           DateTime              @default(now())
+  completedAt         DateTime?
+  subtotalCalculated  Decimal               @default(0) @db.Decimal(12, 2)
+  finalPaidAmount     Decimal?              @db.Decimal(12, 2)
+  discountAmount      Decimal?              @db.Decimal(12, 2)
+  notes               String?
+  // Last time an item was put in or changed in the cart; drives the "finish your purchase" push reminders.
+  lastCartActivityAt  DateTime?
+  finishRemindersSent Int                   @default(0)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  deletedAt           DateTime?
+  user                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  market              Market?               @relation(fields: [marketId], references: [id], onDelete: SetNull)
+  sourceList          MarketList?           @relation(fields: [sourceListId], references: [id], onDelete: SetNull)
+  items               PurchaseItem[]
+  participants        PurchaseParticipant[]
+  sharedPriceRecords  SharedPriceRecord[]
 
   @@index([userId, status, deletedAt])
   @@index([marketId])
+  @@index([status, lastCartActivityAt])
 }
 
 model PurchaseItem {
@@ -333,6 +339,8 @@ model PurchaseItem {
   normalizedUnitLabel String?
   addedByUserId       String?
   updatedByUserId     String?
+  claimedByUserId     String?
+  claimedAt           DateTime?
   notes               String?
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
@@ -342,6 +350,7 @@ model PurchaseItem {
   brandRef            Brand?              @relation("PurchaseItemBrand", fields: [brandId], references: [id], onDelete: SetNull)
   addedByUser         User?               @relation("AddedPurchaseItems", fields: [addedByUserId], references: [id], onDelete: SetNull)
   updatedByUser       User?               @relation("UpdatedPurchaseItems", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  claimedByUser       User?               @relation("ClaimedPurchaseItems", fields: [claimedByUserId], references: [id], onDelete: SetNull)
   sharedPriceRecords  SharedPriceRecord[]
 
   @@index([purchaseId])
@@ -548,4 +557,19 @@ model AppConfig {
   value     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model PushSubscription {
+  id         String    @id @default(cuid())
+  userId     String
+  endpoint   String    @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  lastUsedAt DateTime?
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
