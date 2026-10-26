@@ -1,5 +1,36 @@
 # Deploy Gondly
 
+## Atualizar a VPS com Docker
+
+Na VPS atual, execute como usuario `deploy`:
+
+```bash
+cd /opt/gondly/monorepo
+bash scripts/update-vps.sh
+```
+
+O script atualiza a branch atualmente selecionada pelo remoto `origin`, com fast-forward,
+reconstroi a API e aguarda ate 180 segundos pelo healthcheck. Alteracoes locais ou
+branches divergentes interrompem a atualizacao. Se o build falhar, o container atual
+continua rodando. Se a verificacao de saude falhar depois da substituicao, o script
+exibe os logs e termina com erro; nao faz rollback automatico.
+
+Para atualizar o frontend ou ambos os servicos:
+
+```bash
+bash scripts/update-vps.sh web
+bash scripts/update-vps.sh all
+```
+
+Usa `/opt/gondly/production/compose.yml` e `compose.apps.yml`, com o projeto
+`gondly-prod`. Requer Bash, Git, flock e Docker Compose com suporte a `up --wait`.
+Nao altera arquivos `.env` nem executa migrations: entregas com mudancas de banco
+exigem aplicar as migrations conforme as instrucoes da entrega antes do reinicio.
+
+Na primeira utilizacao, baixe o script com `git pull --ff-only` dentro do repositorio.
+Depois disso, basta executar o script. Para verificar seu fluxo sem acessar a VPS:
+`bash scripts/test-update-vps.sh` (usa comandos simulados).
+
 Este monorepo esta preparado para:
 
 - Vercel: PWA React/Vite em `apps/web`.
