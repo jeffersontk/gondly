@@ -128,6 +128,7 @@ export class ListsService {
       },
     });
 
+    await this.syncItemWithActivePurchases(userId, listId, item);
     this.realtime.emitToList(listId, "listItemUpdated", { listId, item, action: "created", byUserId: userId });
     return item;
   }
