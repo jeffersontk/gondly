@@ -794,14 +794,13 @@ export function Toast({ message, tone = "info" }: { message: string; tone?: "inf
 }
 
 const listItemStatusLabels = {
-  pending: "Não tenho em casa",
-  at_home: "Tenho em casa",
-  not_needed: "Não precisa esse mês",
+  pending: "Comprar",
+  at_home: "Não precisa comprar este mês",
+  not_needed: "Não precisa comprar este mês",
 } satisfies Record<MarketListItem["status"], string>;
 
 function listItemMarkerClass(item: MarketListItem) {
-  if (item.status === "at_home") return "border-muted bg-muted text-white";
-  if (item.status === "not_needed") return "border-muted bg-paper text-muted";
+  if (item.status !== "pending") return "border-muted bg-paper text-muted";
   return "border-line bg-white text-transparent";
 }
 
@@ -819,12 +818,12 @@ export function ListItemRow({ item }: { item: MarketListItem }) {
           listItemMarkerClass(item),
         )}
       >
-        {item.status === "not_needed" ? <X className="h-4 w-4" /> : <Check className="h-4 w-4" />}
+        {isReduced ? <X className="h-4 w-4" /> : <Check className="h-4 w-4" />}
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">
           {item.important ? <Star className="h-3.5 w-3.5 flex-none fill-amber-400 text-amber-400" /> : null}
-          <p className={cls("truncate text-sm font-bold", isReduced ? "text-muted" : "text-ink", item.status === "not_needed" && "line-through")}>
+          <p className={cls("truncate text-sm font-bold", isReduced ? "text-muted" : "text-ink", isReduced && "line-through")}>
             {item.productName}
           </p>
         </div>

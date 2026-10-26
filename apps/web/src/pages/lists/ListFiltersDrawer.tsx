@@ -78,9 +78,8 @@ export function ListFiltersDrawer({
             <span className="mb-1 flex items-center gap-1 text-xs font-semibold text-ink/60"><Filter className="h-3.5 w-3.5" /> Status</span>
             <select className="h-11 w-full rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none focus:border-mint" value={statusFilter} onChange={(event) => onStatusChange(event.target.value as ListStatusFilter)}>
               <option value="all">Todos</option>
-              <option value="pending">Não tenho em casa</option>
-              <option value="at_home">Tenho em casa</option>
-              <option value="not_needed">Não precisa esse mês</option>
+              <option value="pending">Comprar</option>
+              <option value="not_needed">Não precisa comprar este mês</option>
             </select>
           </label>
           <label className="block">

@@ -4,6 +4,7 @@ import { normalizePrice } from "@gondly/utils";
 import { randomUUID } from "crypto";
 import { BillingService } from "../billing/billing.service";
 import { addDays } from "../common/utils/date";
+import { toNumber } from "../common/utils/money";
 import { normalizeSearchName, optionalNumber, optionalText } from "../common/utils/normalize";
 import { PrismaService } from "../prisma/prisma.service";
 import { ItemSnapshotResolver, type ItemProductInput, type ProductSnapshot } from "../products/item-snapshot.resolver";
@@ -233,6 +234,9 @@ export class ListsService {
       data: dto,
     });
 
+    if (item.status === "pending" && (dto.expectedQuantity !== undefined || dto.unit !== undefined)) {
+      await this.syncItemWithActivePurchases(userId, listId, item, true);
+    }
     this.realtime.emitToList(listId, "listItemUpdated", { listId, item, action: "updated", byUserId: userId });
     return item;
   }
@@ -597,6 +601,7 @@ export class ListsService {
       unit: Unit;
       status: ListItemStatus;
     },
+    updateQuantity = false,
   ) {
     const purchases = await this.prisma.purchase.findMany({
       where: { sourceListId: listId, status: "in_progress", deletedAt: null },
@@ -608,6 +613,7 @@ export class ListsService {
             sourceListItemId: true,
             productId: true,
             productName: true,
+            pricePaid: true,
           },
         },
       },
@@ -630,6 +636,15 @@ export class ListsService {
             await this.prisma.purchaseItem.update({
               where: { id: existing.id },
               data: { sourceListItemId: item.id },
+            });
+          }
+          if (updateQuantity && toNumber(existing.pricePaid) === 0) {
+            const quantity = item.expectedQuantity && item.expectedQuantity > 0 ? item.expectedQuantity : 1;
+            const normalized = normalizePrice(quantity, item.unit, 0);
+            // A participant may price this item after the read; never overwrite their cart quantity.
+            await this.prisma.purchaseItem.updateMany({
+              where: { id: existing.id, pricePaid: 0 },
+              data: { quantity, unit: item.unit, unitPriceNormalized: normalized.unitPriceNormalized, normalizedUnitLabel: normalized.normalizedUnitLabel },
             });
           }
         } else {

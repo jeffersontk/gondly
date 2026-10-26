@@ -2,7 +2,7 @@ import { Fragment, lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Loader2, Menu, MessageCircle, Plus, ShoppingCart, SlidersHorizontal, Star, Tags, Trash2 } from "lucide-react";
-import type { ListItemStatus } from "@gondly/types";
+import type { ListItemStatus, Unit } from "@gondly/types";
 import type { Socket } from "socket.io-client";
 import { AppButton, ConfirmDialog, EmptyState, ErrorState, ListItemRow, LoadingState, PriceCard, ScreenContainer, SectionHeader } from "../../components";
 import { trackEvent, trackSafeSearch } from "../../lib/analytics";
@@ -41,6 +41,7 @@ import { ListChatDrawer } from "./ListChatDrawer";
 import { ListFiltersDrawer } from "./ListFiltersDrawer";
 import { ListSharingPanel } from "./SharedListMembers";
 import { useListChat } from "./useListChat";
+import { ListPurchaseOptions } from "./ListPurchaseOptions";
 
 const ListImportPanel = lazy(() =>
   import("./ListImportPanel").then((module) => ({
@@ -126,6 +127,15 @@ export function ListDetailPage() {
       api<MarketListItem>(`/lists/${id}/items/${itemId}/important`, { method: "PATCH", body: { important } }),
     onSuccess: (item) => {
       queryClient.setQueryData<MarketList>(["list", id], (current) => updateListItemCache(current, item));
+    },
+  });
+  const setItemQuantity = useMutation({
+    mutationFn: ({ itemId, expectedQuantity, unit }: { itemId: string; expectedQuantity: number; unit: Unit }) =>
+      api<MarketListItem>(`/lists/${id}/items/${itemId}`, { method: "PUT", body: { expectedQuantity, unit } }),
+    onSuccess: (item) => {
+      queryClient.setQueryData<MarketList>(["list", id], current => updateListItemCache(current, item));
+      void queryClient.invalidateQueries({ queryKey: ["lists"] });
+      void queryClient.invalidateQueries({ queryKey: ["active-purchases"] });
     },
   });
   const start = useMutation({
@@ -363,8 +373,7 @@ export function ListDetailPage() {
 
   const currentList = normalizeMarketList(list.data);
   const neededItems = currentList.items.filter((item) => item.status === "pending");
-  const atHomeItems = currentList.items.filter((item) => item.status === "at_home");
-  const notNeededItems = currentList.items.filter((item) => item.status === "not_needed");
+  const notNeededItems = currentList.items.filter((item) => item.status !== "pending");
   const acceptedMembers = currentList.members?.filter((member) => member.status === "accepted") ?? [];
   const isOwner = currentList.userId === user?.id;
   const pendingMembers = currentList.members?.filter((member) => member.status === "invited") ?? [];
@@ -548,9 +557,8 @@ export function ListDetailPage() {
         </div>
       ) : null}
 
-      <div className="mt-4 grid grid-cols-3 gap-2">
-        <PriceCard label="Não tenho" value={neededItems.length} />
-        <PriceCard label="Tenho em casa" value={atHomeItems.length} />
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <PriceCard label="Comprar" value={neededItems.length} />
         <PriceCard label="Não precisa" value={notNeededItems.length} />
       </div>
 
@@ -644,19 +652,11 @@ export function ListDetailPage() {
                           {removeItem.isPending && removeItem.variables === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                         </button>
                       </div>
-                      <div className="mt-2">
-                        <select
-                          className="h-11 w-full rounded-xl border border-line bg-white px-3 text-sm font-semibold text-ink outline-none focus:border-mint"
-                          value={item.status}
-                          onChange={(event) => setItemState.mutate({ itemId: item.id, status: event.target.value as ListItemStatus })}
-                          disabled={setItemState.isPending && setItemState.variables?.itemId === item.id}
-                          aria-label={`Estado de ${item.productName}`}
-                        >
-                          <option value="pending">Não tenho em casa</option>
-                          <option value="at_home">Tenho em casa</option>
-                          <option value="not_needed">Não precisa esse mês</option>
-                        </select>
-                      </div>
+                      <ListPurchaseOptions
+                        item={item}
+                        onChangeStatus={status => setItemState.mutateAsync({ itemId: item.id, status })}
+                        onSaveQuantity={(expectedQuantity, unit) => setItemQuantity.mutateAsync({ itemId: item.id, expectedQuantity, unit })}
+                      />
                     </div>
                   </Fragment>
                 ))}

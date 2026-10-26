@@ -470,12 +470,12 @@ export type ListMessageRealtimePayload = RealtimeEnvelope<{ listId: string; mess
 };
 
 export function matchesListStatus(item: MarketListItem, status: ListStatusFilter) {
-  return status === "all" || item.status === status;
+  return status === "all" || item.status === status || (status === "not_needed" && item.status === "at_home");
 }
 
 export function sortListItems(items: MarketListItem[], sort: ListSortFilter) {
   const collator = new Intl.Collator("pt-BR", { sensitivity: "base", numeric: true });
-  const statusOrder: Record<ListItemStatus, number> = { pending: 0, at_home: 1, not_needed: 2 };
+  const statusOrder: Record<ListItemStatus, number> = { pending: 0, at_home: 1, not_needed: 1 };
   const originalIndex = new Map(items.map((item, index) => [item.id, index]));
   const originalOrder = (left: MarketListItem, right: MarketListItem) => (originalIndex.get(left.id) ?? 0) - (originalIndex.get(right.id) ?? 0);
 
