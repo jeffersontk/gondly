@@ -19,6 +19,16 @@ testes e uso real antes de aumentar o número de funcionalidades.
 - A verificação DNS do Search Console foi iniciada; confirmação ainda pendente.
 - O deploy do SEO e a validação HTTP em produção precisam ser registrados como evidência.
 - Blog com estrutura disponível, mas sem artigos publicados na última análise do código.
+- Publicidade: integração AdSense existente, mas aprovação do site ainda pendente.
+  Os prints enviados mostram reprovação por telas sem conteúdo do editor e conteúdo
+  de baixo valor; uma tela posterior mostra nova revisão solicitada, com status
+  `Getting ready`. Isso não confirma aprovação nem correção das causas anteriores.
+- Nos prints, anúncios automáticos e otimização automática estão ativos, com sete
+  exclusões de páginas; as URLs excluídas ainda precisam ser conferidas.
+- `ads.txt` verificado publicamente em 26/10/2026: HTTP 200, `text/plain`, com
+  `google.com, pub-5790403109966296, DIRECT, f08c47fec0942fa0`. O painel mostra
+  `Not found`, mas essa indicação corresponde à última leitura do rastreador,
+  não comprova ausência do arquivo no momento atual.
 
 ## Ordem e dependências
 
@@ -31,10 +41,14 @@ testes e uso real antes de aumentar o número de funcionalidades.
 | V5 — Histórico e comparação | P1 | V4 e dados de preço consistentes | Comparações úteis e transparentes |
 | V6 — Compras recorrentes | P2 | V3 e evidências de uso recorrente | Menos trabalho para preparar a próxima compra |
 | V7 — Operação e suporte | P1 | Base operacional iniciada na V1 | Deploy recuperável e suporte com contexto |
+| V8 — Publicidade e aprovação AdSense | P1 | V1, conteúdo da V2 e auditoria dos anúncios | Monetização aprovada e restrita a páginas elegíveis |
 
 Fluxo principal: **V1 → V3 → V4 → V5 → V6**. Conteúdo da V2 pode avançar em paralelo
 após a V1. A V7 deve ser antecipada se surgirem falhas operacionais; backups e
 observação básica de erros começam na V1, não ficam para o fim.
+A auditoria da V8 começa junto da V1/V2. O número V8 não significa esperar todas
+as funcionalidades para tratar a reprovação. A espera pela decisão do AdSense
+não bloqueia as entregas de colaboração, orçamento ou histórico.
 Sem calendário fixo: estimar cada entrega após detalhar suas tarefas e dependências.
 
 ## V1 — Publicar SEO e estabelecer medição
@@ -151,6 +165,63 @@ alertas chegam ao responsável e existe um procedimento de atendimento utilizáv
 
 **Acompanhar:** disponibilidade, tempo de recuperação e recorrência de incidentes.
 
+## V8 — Publicidade e aprovação do AdSense
+
+**Objetivo:** concluir a aprovação e validar a exibição da publicidade já integrada.
+Não recriar a integração nem tratar a instalação do script como aprovação do site.
+
+**Responsáveis:** Codex audita o código e a entrega pública; responsável pela conta
+confere pagamentos, configurações e decisões no painel do AdSense.
+
+### Diagnosticar e corrigir
+
+- [ ] Registrar as pendências atuais na página inicial e na Central de políticas do AdSense.
+- [ ] Conferir o aviso de informações de pagamento e concluir as tarefas obrigatórias
+  da conta indicadas pelo Google; `Getting ready` também pode permanecer enquanto
+  houver configuração de conta pendente.
+- [ ] Identificar quais páginas e estados podem ter motivado as violações, sem assumir
+  que os prints informam a URL exata ou que o problema é apenas o `ads.txt`.
+- [ ] Validar `ads.txt` sem login, HTTP 200, tipo texto, domínio/redirects corretos e
+  publisher ID da conta; acompanhar a atualização do status no painel sem duplicar o arquivo.
+- [ ] Auditar carregamento do script, IDs das unidades, variáveis do frontend e possíveis
+  inserções pelo Google Tag Manager, além dos componentes de anúncios do código.
+- [ ] Conferir as sete exclusões e decidir como controlar anúncios automáticos e
+  otimização automática; essas configurações podem inserir anúncios fora dos slots manuais.
+- [ ] Verificar anúncios na primeira carga e após navegação SPA: login, convites,
+  carregamento, erro, estados vazios, páginas em preparação e 404 devem ficar sem anúncios.
+- [ ] Auditar elegibilidade das telas do app pelo conteúdo real exibido; uma lista
+  preenchida ou uma flag `hasContent` sozinhas não comprovam conformidade com o AdSense.
+- [ ] Priorizar os conteúdos públicos originais e revisados da V2 e conferir acesso
+  sem autenticação, navegação e utilidade das páginas destinadas à publicidade.
+  A meta inicial de três artigos é um escopo editorial interno, não um mínimo de aprovação do Google.
+- [ ] Conferir política de privacidade, informações sobre publicidade e configurações
+  de consentimento aplicáveis ao público atendido.
+- [ ] Garantir que anúncios automáticos, Tag Manager e slots manuais respeitem o
+  benefício sem anúncios e não prejudiquem os fluxos principais do produto.
+
+### Revisão e ativação
+
+- [x] Nova revisão solicitada, conforme o print enviado pelo usuário em 26/10/2026.
+- [ ] Acompanhar a solicitação existente e registrar o retorno do Google.
+- [ ] Se houver nova reprovação, corrigir o motivo informado e validar as mudanças
+  publicadas antes de solicitar outra revisão. Não remover/recriar o site para tentar acelerar.
+- [ ] Confirmar status `Ready` no AdSense; enquanto estiver `Getting ready`, manter
+  a aprovação como pendente. Não prometer prazo ou resultado da análise externa.
+- [ ] Após aprovação, validar primeiro unidades em páginas elegíveis com controle de
+  posicionamento, sem clicar nos próprios anúncios ou gerar tráfego artificial.
+- [ ] Acompanhar exibição, erros, desempenho e experiência móvel; conferir receita
+  agregada nos relatórios do AdSense, sem confundir anúncio aprovado com receita garantida.
+
+**Concluída quando:** conta sem tarefas obrigatórias pendentes, site com status
+`Ready`, unidades elegíveis funcionando e ausência de publicidade nos estados
+bloqueados e para usuários com benefício sem anúncios, incluindo navegação SPA.
+
+**Evidência:** status do painel, resultado público do `ads.txt`, páginas auditadas,
+configuração das exclusões e teste das unidades. A auditoria pode ser concluída
+enquanto a aprovação permanece explicitamente aguardando decisão do Google.
+
+Referência interna: [conteúdo público e anúncios](conteudo-publico.md).
+
 ## Como executar cada entrega
 
 1. Escolher a próxima entrega e conferir os bloqueios externos.
@@ -171,9 +242,13 @@ ou documental em alteração de código.
 **Começar pela V1:** confirmar verificação do domínio, deploy do frontend e respostas
 HTTP. Em seguida, preparar os cenários de duas contas da V3. Não iniciar orçamento
 ou recorrência antes de estabilizar a colaboração.
+Na mesma etapa inicial, conferir pendências de conta e exclusões do AdSense (V8),
+aproveitando a V2 para corrigir lacunas de conteúdo identificadas na auditoria.
 
 ## Referências
 
 - [Eventos existentes e regras de privacidade](analytics-events.md).
 - [Google: princípios básicos de SEO](https://developers.google.com/search/docs/fundamentals/seo-starter-guide?hl=pt-br).
 - [Google: inspeção de URL](https://support.google.com/webmasters/answer/9012289?hl=pt-BR).
+- [AdSense: status do site e do ads.txt](https://support.google.com/adsense/answer/12170222?hl=pt-BR).
+- [Google: anúncios em telas sem conteúdo do editor](https://support.google.com/publisherpolicies/answer/11112688?hl=pt-BR).
