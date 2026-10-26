@@ -27,6 +27,7 @@ import { trackEvent, usePageTracking } from "./lib/analytics";
 import { useAuth } from "./lib/auth";
 import { syncPushSubscription } from "./lib/push";
 import { promptPwaInstall, usePwaInstall } from "./lib/pwaInstall";
+import { RouteMetadata } from "./seo/RouteMetadata";
 
 const INSTALL_MODAL_SESSION_KEY = "gondly.installModalDismissed";
 
@@ -181,6 +182,8 @@ export function App() {
   usePageTracking();
 
   return (
+    <>
+    <RouteMetadata />
     <Suspense fallback={<RouteLoadingFallback />}>
       <Routes>
         <Route index element={<PublicLandingRoute />} />
@@ -291,6 +294,7 @@ export function App() {
         <Route path="*" element={<Navigate to="/app/home" replace />} />
       </Routes>
     </Suspense>
+    </>
   );
 }
 

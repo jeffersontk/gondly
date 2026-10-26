@@ -12,7 +12,6 @@ import {
   Store,
   TrendingUp,
 } from "lucide-react";
-import { AdSlot } from "../ads/AdSlot";
 import { trackEvent } from "../lib/analytics";
 
 type LandingPageProps = {
@@ -22,6 +21,7 @@ type LandingPageProps = {
   googleReady?: boolean;
   loginPending?: boolean;
   authError?: string | null;
+  adSlot?: ReactNode;
 };
 
 export function LandingPage({
@@ -31,6 +31,7 @@ export function LandingPage({
   googleReady,
   loginPending,
   authError,
+  adSlot,
 }: LandingPageProps) {
   useEffect(() => {
     trackEvent("view_landing", { source: "login_page" });
@@ -79,7 +80,7 @@ export function LandingPage({
               Compras organizadas
             </span>
             <h1 className="mt-5 max-w-2xl text-5xl font-black leading-[1.04] tracking-normal text-ink sm:text-6xl">
-              Sua lista, seu carrinho e seus preços no mesmo fluxo.
+              Sua lista de compras, seu carrinho e seus preços no mesmo lugar.
             </h1>
             <p className="mt-5 max-w-xl text-base leading-7 text-ink/65 sm:text-lg">
               Organize listas de mercado, abra o carrinho rapidamente e
@@ -140,12 +141,20 @@ export function LandingPage({
         </div>
       </section>
 
-      <AdSlot
-        slot="landing_inline"
-        hasContent={true}
-        disabled={loginPending || Boolean(authError)}
-        className="mx-5 mb-8 sm:mx-8 lg:mx-auto lg:max-w-7xl"
-      />
+      {adSlot}
+
+      <section className="mx-auto w-full max-w-7xl px-5 pb-10 sm:px-8 lg:px-10">
+        <h2 className="text-2xl font-black text-ink">Lista de compras compartilhada para o supermercado</h2>
+        <p className="mt-3 max-w-3xl text-base leading-7 text-ink/65">
+          Com o Gondly, você organiza os produtos que faltam em casa, compartilha a lista
+          com outras pessoas e acompanha a compra em conjunto. Registre os preços pagos
+          para consultar seu histórico e comparar mercados nas próximas compras.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-5 text-sm font-bold text-mint">
+          <a href="/guias/lista-de-compras">Como organizar sua lista de compras</a>
+          <a href="/guias/comparar-precos">Como comparar preços no supermercado</a>
+        </div>
+      </section>
 
       <section className="mx-auto grid w-full max-w-7xl gap-3 px-5 pb-10 sm:px-8 md:grid-cols-4 lg:px-10">
         <LandingFeature

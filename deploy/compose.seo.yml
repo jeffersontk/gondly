@@ -1,0 +1,7 @@
+# Overlay for the existing VPS compose files. Only overrides the web build.
+services:
+  web:
+    build:
+      context: ${GONDLY_REPO_DIR:-/opt/gondly/monorepo}
+      dockerfile: deploy/Dockerfile.web
+      target: web

@@ -69,3 +69,9 @@ test("offline article does not fall back to home or another article", async () =
   assert.equal(r.status, 503);
   assert.ok(!w.matches.includes("/"));
 });
+
+test("offline app uses its own shell instead of the prerendered landing", async () => {
+  const w = worker({ offline: true });
+  await w.navigate("/app/lists");
+  assert.deepEqual(w.matches, ["/app-shell.html"]);
+});

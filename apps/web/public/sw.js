@@ -1,5 +1,5 @@
 const CACHE_NAME = "gondly-cache-v5";
-const APP_SHELL = ["/index.html", "/manifest.webmanifest", "/icons/gondly-icon-192x192.png", "/icons/apple-touch-icon.png", "/gondly-logo-small.webp"];
+const APP_SHELL = ["/app-shell.html", "/manifest.webmanifest", "/icons/gondly-icon-192x192.png", "/icons/apple-touch-icon.png", "/gondly-logo-small.webp"];
 const STATIC_PUBLIC_ASSETS = new Set([
   "/manifest.webmanifest",
   "/gondly-logo-small.webp",
@@ -80,7 +80,7 @@ async function networkFirstNavigation(request) {
     }
     return response;
   } catch {
-    const cached = editorial ? await caches.match(url.href) : await caches.match("/index.html");
+    const cached = editorial ? await caches.match(url.href) : await caches.match("/app-shell.html");
     return cached || new Response('<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Sem conexão | Gondly</title><h1>Você está sem conexão</h1><p>Esta página ainda não está disponível offline. Reconecte e tente novamente.</p></html>', {status:503, headers:{"Content-Type":"text/html; charset=utf-8"}});
   }
 }
