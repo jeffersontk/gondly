@@ -27,6 +27,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build --workspace @gondly/web
+      - run: npm run test:editorial --workspace @gondly/web
 
   e2e:
     name: Shared purchase e2e (API + realtime + Postgres)

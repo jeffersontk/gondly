@@ -34,6 +34,10 @@ bash "$script" all > "$tmp/output" 2>&1
 grep -q 'build api web$' "$DEPLOY_TEST_LOG"
 bash "$script" web > "$tmp/output" 2>&1
 grep -q 'build web$' "$DEPLOY_TEST_LOG"
+mkdir -p "$tmp/repo/deploy"
+touch "$tmp/repo/deploy/compose.seo.yml"
+bash "$script" web > "$tmp/output" 2>&1
+grep -q 'deploy/compose.seo.yml build web$' "$DEPLOY_TEST_LOG"
 
 for failure in TEST_DIRTY TEST_MERGE_FAIL TEST_BUILD_FAIL TEST_HEALTH_FAIL; do
   : > "$DEPLOY_TEST_LOG"

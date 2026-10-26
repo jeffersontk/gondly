@@ -23,13 +23,63 @@ bash scripts/update-vps.sh all
 ```
 
 Usa `/opt/gondly/production/compose.yml` e `compose.apps.yml`, com o projeto
-`gondly-prod`. Requer Bash, Git, flock e Docker Compose com suporte a `up --wait`.
+`gondly-prod`. Quando presente, inclui tambem `deploy/compose.seo.yml` do repositorio:
+esse overlay faz o frontend usar `deploy/Dockerfile.web` e `deploy/nginx.public.conf`.
+Assim, as regras das paginas publicas acompanham o codigo sem editar o Dockerfile
+externo da VPS. O build da API e as configuracoes de ambiente existentes sao preservados.
+Requer Bash, Git, flock e Docker Compose com suporte a `up --wait`.
 Nao altera arquivos `.env` nem executa migrations: entregas com mudancas de banco
 exigem aplicar as migrations conforme as instrucoes da entrega antes do reinicio.
 
 Na primeira utilizacao, baixe o script com `git pull --ff-only` dentro do repositorio.
 Depois disso, basta executar o script. Para verificar seu fluxo sem acessar a VPS:
 `bash scripts/test-update-vps.sh` (usa comandos simulados).
+
+### Publicar os ajustes de SEO
+
+A primeira publicacao desta entrega exige atualizar o frontend. Na VPS, depois de
+integrar a branch `feat/seo-google` na branch de producao (ou seleciona-la explicitamente):
+
+```bash
+cd /opt/gondly/monorepo
+git pull --ff-only
+bash scripts/update-vps.sh web
+```
+
+O `git pull` inicial carrega a nova versao do script com suporte ao overlay.
+Use `all` quando tambem precisar atualizar a API. O script usa a branch atual;
+confira `git branch --show-current` antes de executar.
+
+Confira depois do deploy:
+
+```bash
+curl -s https://gondly.com.br/ | grep -E '<title>|canonical|application/ld\+json|<h1'
+curl -I https://gondly.com.br/uma-pagina-que-nao-existe
+curl -I https://gondly.com.br/app/home
+curl -s https://gondly.com.br/sitemap.xml
+```
+
+A home deve ter conteudo no HTML; a URL inexistente deve responder 404; `/app/home`
+deve carregar o app com `X-Robots-Tag: noindex, follow`. Confira tambem o login Google,
+os links dos guias e as paginas de contato/termos/privacidade no navegador.
+
+### Google Search Console
+
+1. Acesse https://search.google.com/search-console e adicione a propriedade de dominio
+   `gondly.com.br`, se ainda nao existir.
+2. Adicione no provedor DNS o TXT gerado pelo Google e conclua a verificacao.
+   O valor e especifico da conta; nao existe token padrao no codigo.
+3. Em Sitemaps, envie `https://gondly.com.br/sitemap.xml`.
+4. Na Inspecao de URL, teste `https://gondly.com.br/` ao vivo, confira o HTML renderizado
+   e solicite indexacao. Repita para os dois guias publicos importantes.
+5. Acompanhe as secoes de indexacao e desempenho nas semanas seguintes. Se uma URL
+   nao for indexada, use o motivo informado pelo Google para orientar o proximo ajuste.
+
+Analytics/Tag Manager e AdSense nao substituem o Search Console. Nao ha garantia de
+indexacao nem de posicao ou prazo. A etapa seguinte e publicar conteudo original e
+revisado para os assuntos do produto, sem gerar artigos ou avaliacoes ficticias.
+
+Referencia: https://developers.google.com/search/docs/fundamentals/seo-starter-guide?hl=pt-br
 
 Este monorepo esta preparado para:
 

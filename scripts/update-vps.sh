@@ -47,6 +47,10 @@ git fetch origin
 git merge --ff-only "origin/$branch"
 echo "Commit: $(git rev-parse --short HEAD)"
 
+# The versioned overlay keeps the public Nginx rules in sync with the web build.
+if [[ -f "$REPO_DIR/deploy/compose.seo.yml" ]]; then
+  compose+=(-f "$REPO_DIR/deploy/compose.seo.yml")
+fi
 "${compose[@]}" config --quiet
 echo "Construindo: ${services[*]}..."
 "${compose[@]}" build "${services[@]}"

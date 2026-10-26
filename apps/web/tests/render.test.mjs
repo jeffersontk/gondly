@@ -25,7 +25,7 @@ test("published article renders full content and editorial metadata without auth
   const server = await createServer({
     root,
     configFile: path.join(root, "vite.config.ts"),
-    server: { middlewareMode: true, hmr: false },
+    server: { middlewareMode: true, hmr: false, ws: false },
     appType: "custom",
   });
   try {

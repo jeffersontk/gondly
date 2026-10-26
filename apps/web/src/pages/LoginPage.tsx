@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ApiError, isNetworkFailure } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { LandingPage } from "./LandingPage";
+import { AdSlot } from "../ads/AdSlot";
 
 const HOME_ROUTE = "/app/home";
 const GOOGLE_SCRIPT_ID = "google-identity-services";
@@ -173,6 +174,7 @@ export function LoginPage() {
       googleReady={googleReady}
       loginPending={loginPending}
       authError={loginError ?? googleScriptError}
+      adSlot={<AdSlot slot="landing_inline" hasContent={true} disabled={loginPending || Boolean(loginError ?? googleScriptError)} className="mx-5 mb-8 sm:mx-8 lg:mx-auto lg:max-w-7xl" />}
     />
   );
 }
