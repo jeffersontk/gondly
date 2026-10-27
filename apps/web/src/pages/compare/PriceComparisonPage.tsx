@@ -41,6 +41,7 @@ import { ComparisonCategoryFilter, ComparisonResultsCount, PriceVariationBadge }
 
 import { comparisonRegionParams, locateComparisonRegion, type ComparisonLocation, type LocatedComparisonRegion } from "./comparisonLocation";
 import { reverseGeocodeForComparison } from "./browserGeocoding";
+import { NeighborhoodSelect } from "./NeighborhoodSelect";
 
 type TabKey = "mine" | "region" | "basket";
 type CardData = { kind: "mine"; item: PriceComparison } | { kind: "region"; item: PriceLibraryItem };
@@ -322,9 +323,9 @@ export function PriceComparisonPage() {
           periodDays={periodDays}
           onPeriodDays={setPeriodDays}
           city={city}
-          onCity={value => { setCity(value); setLocation(null); }}
+          onCity={value => { setCity(value); setNeighborhood(""); setLocation(null); }}
           state={state}
-          onState={value => { setState(value); setLocation(null); }}
+          onState={value => { setState(value); setNeighborhood(""); setLocation(null); }}
           neighborhood={neighborhood}
           onNeighborhood={value => { setNeighborhood(value); setLocation(null); }}
           location={location}
@@ -540,7 +541,7 @@ function FiltersSheet({
             <AppInput label="Cidade" value={city} onChange={(event) => onCity(event.target.value)} placeholder="Ex.: Barra Mansa" />
             <AppInput label="UF" maxLength={2} value={state} onChange={(event) => onState(event.target.value.toUpperCase())} placeholder="RJ" />
           </div>
-          <AppInput label="Bairro" value={neighborhood} onChange={(event) => onNeighborhood(event.target.value)} placeholder="Opcional" />
+          <NeighborhoodSelect key={`${city}:${state}`} markets={markets} city={city} state={state} value={neighborhood} onChange={onNeighborhood} usingGps={Boolean(location)} />
           <div>
             <span className="mb-1.5 block text-sm font-semibold text-ink">Raio</span>
             <div className="grid grid-cols-3 gap-2">
