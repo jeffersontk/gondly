@@ -61,3 +61,21 @@ export class CreateMarketDto {
 }
 
 export class UpdateMarketDto extends PartialType(CreateMarketDto) {}
+
+export class NearbyMarketQueryDto {
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitude!: number;
+
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitude!: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.5)
+  @Max(5)
+  radiusKm?: number;
+}

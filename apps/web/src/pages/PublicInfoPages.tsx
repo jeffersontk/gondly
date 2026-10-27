@@ -48,6 +48,14 @@ export function PrivacyPage() {
           geolocalização por IP.
         </p>
         <p>
+          Ao buscar mercados próximos, uma posição aproximada é consultada pela
+          nossa API na instância Overpass da Private.coffee, para obter lojas do
+          OpenStreetMap. Não enviamos nome, e-mail ou dados da sua compra ao provedor.
+          A localização da loja só é vinculada ao cadastro após sua confirmação.
+          Consulte as{" "}
+          <a href="https://overpass.private.coffee/" target="_blank" rel="noreferrer" className="underline">informações de privacidade do serviço de mapas</a>.
+        </p>
+        <p>
           Essa consulta não é iniciada automaticamente ao abrir a tela. Você pode
           usar cidade e bairro preenchidos manualmente. Consulte a{" "}
           <a href="https://www.bigdatacloud.com/privacy-policy" target="_blank" rel="noreferrer" className="underline">política de privacidade da BigDataCloud</a>

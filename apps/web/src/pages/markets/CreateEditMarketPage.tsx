@@ -8,6 +8,8 @@ import { api } from "../../lib/api";
 import type { Market } from "../../types";
 import { MarketForm, marketSchema } from "../shared";
 import { updateMarketCaches } from "../../lib/marketCache";
+import { NearbyMarketSearch } from "./NearbyMarketSearch";
+import { marketPlacePayload } from "./nearbyMarketMatching";
 
 export function CreateEditMarketPage() {
   const { id } = useParams();
@@ -33,6 +35,7 @@ export function CreateEditMarketPage() {
         notes: market.data.notes ?? "",
         latitude: market.data.latitude ?? undefined,
         longitude: market.data.longitude ?? undefined,
+        placeId: market.data.placeId ?? undefined,
       });
     }
   }, [market.data, form]);
@@ -50,6 +53,7 @@ export function CreateEditMarketPage() {
 
   return (
     <ScreenContainer title={isEdit ? "Editar mercado" : "Novo mercado"}>
+      <NearbyMarketSearch onSelect={place => form.reset({ ...form.getValues(), ...marketPlacePayload(place) })} />
       <form className="space-y-3" onSubmit={form.handleSubmit((values) => save.mutate(values))}>
         <AppInput label="Nome" error={form.formState.errors.name?.message} {...form.register("name")} />
         <AppInput label="Cidade" {...form.register("city")} />

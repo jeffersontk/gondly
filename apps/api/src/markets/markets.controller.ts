@@ -3,7 +3,8 @@ import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import type { JwtUser } from "../common/auth.types";
-import { CreateMarketDto, UpdateMarketDto } from "./dto";
+import { CreateMarketDto, NearbyMarketQueryDto, UpdateMarketDto } from "./dto";
+import { MarketDiscoveryService } from "./market-discovery.service";
 import { MarketsService } from "./markets.service";
 
 @ApiTags("Markets")
@@ -11,7 +12,7 @@ import { MarketsService } from "./markets.service";
 @UseGuards(JwtAuthGuard)
 @Controller("markets")
 export class MarketsController {
-  constructor(private readonly marketsService: MarketsService) {}
+  constructor(private readonly marketsService: MarketsService, private readonly discovery: MarketDiscoveryService) {}
 
   @Get()
   list(@CurrentUser() user: JwtUser) {
@@ -21,6 +22,11 @@ export class MarketsController {
   @Get("nearby")
   nearby(@CurrentUser() user: JwtUser, @Query("latitude") latitude?: string, @Query("longitude") longitude?: string) {
     return this.marketsService.nearby(user.id, latitude, longitude);
+  }
+
+  @Get("discover")
+  discover(@Query() query: NearbyMarketQueryDto) {
+    return this.discovery.discover(query);
   }
 
   @Post()

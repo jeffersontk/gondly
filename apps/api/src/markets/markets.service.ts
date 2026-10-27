@@ -17,7 +17,11 @@ export class MarketsService {
     });
   }
 
-  create(userId: string, dto: CreateMarketDto) {
+  async create(userId: string, dto: CreateMarketDto) {
+    if (dto.placeId?.startsWith("osm:")) {
+      const existing = await this.prisma.market.findFirst({ where: { placeId: dto.placeId, createdByUserId: userId, deletedAt: null } });
+      if (existing) return existing;
+    }
     return this.prisma.market.create({
       data: {
         ...marketLocationData(dto, { defaultCountry: true }),

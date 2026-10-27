@@ -11,7 +11,9 @@ import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { useOutboxStatus } from "../../lib/offlineQueue";
 import { invalidatePurchaseReports } from "../../lib/purchaseReportCache";
-import type { Market, MarketList, PriceSharingPreference, Purchase } from "../../types";
+import { updateMarketCaches } from "../../lib/marketCache";
+import { marketPlacePayload, matchNearbyMarket } from "../markets/nearbyMarketMatching";
+import type { Market, MarketList, NearbyMarketPlace, PriceSharingPreference, Purchase } from "../../types";
 import { decimalValue, finishSchema, FinishForm, formatBRL, MarketForm, marketSchema, removeActivePurchaseCache } from "../shared";
 
 type GeoFeedback = {
@@ -28,8 +30,10 @@ export function FinishPurchasePage() {
   const [showCreateMarket, setShowCreateMarket] = useState(false);
   const [geoPending, setGeoPending] = useState(false);
   const [geoFeedback, setGeoFeedback] = useState<GeoFeedback | null>(null);
+  const [nearbyPlaces, setNearbyPlaces] = useState<NearbyMarketPlace[]>([]);
   const [createMissingList, setCreateMissingList] = useState(false);
   const { user } = useAuth();
+  const markets = useQuery({ queryKey: ["markets"], queryFn: () => api<Market[]>("/markets") });
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   const priceSharingPreference = useQuery({
     queryKey: ["price-sharing-preference"],
@@ -84,13 +88,21 @@ export function FinishPurchasePage() {
       setShowCreateMarket(false);
     },
   });
-  const updateMarketLocation = useMutation({
-    mutationFn: ({ marketId, latitude, longitude }: { marketId: string; latitude: number; longitude: number }) =>
-      api<Market>(`/markets/${marketId}`, { method: "PATCH", body: { latitude, longitude } }),
-    onSuccess: (market) => {
-      queryClient.setQueryData<Market[]>(["markets"], (current) => (current ? [market, ...current.filter((entry) => entry.id !== market.id)] : [market]));
-      queryClient.setQueryData<Market>(["market", market.id], market);
+  const chooseNearbyMarket = useMutation({
+    mutationFn: async (place: NearbyMarketPlace) => {
+      const existing = matchNearbyMarket(markets.data ?? [], place, form.getValues("marketId"), user?.id ?? "");
+      if (existing?.placeId === place.placeId) return existing;
+      if (existing && existing.createdByUserId !== user?.id) return existing;
+      return api<Market>(existing ? `/markets/${existing.id}` : "/markets", { method: existing ? "PATCH" : "POST", body: marketPlacePayload(place) });
     },
+    onSuccess: market => {
+      void updateMarketCaches(queryClient, market);
+      form.setValue("marketId", market.id, { shouldValidate: true });
+      setNearbyPlaces([]);
+      setShowCreateMarket(false);
+      setGeoFeedback({ tone: "success", message: `Mercado confirmado: ${market.name}. A localização salva é a da loja.` });
+    },
+    onError: () => setGeoFeedback({ tone: "error", message: "Não foi possível selecionar o mercado. Tente novamente ou cadastre manualmente." }),
   });
 
   async function handleUseCurrentLocation() {
@@ -101,21 +113,14 @@ export function FinishPurchasePage() {
 
     setGeoPending(true);
     setGeoFeedback(null);
+    setNearbyPlaces([]);
     try {
       const coords = await getCurrentCoordinates();
-      marketForm.setValue("latitude", coords.latitude, { shouldDirty: true });
-      marketForm.setValue("longitude", coords.longitude, { shouldDirty: true });
-
-      const marketId = form.getValues("marketId");
-      if (marketId) {
-        await updateMarketLocation.mutateAsync({ marketId, latitude: coords.latitude, longitude: coords.longitude });
-        setGeoFeedback({ tone: "success", message: "Localizacao adicionada ao mercado selecionado." });
-      } else {
-        setShowCreateMarket(true);
-        setGeoFeedback({ tone: "success", message: "Localizacao capturada. Cadastre o mercado para salvar esses dados." });
-      }
+      const places = await api<NearbyMarketPlace[]>(`/markets/discover?${new URLSearchParams({ latitude: String(coords.latitude), longitude: String(coords.longitude), radiusKm: "3" })}`, { timeoutMs: 10_000 });
+      setNearbyPlaces(places);
+      setGeoFeedback({ tone: "info", message: places.length ? "Confirme em qual loja você comprou. A proximidade não seleciona o mercado automaticamente." : "Não encontramos lojas mapeadas em até 3 km. Você pode escolher ou cadastrar um mercado manualmente." });
     } catch {
-      setGeoFeedback({ tone: "info", message: "Localizacao nao autorizada. Voce pode finalizar a compra normalmente." });
+      setGeoFeedback({ tone: "info", message: "Não foi possível buscar lojas próximas. Confira a permissão de localização e tente novamente, ou escolha/cadastre o mercado manualmente." });
     } finally {
       setGeoPending(false);
     }
@@ -209,7 +214,7 @@ export function FinishPurchasePage() {
         />
         <div className="rounded-xl border border-line bg-white p-3 shadow-sm">
           <p className="text-sm font-semibold leading-5 text-ink/65">
-            Usar sua localização ajuda o Gondly a comparar preços da sua região.
+            Encontre mercados em até 3 km e confirme a loja onde comprou, sem precisar digitar o endereço.
           </p>
           <AppButton
             className="mt-3"
@@ -218,11 +223,25 @@ export function FinishPurchasePage() {
             variant="secondary"
             icon={<MapPin className="h-4 w-4" />}
             onClick={handleUseCurrentLocation}
-            loading={geoPending || updateMarketLocation.isPending}
-            loadingLabel="Capturando"
+            loading={geoPending}
+            disabled={chooseNearbyMarket.isPending}
+            loadingLabel="Buscando mercados"
           >
-            Usar minha localização atual
+            Encontrar mercados próximos
           </AppButton>
+          <p className="mt-2 text-xs leading-5 text-ink/55">Ao buscar, uma posição aproximada é consultada no serviço de mapas. Dados © <a className="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>. A cobertura e os endereços podem estar incompletos.</p>
+          {nearbyPlaces.length ? <div className="mt-3 space-y-2">
+            {nearbyPlaces.map(place => {
+              const existing = matchNearbyMarket(markets.data ?? [], place, form.watch("marketId"), user?.id ?? "");
+              return <div key={place.placeId} className="rounded-xl border border-line p-3">
+                <p className="text-sm font-bold text-ink">{place.name} · {place.distanceKm < 1 ? `${Math.round(place.distanceKm * 1000)} m` : `${place.distanceKm.toFixed(1)} km`}</p>
+                <p className="mt-1 text-xs text-ink/60">{[place.address, place.neighborhood, place.city].filter(Boolean).join(" · ") || "Endereço não informado no mapa"}</p>
+                <AppButton type="button" variant="secondary" full className="mt-2" disabled={chooseNearbyMarket.isPending} onClick={() => chooseNearbyMarket.mutate(place)}>
+                  {existing && existing.placeId !== place.placeId && existing.createdByUserId === user?.id ? `Vincular a ${existing.name}` : "Confirmar esta loja"}
+                </AppButton>
+              </div>;
+            })}
+          </div> : null}
         </div>
         {geoFeedback ? <ItemFeedback tone={geoFeedback.tone} message={geoFeedback.message} /> : null}
         {showCreateMarket ? (
@@ -283,7 +302,7 @@ export function FinishPurchasePage() {
           <p className={difference >= 0 ? "text-lg font-black text-mint" : "text-lg font-black text-tomato"}>{formatBRL(difference)}</p>
           {difference < 0 ? <p className="mt-1 text-xs text-tomato">Diferenca positiva, talvez algum item nao tenha sido lancado.</p> : null}
         </div>
-        <AppButton type="submit" full loading={finish.isPending} loadingLabel="Salvando" disabled={outbox.pendingCount > 0}>
+        <AppButton type="submit" full loading={finish.isPending} loadingLabel="Salvando" disabled={outbox.pendingCount > 0 || geoPending || chooseNearbyMarket.isPending}>
           Salvar compra
         </AppButton>
       </form>
@@ -296,7 +315,7 @@ function getCurrentCoordinates() {
     navigator.geolocation.getCurrentPosition(
       (position) => resolve({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
       reject,
-      { enableHighAccuracy: false, maximumAge: 5 * 60_000, timeout: 10_000 },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15_000 },
     );
   });
 }

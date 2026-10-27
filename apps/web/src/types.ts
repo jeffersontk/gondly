@@ -88,6 +88,13 @@ export type Market = {
   updatedAt: string;
 };
 
+export type NearbyMarketPlace = Pick<Market, "name" | "address" | "neighborhood" | "city" | "state" | "country" | "postalCode"> & {
+  placeId: string;
+  latitude: number;
+  longitude: number;
+  distanceKm: number;
+};
+
 export type Brand = {
   id: string;
   name: string;
