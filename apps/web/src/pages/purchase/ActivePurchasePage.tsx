@@ -9,10 +9,10 @@ import { enablePushNotifications } from "../../lib/push";
 import { trackEvent, trackSafeSearch } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
-import { getListLastMessageReadAt, setListLastMessageReadAt } from "../../lib/listActivity";
 import { discardQueuedPurchaseChanges, useOutboxStatus } from "../../lib/offlineQueue";
 import { ListChatDrawer } from "../lists/ListChatDrawer";
 import { useListChat } from "../lists/useListChat";
+import { ChatMessageNotice, ChatUnreadBadge } from "../lists/ChatMessageNotice";
 import { usePurchaseRealtime } from "./usePurchaseRealtime";
 import type { Purchase, PurchaseItem } from "../../types";
 import {
@@ -38,7 +38,6 @@ export function ActivePurchasePage() {
   const [showStickySummary, setShowStickySummary] = useState(false);
   const [expandedPurchaseCategories, setExpandedPurchaseCategories] = useState<Set<string>>(() => new Set());
   const [chatOpen, setChatOpen] = useState(false);
-  const [chatUnread, setChatUnread] = useState(false);
   const debouncedPurchaseSearch = useDebouncedValue(purchaseSearch);
   const totalCardRef = useRef<HTMLDivElement | null>(null);
   const purchaseId = routeParams.purchaseId ?? params.get("purchaseId");
@@ -46,7 +45,7 @@ export function ActivePurchasePage() {
   const purchase = useMemo(() => active.data?.find((entry) => entry.id === purchaseId) ?? active.data?.[0], [active.data, purchaseId]);
   const sourceListId = purchase?.sourceListId ?? undefined;
   const { socket: realtimeSocket, notice: realtimeNotice, endedNotice } = usePurchaseRealtime(purchase?.id, sourceListId);
-  const chat = useListChat(sourceListId, realtimeSocket);
+  const chat = useListChat(sourceListId, realtimeSocket, { currentUserId: user?.id, open: chatOpen });
   const outbox = useOutboxStatus(purchase?.id);
   const participantNames = useMemo(
     () => new Map((purchase?.participants ?? []).flatMap((participant) => (participant.user ? [[participant.userId, firstName(participant.user.name)] as const] : []))),
@@ -106,19 +105,6 @@ export function ActivePurchasePage() {
   useEffect(() => {
     trackSafeSearch("purchase", debouncedPurchaseSearch);
   }, [debouncedPurchaseSearch]);
-
-  useEffect(() => {
-    if (!sourceListId) return;
-    if (chatOpen) {
-      setChatUnread(false);
-      setListLastMessageReadAt(sourceListId);
-      return;
-    }
-
-    const lastMessage = chat.messages[chat.messages.length - 1];
-    if (!lastMessage) return;
-    setChatUnread(Date.parse(lastMessage.createdAt) > getListLastMessageReadAt(sourceListId));
-  }, [sourceListId, chatOpen, chat.messages]);
 
   useEffect(() => {
     const node = totalCardRef.current;
@@ -182,10 +168,10 @@ export function ActivePurchasePage() {
               type="button"
               className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-white text-ink shadow-sm transition hover:border-mint/30"
               onClick={() => setChatOpen(true)}
-              aria-label="Abrir mensagens da lista"
+              aria-label={`Abrir mensagens da lista${chat.unreadCount ? `, ${chat.unreadCount} não lidas` : ""}`}
             >
               <MessageCircle className="h-4 w-4" />
-              {chatUnread ? <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-tomato" /> : null}
+              <ChatUnreadBadge count={chat.unreadCount} />
             </button>
           ) : null}
           <button
@@ -417,6 +403,7 @@ export function ActivePurchasePage() {
         confirmLoading={cancel.isPending}
       />
 
+      <ChatMessageNotice message={chat.notice} count={chat.unreadCount} onOpen={() => setChatOpen(true)} onDismiss={chat.dismissNotice} soundEnabled={chat.soundEnabled} onToggleSound={chat.toggleSound} />
       <ListChatDrawer
         open={chatOpen}
         messages={chat.messages}
@@ -424,6 +411,8 @@ export function ActivePurchasePage() {
         sending={chat.sending}
         onClose={() => setChatOpen(false)}
         onSend={chat.send}
+        soundEnabled={chat.soundEnabled}
+        onToggleSound={chat.toggleSound}
       />
     </ScreenContainer>
   );

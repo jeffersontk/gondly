@@ -4,6 +4,19 @@ import { NotFoundException } from "@nestjs/common";
 import { ListsService } from "../src/lists/lists.service";
 
 describe("shared list messages", () => {
+  it("recovers the latest 50 messages in chronological order in long conversations", async () => {
+    const history = Array.from({ length: 60 }, (_, index) => ({ id: `message-${index + 1}`, createdAt: new Date(index * 1000) }));
+    const service = new ListsService({
+      marketList: { findFirst: async () => ({ id: "list-1" }) },
+      listMessage: { findMany: async ({ orderBy, take }: { orderBy: { createdAt: string }; take: number }) =>
+        [...history].sort((a, b) => (orderBy.createdAt === "desc" ? -1 : 1) * (a.createdAt.getTime() - b.createdAt.getTime())).slice(0, take) },
+    } as never, {} as never, {} as never);
+    const recovered = await service.listMessages("guest-1", "list-1");
+    assert.equal(recovered.length, 50);
+    assert.equal(recovered[0].id, "message-11");
+    assert.equal(recovered[49].id, "message-60");
+  });
+
   it("lets an accepted member send and read messages, and emits the realtime event", async () => {
     const createdMessages: Array<{ id: string; listId: string; userId: string; body: string; createdAt: Date }> = [];
     const emittedEvents: string[] = [];

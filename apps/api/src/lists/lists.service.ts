@@ -474,12 +474,13 @@ export class ListsService {
 
   async listMessages(userId: string, listId: string, limit = 50) {
     await this.assertListMembership(userId, listId);
-    return this.prisma.listMessage.findMany({
+    const messages = await this.prisma.listMessage.findMany({
       where: { listId },
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: "desc" },
       take: limit,
       include: { user: { select: { id: true, name: true, photoUrl: true } } },
     });
+    return messages.reverse();
   }
 
   async addMessage(userId: string, listId: string, body: string) {

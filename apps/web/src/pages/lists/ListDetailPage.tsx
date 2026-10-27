@@ -8,7 +8,7 @@ import { AppButton, ConfirmDialog, EmptyState, ErrorState, ListItemRow, LoadingS
 import { trackEvent, trackSafeSearch } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
-import { getListLastMessageReadAt, setListLastMessageReadAt, setListLastViewedAt } from "../../lib/listActivity";
+import { setListLastViewedAt } from "../../lib/listActivity";
 import type { ParsedShoppingList } from "../../lib/listImport";
 import { discardQueuedPurchaseChanges } from "../../lib/offlineQueue";
 import { createRealtimeSocket } from "../../lib/realtime";
@@ -42,6 +42,7 @@ import { ListFiltersDrawer } from "./ListFiltersDrawer";
 import { ListSharingPanel } from "./SharedListMembers";
 import { useListChat } from "./useListChat";
 import { ListPurchaseOptions } from "./ListPurchaseOptions";
+import { ChatMessageNotice, ChatUnreadBadge } from "./ChatMessageNotice";
 
 const ListImportPanel = lazy(() =>
   import("./ListImportPanel").then((module) => ({
@@ -71,13 +72,12 @@ export function ListDetailPage() {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(() => new Set());
   const [replacePurchaseOpen, setReplacePurchaseOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [chatUnread, setChatUnread] = useState(false);
   const [realtimeSocket, setRealtimeSocket] = useState<Socket | undefined>(undefined);
   const debouncedItemSearch = useDebouncedValue(itemSearch);
   const listRealtimeNoticeTimeoutRef = useRef<number | undefined>(undefined);
   const realtimeStateRef = useRef(createRealtimeApplyState());
   const list = useQuery({ queryKey: ["list", id], queryFn: () => api<MarketList>(`/lists/${id}`), enabled: Boolean(id) });
-  const chat = useListChat(id, realtimeSocket);
+  const chat = useListChat(id, realtimeSocket, { currentUserId: user?.id, open: chatOpen });
   const activePurchases = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   // Only the user's own purchase can be replaced; a purchase someone else opened for this list is joined instead.
   const activePurchase = activePurchases.data?.find((purchase) => !purchase.userId || purchase.userId === user?.id);
@@ -355,19 +355,6 @@ export function ListDetailPage() {
     setListLastViewedAt(id);
   }, [id, list.data]);
 
-  useEffect(() => {
-    if (!id) return;
-    if (chatOpen) {
-      setChatUnread(false);
-      setListLastMessageReadAt(id);
-      return;
-    }
-
-    const lastMessage = chat.messages[chat.messages.length - 1];
-    if (!lastMessage) return;
-    setChatUnread(Date.parse(lastMessage.createdAt) > getListLastMessageReadAt(id));
-  }, [id, chatOpen, chat.messages]);
-
   if (list.isLoading) return <LoadingState />;
   if (list.isError || !list.data) return <ScreenContainer title="Lista"><ErrorState /></ScreenContainer>;
 
@@ -429,9 +416,9 @@ export function ListDetailPage() {
         <AppButton icon={<ShoppingCart className="h-5 w-5" />} onClick={handleStartPurchaseFromList} loading={start.isPending} loadingLabel="Iniciando">
           {listPurchase ? (listPurchase.userId && listPurchase.userId !== user?.id ? "Entrar na compra" : "Continuar compra") : "Comprar"}
         </AppButton>
-        <AppButton className="relative w-14 px-0" variant="secondary" icon={<MessageCircle className="h-5 w-5" />} onClick={() => setChatOpen(true)} aria-label="Abrir mensagens da lista">
+        <AppButton className="relative w-14 px-0" variant="secondary" icon={<MessageCircle className="h-5 w-5" />} onClick={() => setChatOpen(true)} aria-label={`Abrir mensagens da lista${chat.unreadCount ? `, ${chat.unreadCount} não lidas` : ""}`}>
           <span className="sr-only">Mensagens</span>
-          {chatUnread ? <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-tomato" /> : null}
+          <ChatUnreadBadge count={chat.unreadCount} />
         </AppButton>
         <AppButton className="w-14 px-0" variant="secondary" icon={<Menu className="h-5 w-5" />} onClick={() => setActionsOpen(true)} aria-label="Abrir ações da lista">
           <span className="sr-only">Ações</span>
@@ -498,6 +485,7 @@ export function ListDetailPage() {
         }}
       />
 
+      <ChatMessageNotice message={chat.notice} count={chat.unreadCount} onOpen={() => setChatOpen(true)} onDismiss={chat.dismissNotice} soundEnabled={chat.soundEnabled} onToggleSound={chat.toggleSound} />
       <ListChatDrawer
         open={chatOpen}
         messages={chat.messages}
@@ -505,6 +493,8 @@ export function ListDetailPage() {
         sending={chat.sending}
         onClose={() => setChatOpen(false)}
         onSend={chat.send}
+        soundEnabled={chat.soundEnabled}
+        onToggleSound={chat.toggleSound}
       />
 
       {showShare && isOwner ? (
