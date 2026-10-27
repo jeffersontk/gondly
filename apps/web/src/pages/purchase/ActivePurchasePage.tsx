@@ -39,7 +39,7 @@ export function ActivePurchasePage() {
   const [expandedPurchaseCategories, setExpandedPurchaseCategories] = useState<Set<string>>(() => new Set());
   const [chatOpen, setChatOpen] = useState(false);
   const debouncedPurchaseSearch = useDebouncedValue(purchaseSearch);
-  const totalCardRef = useRef<HTMLDivElement | null>(null);
+  const headerActionsRef = useRef<HTMLDivElement | null>(null);
   const purchaseId = routeParams.purchaseId ?? params.get("purchaseId");
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   const purchase = useMemo(() => active.data?.find((entry) => entry.id === purchaseId) ?? active.data?.[0], [active.data, purchaseId]);
@@ -107,7 +107,7 @@ export function ActivePurchasePage() {
   }, [debouncedPurchaseSearch]);
 
   useEffect(() => {
-    const node = totalCardRef.current;
+    const node = headerActionsRef.current;
     if (!node || typeof IntersectionObserver === "undefined") return;
 
     const observer = new IntersectionObserver(([entry]) => setShowStickySummary(!entry.isIntersecting), { threshold: 0.15 });
@@ -162,7 +162,7 @@ export function ActivePurchasePage() {
       title={purchaseTitle}
       subtitle={`Compra ativa · ${cartItemsLabel}`}
       headerAction={
-        <div className="flex items-center gap-2">
+        <div ref={headerActionsRef} className="flex items-center gap-2">
           {sourceListId ? (
             <button
               type="button"
@@ -189,11 +189,32 @@ export function ActivePurchasePage() {
         <div className="fixed inset-x-0 top-0 z-40 border-b border-line bg-white/95 pt-[env(safe-area-inset-top)] shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl">
           <div className="mx-auto flex w-full max-w-xl items-center gap-2 px-4 py-2.5">
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-black text-ink">{purchaseTitle}</p>
+              <p className="hidden truncate text-xs font-black text-ink sm:block">{purchaseTitle}</p>
               <p className="mt-0.5 truncate text-[11px] font-semibold text-ink/60">
-                {formatBRL(purchase.subtotalCalculated)} · {cartItemsShortLabel}
+                <span className="block truncate font-black text-ink">{formatBRL(purchase.subtotalCalculated)}</span>
+                <span className="block truncate">{cartItemsShortLabel}</span>
               </p>
             </div>
+            {sourceListId ? (
+              <button
+                type="button"
+                className="relative inline-flex h-10 w-10 flex-none items-center justify-center rounded-xl border border-line bg-white text-ink shadow-sm transition hover:border-mint/30"
+                onClick={() => setChatOpen(true)}
+                aria-label={`Abrir mensagens da lista${chat.unreadCount ? `, ${chat.unreadCount} não lidas` : ""}`}
+              >
+                <MessageCircle className="h-4 w-4" />
+                <ChatUnreadBadge count={chat.unreadCount} />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="inline-flex h-10 flex-none items-center justify-center gap-1 rounded-xl border border-mint/30 bg-white px-2.5 text-xs font-black text-mint shadow-sm transition hover:bg-mint/5"
+              onClick={() => navigate(`/app/purchase/${purchase.id}/item`)}
+              aria-label="Adicionar item ao carrinho"
+            >
+              <Plus className="h-4 w-4" />
+              Item
+            </button>
             <button
               type="button"
               className="inline-flex h-9 flex-none items-center justify-center rounded-xl bg-mint px-3 text-xs font-black text-white shadow-soft transition hover:bg-mint/90 disabled:cursor-not-allowed disabled:opacity-60"
@@ -206,7 +227,7 @@ export function ActivePurchasePage() {
         </div>
       ) : null}
 
-      <div ref={totalCardRef} className="rounded-3xl bg-ink p-4 text-white shadow-[0_18px_46px_rgba(15,23,42,0.18)]">
+      <div className="rounded-3xl bg-ink p-4 text-white shadow-[0_18px_46px_rgba(15,23,42,0.18)]">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[11px] font-black uppercase tracking-[0.12em] text-white/55">Total atual</p>
