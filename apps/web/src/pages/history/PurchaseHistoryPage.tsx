@@ -6,6 +6,7 @@ import { AppButton, ConfirmDialog, DateRangeFilter, EmptyState, LoadingState, Sc
 import { AdSlot } from "../../ads/AdSlot";
 import { trackEvent, trackSafeSearch } from "../../lib/analytics";
 import { api } from "../../lib/api";
+import { invalidatePurchaseReports } from "../../lib/purchaseReportCache";
 import type { Purchase } from "../../types";
 import { formatBRL, useDebouncedValue } from "../shared";
 
@@ -29,6 +30,7 @@ export function PurchaseHistoryPage() {
     mutationFn: (id: string) => api(`/purchases/${id}`, { method: "DELETE" }),
     onSuccess: (_result, id) => {
       queryClient.setQueryData<Purchase[]>(["purchases"], (current) => current?.filter((purchase) => purchase.id !== id));
+      void invalidatePurchaseReports(queryClient);
       trackEvent("delete_purchase_history_item", { purchase_id: id });
       setPurchaseToRemove(null);
     },
@@ -38,6 +40,7 @@ export function PurchaseHistoryPage() {
     mutationFn: () => api("/purchases/history", { method: "DELETE" }),
     onSuccess: () => {
       queryClient.setQueryData<Purchase[]>(["purchases"], (current) => current?.filter((purchase) => purchase.status === "in_progress"));
+      void invalidatePurchaseReports(queryClient);
       trackEvent("clear_purchase_history");
       setClearAllOpen(false);
     },

@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { Socket } from "socket.io-client";
 import { useAuth } from "../../lib/auth";
 import { createRealtimeSocket } from "../../lib/realtime";
+import { invalidatePurchaseReports } from "../../lib/purchaseReportCache";
 import type { Purchase } from "../../types";
 import {
   createRealtimeApplyState,
@@ -92,6 +93,7 @@ export function usePurchaseRealtime(purchaseId: string | undefined, sourceListId
     };
     const handleTotalUpdated = (payload: PurchaseItemRealtimePayload) => {
       if (payload.purchaseId !== purchaseId) return;
+      if (payload.status === "completed") void invalidatePurchaseReports(queryClient);
       if (payload.status && payload.status !== "in_progress" && realtimeActorId(payload) !== user?.id) {
         const actorName = payload.by?.name ?? "Outro participante";
         setEndedNotice(`${actorName} ${payload.status === "completed" ? "finalizou" : "cancelou"} esta compra.`);

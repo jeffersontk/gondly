@@ -4,6 +4,7 @@ import { roundMoney } from "@gondly/utils";
 import { startOfMonth } from "../common/utils/date";
 import { toNumber } from "../common/utils/money";
 import { PrismaService } from "../prisma/prisma.service";
+import { purchaseAccessWhere } from "../purchases/purchase-access";
 import { ReportFiltersDto } from "./dto";
 
 @Injectable()
@@ -311,7 +312,7 @@ export class ReportsService {
   private purchaseWhere(userId: string, filters: ReportFiltersDto = {}): Prisma.PurchaseWhereInput {
     const completedAt = this.dateFilter(filters);
     return {
-      userId,
+      ...purchaseAccessWhere(userId),
       status: "completed",
       deletedAt: null,
       ...(filters.marketId ? { marketId: filters.marketId } : {}),

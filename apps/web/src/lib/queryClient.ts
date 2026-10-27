@@ -1,5 +1,6 @@
 import { QueryClient, dehydrate, hydrate, type DehydratedState, type Query } from "@tanstack/react-query";
 import { queryCacheDelete, queryCacheGet, queryCacheSet } from "./db";
+import { configurePurchaseReportQueries } from "./purchaseReportCache";
 
 const PERSISTED_QUERY_CACHE_KEY = "react-query";
 const PERSISTED_QUERY_CACHE_BUSTER = "gondly-web-query-cache-v1";
@@ -29,6 +30,8 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+configurePurchaseReportQueries(queryClient);
 
 queryClient.setQueryDefaults(["active-purchases"], {
   staleTime: 0,

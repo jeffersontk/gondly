@@ -10,6 +10,7 @@ import { trackEvent } from "../../lib/analytics";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { useOutboxStatus } from "../../lib/offlineQueue";
+import { invalidatePurchaseReports } from "../../lib/purchaseReportCache";
 import type { Market, MarketList, PriceSharingPreference, Purchase } from "../../types";
 import { decimalValue, finishSchema, FinishForm, formatBRL, MarketForm, marketSchema, removeActivePurchaseCache } from "../shared";
 
@@ -56,6 +57,7 @@ export function FinishPurchasePage() {
       }
       queryClient.setQueryData(["purchase", saved.id], saved);
       queryClient.setQueryData<Purchase[]>(["purchases"], (current) => (current ? [saved, ...current.filter((purchase) => purchase.id !== saved.id)] : current));
+      void invalidatePurchaseReports(queryClient);
       queryClient.setQueryData<PriceSharingPreference>(["price-sharing-preference"], (current) =>
         current ? { ...current, sharePrices: values.sharePrices } : current,
       );
