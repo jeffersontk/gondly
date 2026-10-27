@@ -42,6 +42,8 @@ export function AddEditCartItemPage() {
   const active = useQuery({ queryKey: ["active-purchases"], queryFn: () => api<Purchase[]>("/purchases/active") });
   const purchase = active.data?.find((entry) => entry.id === purchaseId);
   const editingItem = purchase?.items.find((item) => item.id === itemId);
+  // Planned list items already have an ID before they are added to the cart.
+  const isEditingCartItem = Number(editingItem?.pricePaid ?? 0) > 0;
   const form = useForm<CartItemForm>({
     resolver: zodResolver(cartItemSchema),
     defaultValues: { productName: "", brand: "", brandId: "", brandNameSnapshot: "", packageSize: undefined, packageUnit: "kg", quantity: 1, unit: "un", priceInputMode: "unit", pricePaid: 0 },
@@ -113,8 +115,8 @@ export function AddEditCartItemPage() {
       void queryClient.invalidateQueries({ queryKey: ["active-purchases"] });
     },
   });
-  const sheetTitle = itemId ? "Editar item" : "Adicionar item";
-  const submitLabel = itemId ? "Atualizar item" : "Adicionar ao carrinho";
+  const sheetTitle = isEditingCartItem ? "Editar item do carrinho" : "Adicionar ao carrinho";
+  const submitLabel = isEditingCartItem ? "Atualizar item" : "Adicionar ao carrinho";
   const closeSheet = () => navigate(purchaseId ? `/app/purchase/${purchaseId}` : "/app/purchase/start");
   const watchedQuantity = decimalValue(form.watch("quantity"), 0);
   const watchedUnitPrice = decimalValue(form.watch("pricePaid"), 0);
@@ -302,7 +304,7 @@ export function AddEditCartItemPage() {
             full
             icon={<ShoppingCart className="h-4 w-4" />}
             loading={save.isPending}
-            loadingLabel={itemId ? "Atualizando item" : "Adicionando ao carrinho"}
+            loadingLabel={isEditingCartItem ? "Atualizando item" : "Adicionando ao carrinho"}
           >
             {submitLabel}
           </AppButton>
