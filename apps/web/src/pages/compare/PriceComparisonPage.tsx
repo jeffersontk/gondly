@@ -40,6 +40,7 @@ import { COMPARISON_PAGE_SIZE, comparisonCategories, filterComparisonProducts, p
 import { ComparisonCategoryFilter, ComparisonResultsCount, PriceVariationBadge } from "./ComparisonControls";
 
 import { comparisonRegionParams, locateComparisonRegion, type ComparisonLocation, type LocatedComparisonRegion } from "./comparisonLocation";
+import { reverseGeocodeForComparison } from "./browserGeocoding";
 
 type TabKey = "mine" | "region" | "basket";
 type CardData = { kind: "mine"; item: PriceComparison } | { kind: "region"; item: PriceLibraryItem };
@@ -581,8 +582,10 @@ function UseMyLocationButton({ onResolve }: { onResolve: (result: LocatedCompari
 
     setStatus("loading");
     try {
-      const result = await locateComparisonRegion(navigator.geolocation, ({ latitude, longitude }) =>
-        api<ReverseGeocodeResult>(`/geocoding/reverse?${new URLSearchParams({ latitude: String(latitude), longitude: String(longitude) })}`),
+      const result = await locateComparisonRegion(navigator.geolocation, location =>
+        reverseGeocodeForComparison(location, ({ latitude, longitude }) =>
+          api<ReverseGeocodeResult>(`/geocoding/reverse?${new URLSearchParams({ latitude: String(latitude), longitude: String(longitude) })}`),
+        ),
       );
       onResolve(result);
       trackEvent("use_my_location", { context: "compare_region_filter" });
@@ -603,6 +606,7 @@ function UseMyLocationButton({ onResolve }: { onResolve: (result: LocatedCompari
         <LocateFixed className="h-4 w-4" />
         {status === "loading" ? "Localizando..." : "Usar minha localização"}
       </button>
+      <p className="mt-1.5 text-xs text-ink/55">Ao usar, suas coordenadas serão consultadas em um serviço de endereços. Se o Google estiver indisponível, usamos a <a href="https://www.bigdatacloud.com/privacy-policy" target="_blank" rel="noreferrer" className="underline">BigDataCloud</a>, que recebe sua posição e IP. Você pode preencher a região manualmente.</p>
       {status === "error" ? (
         <p className="mt-1.5 text-xs font-semibold text-tomato">Não foi possível obter sua localização. Preencha manualmente ou tente novamente.</p>
       ) : null}

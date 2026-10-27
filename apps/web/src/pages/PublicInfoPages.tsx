@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowLeft, FileText, Mail, MessageCircle, ShieldCheck } from "lucide-react";
 
 const CONTACT_EMAIL = "contato@gondly.com.br";
-const UPDATED_AT = "02 de julho de 2026";
+const UPDATED_AT = "27 de outubro de 2026";
 
 export function PrivacyPage() {
   return (
@@ -34,6 +34,24 @@ export function PrivacyPage() {
           Eventos técnicos e de analytics podem ser usados para segurança,
           diagnóstico de erros e entendimento de fluxos do app, sem intenção de
           vender dados pessoais.
+        </p>
+      </InfoSection>
+
+      <InfoSection title="Localização opcional">
+        <p>
+          Ao escolher “Usar minha localização” e autorizar o navegador, usamos suas
+          coordenadas para comparar preços próximos e preencher cidade, UF e bairro.
+          Para identificar a região, as coordenadas são consultadas pelo serviço
+          Google Maps ou, quando indisponível, diretamente na BigDataCloud. Nessa
+          consulta, a BigDataCloud também recebe o endereço IP do dispositivo e
+          informa que usa essas informações de forma agregada para melhorar sua
+          geolocalização por IP.
+        </p>
+        <p>
+          Essa consulta não é iniciada automaticamente ao abrir a tela. Você pode
+          usar cidade e bairro preenchidos manualmente. Consulte a{" "}
+          <a href="https://www.bigdatacloud.com/privacy-policy" target="_blank" rel="noreferrer" className="underline">política de privacidade da BigDataCloud</a>
+          {" "}para conhecer o tratamento realizado pelo provedor.
         </p>
       </InfoSection>
 
