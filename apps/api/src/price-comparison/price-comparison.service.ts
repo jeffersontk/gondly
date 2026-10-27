@@ -42,6 +42,8 @@ type CandidateRecord = Prisma.SharedPriceRecordGetPayload<{
     userId: true;
     marketId: true;
     marketNameSnapshot: true;
+    latitudeApprox: true;
+    longitudeApprox: true;
     pricePaid: true;
     normalizedPrice: true;
     normalizedUnit: true;
@@ -67,6 +69,8 @@ type LibraryRecord = Prisma.SharedPriceRecordGetPayload<{
     packageUnit: true;
     marketId: true;
     marketNameSnapshot: true;
+    latitudeApprox: true;
+    longitudeApprox: true;
     pricePaid: true;
     normalizedPrice: true;
     normalizedUnit: true;
@@ -193,7 +197,7 @@ export class PriceComparisonService {
 
   async priceLibrary(query: PriceLibraryQueryDto) {
     const periodDays = Math.floor(optionalNumber(query.periodDays) ?? 30);
-    const records = await this.prisma.sharedPriceRecord.findMany({
+    const records = await this.radiusCandidates((skip, take) => this.prisma.sharedPriceRecord.findMany({
       where: this.priceLibraryWhere(query, periodDays),
       select: {
         id: true,
@@ -207,6 +211,8 @@ export class PriceComparisonService {
         packageUnit: true,
         marketId: true,
         marketNameSnapshot: true,
+        latitudeApprox: true,
+        longitudeApprox: true,
         pricePaid: true,
         normalizedPrice: true,
         normalizedUnit: true,
@@ -215,9 +221,10 @@ export class PriceComparisonService {
         createdAt: true,
         market: { select: { name: true } },
       },
-      orderBy: { purchasedAt: "desc" },
-      take: 2500,
-    });
+      orderBy: [{ purchasedAt: "desc" }, { id: "desc" }],
+      take,
+      skip,
+    }), query, 2500);
 
     const grouped = new Map<string, LibraryRecord[]>();
     for (const record of records) {
@@ -239,7 +246,7 @@ export class PriceComparisonService {
     const normalizedProductName = normalizeSearchName(query.productName);
     const packageSize = optionalNumber(query.packageSize);
 
-    const records = await this.prisma.sharedPriceRecord.findMany({
+    const records = await this.radiusCandidates((skip, take) => this.prisma.sharedPriceRecord.findMany({
       where: {
         visibility: "shared",
         status: "valid",
@@ -250,14 +257,14 @@ export class PriceComparisonService {
         ...(optionalText(query.brandId) ? { brandId: query.brandId } : {}),
         ...(packageSize !== undefined ? { packageSize } : {}),
         ...(query.packageUnit ? { packageUnit: query.packageUnit } : {}),
-        ...(optionalText(query.city) ? { city: { equals: optionalText(query.city), mode: "insensitive" } } : {}),
-        ...(optionalText(query.state) ? { state: { equals: optionalText(query.state)?.toUpperCase(), mode: "insensitive" } } : {}),
-        ...(optionalText(query.neighborhood) ? { neighborhood: { equals: optionalText(query.neighborhood), mode: "insensitive" } } : {}),
+        ...this.locationWhere({ ...query, periodDays }),
       },
       select: {
         id: true,
         marketId: true,
         marketNameSnapshot: true,
+        latitudeApprox: true,
+        longitudeApprox: true,
         pricePaid: true,
         normalizedPrice: true,
         normalizedUnit: true,
@@ -268,9 +275,10 @@ export class PriceComparisonService {
         neighborhood: true,
         market: { select: { name: true, neighborhood: true, city: true } },
       },
-      orderBy: { purchasedAt: "desc" },
-      take: 500,
-    });
+      orderBy: [{ purchasedAt: "desc" }, { id: "desc" }],
+      take,
+      skip,
+    }), query, 500);
 
     const grouped = new Map<string, typeof records>();
     for (const record of records) {
@@ -334,6 +342,8 @@ export class PriceComparisonService {
       city: optionalText(query.city),
       state: optionalText(query.state)?.toUpperCase(),
       neighborhood: optionalText(query.neighborhood),
+      latitude: optionalNumber(query.latitude),
+      longitude: optionalNumber(query.longitude),
       radiusKm: optionalNumber(query.radiusKm),
       periodDays: Math.floor(optionalNumber(query.periodDays) ?? 30),
     };
@@ -355,7 +365,7 @@ export class PriceComparisonService {
   }
 
   private findCandidates(context: QueryContext, level: ComparisonLevel, exclusions: CandidateExclusions = {}) {
-    return this.prisma.sharedPriceRecord.findMany({
+    return this.radiusCandidates((skip, take) => this.prisma.sharedPriceRecord.findMany({
       where: this.whereForLevel(context, level, exclusions),
       select: {
         id: true,
@@ -363,6 +373,8 @@ export class PriceComparisonService {
         userId: true,
         marketId: true,
         marketNameSnapshot: true,
+        latitudeApprox: true,
+        longitudeApprox: true,
         pricePaid: true,
         normalizedPrice: true,
         normalizedUnit: true,
@@ -371,9 +383,10 @@ export class PriceComparisonService {
         createdAt: true,
         market: { select: { name: true } },
       },
-      orderBy: { purchasedAt: "desc" },
-      take: 500,
-    });
+      orderBy: [{ purchasedAt: "desc" }, { id: "desc" }],
+      take,
+      skip,
+    }), context, 500);
   }
 
   private whereForLevel(context: QueryContext, level: ComparisonLevel, exclusions: CandidateExclusions = {}): Prisma.SharedPriceRecordWhereInput {
@@ -439,12 +452,40 @@ export class PriceComparisonService {
 
   private locationWhere(context: QueryContext): Prisma.SharedPriceRecordWhereInput {
     const radiusWhere = this.radiusWhere(context);
+    if (context.radiusKm && context.latitude !== undefined && context.longitude !== undefined) return radiusWhere;
     return {
       ...(context.city ? { city: { equals: context.city, mode: "insensitive" } } : {}),
       ...(context.state ? { state: { equals: context.state, mode: "insensitive" } } : {}),
       ...(context.neighborhood ? { neighborhood: { equals: context.neighborhood, mode: "insensitive" } } : {}),
       ...radiusWhere,
     };
+  }
+
+  private async radiusCandidates<T extends { latitudeApprox: number | null; longitudeApprox: number | null }>(
+    fetchPage: (skip: number, take: number) => Promise<T[]>,
+    context: { latitude?: number; longitude?: number; radiusKm?: number },
+    limit: number,
+  ): Promise<T[]> {
+    if (!context.radiusKm || context.latitude === undefined || context.longitude === undefined) return fetchPage(0, limit);
+    const results: T[] = [];
+    let skip = 0;
+    while (results.length < limit) {
+      const page = await fetchPage(skip, limit);
+      results.push(...page.filter(record => this.withinRadius(record, context)));
+      if (page.length < limit) break;
+      skip += page.length;
+    }
+    return results.slice(0, limit);
+  }
+
+  private withinRadius(record: { latitudeApprox: number | null; longitudeApprox: number | null }, context: { latitude?: number; longitude?: number; radiusKm?: number }) {
+    if (!context.radiusKm || context.latitude === undefined || context.longitude === undefined) return true;
+    if (record.latitudeApprox === null || record.longitudeApprox === null) return false;
+    const radians = (degrees: number) => degrees * Math.PI / 180;
+    const latDelta = radians(record.latitudeApprox - context.latitude);
+    const lonDelta = radians(record.longitudeApprox - context.longitude);
+    const distance = Math.sin(latDelta / 2) ** 2 + Math.cos(radians(context.latitude)) * Math.cos(radians(record.latitudeApprox)) * Math.sin(lonDelta / 2) ** 2;
+    return 6371 * 2 * Math.atan2(Math.sqrt(distance), Math.sqrt(Math.max(0, 1 - distance))) <= context.radiusKm;
   }
 
   private radiusWhere(context: QueryContext): Prisma.SharedPriceRecordWhereInput {
@@ -487,9 +528,7 @@ export class PriceComparisonService {
       ...(optionalText(query.categoryName) ? { categoryNameSnapshot: { contains: optionalText(query.categoryName), mode: "insensitive" } } : {}),
       ...(optionalText(query.brandId) ? { brandId: optionalText(query.brandId) } : {}),
       ...(optionalText(query.marketId) ? { marketId: optionalText(query.marketId) } : {}),
-      ...(optionalText(query.city) ? { city: { equals: optionalText(query.city), mode: "insensitive" } } : {}),
-      ...(optionalText(query.state) ? { state: { equals: optionalText(query.state)?.toUpperCase(), mode: "insensitive" } } : {}),
-      ...(optionalText(query.neighborhood) ? { neighborhood: { equals: optionalText(query.neighborhood), mode: "insensitive" } } : {}),
+      ...this.locationWhere({ ...query, periodDays }),
       ...(search
         ? {
             OR: [

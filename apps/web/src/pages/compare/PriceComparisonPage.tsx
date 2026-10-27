@@ -33,11 +33,12 @@ import type {
   PriceLibraryMarket,
   Purchase,
   PurchaseRegionalPriceComparison,
-  ReverseGeocodeResult,
 } from "../../types";
 import { formatBRL, useDebouncedValue } from "../shared";
 import { COMPARISON_PAGE_SIZE, comparisonCategories, filterComparisonProducts, priceRangeVariation } from "./comparisonPresentation";
 import { ComparisonCategoryFilter, ComparisonResultsCount, PriceVariationBadge } from "./ComparisonControls";
+
+import { comparisonRegionParams, requestComparisonLocation, type ComparisonLocation } from "./comparisonLocation";
 
 type TabKey = "mine" | "region" | "basket";
 type CardData = { kind: "mine"; item: PriceComparison } | { kind: "region"; item: PriceLibraryItem };
@@ -59,6 +60,8 @@ export function PriceComparisonPage() {
   const [state, setState] = useState("");
   const [neighborhood, setNeighborhood] = useState("");
   const [radiusKm, setRadiusKm] = useState(5);
+  const [location, setLocation] = useState<ComparisonLocation | null>(null);
+  const regionParams = comparisonRegionParams({ city, state, neighborhood }, location, radiusKm);
   const [filterSection, setFilterSection] = useState<FilterSection | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [detailData, setDetailData] = useState<CardData | null>(null);
@@ -72,16 +75,14 @@ export function PriceComparisonPage() {
   const startDate = useMemo(() => new Date(Date.now() - periodDays * 24 * 60 * 60_000).toISOString(), [periodDays]);
 
   const regionQuery = useQuery({
-    queryKey: ["price-library", debouncedSearch, brandId, marketId, city, state, neighborhood, periodDays],
+    queryKey: ["price-library", debouncedSearch, brandId, marketId, regionParams, periodDays],
     queryFn: () =>
       api<PriceLibraryItem[]>(
         `/price-library?${buildParams({
           search: debouncedSearch,
           brandId,
           marketId,
-          city,
-          state,
-          neighborhood,
+          ...regionParams,
           periodDays: String(periodDays),
           sort: "most_recent",
         })}`,
@@ -119,7 +120,7 @@ export function PriceComparisonPage() {
 
   useEffect(() => {
     setVisibleCount(COMPARISON_PAGE_SIZE);
-  }, [tab, category, debouncedSearch, brandId, marketId, periodDays, city, state, neighborhood]);
+  }, [tab, category, debouncedSearch, brandId, marketId, periodDays, city, state, neighborhood, location, radiusKm]);
 
   const regionSummary = useMemo(() => regionSummaryFromItems(regionItems), [regionItems]);
   const bestRegionKey = regionSummary ? priceLibraryCardKey(regionSummary.best) : null;
@@ -215,8 +216,8 @@ export function PriceComparisonPage() {
             />
             <FilterChip
               icon={MapPin}
-              label={city ? `Região: ${[city, state].filter(Boolean).join(" · ")} · ${radiusKm} km` : "Definir região"}
-              active={Boolean(city)}
+              label={location ? `Perto de mim · ${radiusKm} km` : city ? `Região: ${[city, state].filter(Boolean).join(" · ")}` : "Definir região"}
+              active={Boolean(location || city || state || neighborhood)}
               tone="mint"
               onClick={() => setFilterSection("region")}
             />
@@ -232,6 +233,7 @@ export function PriceComparisonPage() {
 
       {tab === "region" ? (
         <div className="mt-4">
+          <p className="mb-3 text-xs text-ink/60">{location ? `Busca em aproximadamente ${radiusKm} km da sua localização. Registros sem coordenadas ficam fora desse filtro.` : city || state || neighborhood ? "Busca pela região preenchida, sem filtro por distância." : "Mostrando todas as regiões. Use Definir região para buscar perto de você."}</p>
           <RegionSummaryCard summary={regionSummary} loading={regionQuery.isLoading} onRefresh={() => regionQuery.refetch()} />
         </div>
       ) : null}
@@ -318,18 +320,20 @@ export function PriceComparisonPage() {
           periodDays={periodDays}
           onPeriodDays={setPeriodDays}
           city={city}
-          onCity={setCity}
+          onCity={value => { setCity(value); setLocation(null); }}
           state={state}
-          onState={setState}
+          onState={value => { setState(value); setLocation(null); }}
           neighborhood={neighborhood}
-          onNeighborhood={setNeighborhood}
+          onNeighborhood={value => { setNeighborhood(value); setLocation(null); }}
+          location={location}
+          onLocation={value => { setLocation(value); setCity(""); setState(""); setNeighborhood(""); }}
           radiusKm={radiusKm}
           onRadiusKm={setRadiusKm}
         />
       ) : null}
 
       {detailData ? (
-        <ProductDetailSheet data={detailData} periodDays={periodDays} city={city} state={state} neighborhood={neighborhood} onClose={() => setDetailData(null)} />
+        <ProductDetailSheet data={detailData} periodDays={periodDays} regionParams={regionParams} onClose={() => setDetailData(null)} />
       ) : null}
     </ScreenContainer>
   );
@@ -452,6 +456,8 @@ function FiltersSheet({
   onNeighborhood,
   radiusKm,
   onRadiusKm,
+  location,
+  onLocation,
 }: {
   section: FilterSection;
   onClose: () => void;
@@ -469,6 +475,8 @@ function FiltersSheet({
   onState: (value: string) => void;
   neighborhood: string;
   onNeighborhood: (value: string) => void;
+  location: ComparisonLocation | null;
+  onLocation: (value: ComparisonLocation) => void;
   radiusKm: number;
   onRadiusKm: (value: number) => void;
 }) {
@@ -524,7 +532,8 @@ function FiltersSheet({
 
       {section === "region" ? (
         <div className="space-y-3">
-          {/* "Usar minha localização" fica desativado até o faturamento da Geocoding API estar ativo no Google Cloud. */}
+          <UseMyLocationButton onResolve={onLocation} />
+          {location ? <p className="text-xs text-ink/60">Localização obtida · precisão estimada de {Math.round(location.accuracy)} m. A busca usa coordenadas aproximadas dos mercados.</p> : <p className="text-xs text-ink/60">Sem GPS, a busca usa cidade e bairro, sem filtro por distância.</p>}
           <div className="grid grid-cols-2 gap-2">
             <AppInput label="Cidade" value={city} onChange={(event) => onCity(event.target.value)} placeholder="Ex.: Barra Mansa" />
             <AppInput label="UF" maxLength={2} value={state} onChange={(event) => onState(event.target.value.toUpperCase())} placeholder="RJ" />
@@ -537,9 +546,10 @@ function FiltersSheet({
                 <button
                   key={km}
                   type="button"
+                  disabled={!location}
                   onClick={() => onRadiusKm(km)}
                   className={[
-                    "h-11 rounded-xl border text-sm font-bold transition",
+                    "h-11 rounded-xl border text-sm font-bold transition disabled:opacity-40",
                     radiusKm === km ? "border-mint bg-mint/10 text-mint" : "border-line text-ink/70 hover:border-mint/25",
                   ].join(" ")}
                 >
@@ -548,7 +558,7 @@ function FiltersSheet({
               ))}
             </div>
           </div>
-          {!city ? <p className="text-xs font-semibold text-ink/50">Defina sua região para comparar preços próximos de você.</p> : null}
+          {!city && !location ? <p className="text-xs font-semibold text-ink/50">Defina sua região para comparar preços próximos de você.</p> : null}
         </div>
       ) : null}
 
@@ -559,7 +569,7 @@ function FiltersSheet({
   );
 }
 
-function UseMyLocationButton({ onResolve }: { onResolve: (result: ReverseGeocodeResult) => void }) {
+function UseMyLocationButton({ onResolve }: { onResolve: (result: ComparisonLocation) => void }) {
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
 
   async function handleClick() {
@@ -570,12 +580,7 @@ function UseMyLocationButton({ onResolve }: { onResolve: (result: ReverseGeocode
 
     setStatus("loading");
     try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) =>
-        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: false, timeout: 10_000 }),
-      );
-      const result = await api<ReverseGeocodeResult>(
-        `/geocoding/reverse?latitude=${position.coords.latitude}&longitude=${position.coords.longitude}`,
-      );
+      const result = await requestComparisonLocation(navigator.geolocation);
       onResolve(result);
       trackEvent("use_my_location", { context: "compare_region_filter" });
       setStatus("idle");
@@ -826,29 +831,23 @@ function MineCardFooter({ item }: { item: PriceComparison }) {
 function ProductDetailSheet({
   data,
   periodDays,
-  city,
-  state,
-  neighborhood,
+  regionParams,
   onClose,
 }: {
   data: CardData;
   periodDays: number;
-  city: string;
-  state: string;
-  neighborhood: string;
+  regionParams: Record<string, string>;
   onClose: () => void;
 }) {
   const marketsQuery = useQuery({
-    queryKey: ["price-library-markets", data.item.productName, data.item.brandName, data.item.packageSize, data.item.packageUnit, city, state, neighborhood, periodDays],
+    queryKey: ["price-library-markets", data.item.productName, data.item.brandName, data.item.packageSize, data.item.packageUnit, regionParams, periodDays],
     queryFn: () =>
       api<PriceLibraryMarket[]>(
         `/price-library/markets?${buildParams({
           productName: data.item.productName,
           packageSize: data.item.packageSize != null ? String(data.item.packageSize) : undefined,
           packageUnit: data.item.packageUnit ?? undefined,
-          city,
-          state,
-          neighborhood,
+          ...regionParams,
           periodDays: String(periodDays),
         })}`,
       ),

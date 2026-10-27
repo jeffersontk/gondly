@@ -1,7 +1,27 @@
 import { Unit } from "@prisma/client";
-import { IsEnum, IsIn, IsNumber, IsOptional, IsString, Max, Min } from "class-validator";
+import { IsEnum, IsIn, IsNumber, IsOptional, IsString, Max, Min, ValidateIf } from "class-validator";
 
-export class RegionalPriceComparisonQueryDto {
+class CoordinateRadiusQueryDto {
+  @ValidateIf(value => value.latitude !== undefined || value.longitude !== undefined || value.radiusKm !== undefined)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitude?: number;
+
+  @ValidateIf(value => value.latitude !== undefined || value.longitude !== undefined || value.radiusKm !== undefined)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitude?: number;
+
+  @ValidateIf(value => value.latitude !== undefined || value.longitude !== undefined || value.radiusKm !== undefined)
+  @IsNumber()
+  @Min(0.1)
+  @Max(500)
+  radiusKm?: number;
+}
+
+export class RegionalPriceComparisonQueryDto extends CoordinateRadiusQueryDto {
   @IsOptional()
   @IsString()
   productId?: string;
@@ -49,12 +69,6 @@ export class RegionalPriceComparisonQueryDto {
 
   @IsOptional()
   @IsNumber()
-  @Min(0.1)
-  @Max(500)
-  radiusKm?: number;
-
-  @IsOptional()
-  @IsNumber()
   @Min(1)
   @Max(365)
   periodDays?: number;
@@ -86,7 +100,7 @@ export class PurchaseRegionalPriceComparisonQueryDto {
   periodDays?: number;
 }
 
-export class PriceLibraryQueryDto {
+export class PriceLibraryQueryDto extends CoordinateRadiusQueryDto {
   @IsOptional()
   @IsString()
   search?: string;
@@ -130,7 +144,7 @@ export class PriceLibraryQueryDto {
   sort?: "cheapest" | "most_recent" | "most_records";
 }
 
-export class PriceLibraryMarketsQueryDto {
+export class PriceLibraryMarketsQueryDto extends CoordinateRadiusQueryDto {
   @IsString()
   productName!: string;
 
