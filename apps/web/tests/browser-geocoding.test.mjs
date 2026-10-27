@@ -35,3 +35,25 @@ test("fills the region without a Google key using browser geocoding, preserving 
     await assert.rejects(reverseGeocodeForComparison(result.location, unavailableGoogle, async () => ({ ok: false })), /regi/);
   } finally { await server.close(); }
 });
+
+test("uses the Brazilian municipality and neighborhood hierarchy instead of metropolitan labels", async () => {
+  const server = await createServer({ root: fileURLToPath(new URL("../", import.meta.url)), optimizeDeps: { noDiscovery: true, include: [] }, server: { middlewareMode: true, hmr: false, ws: false }, appType: "custom" });
+  try {
+    const { reverseGeocodeForComparison } = await server.ssrLoadModule("/src/pages/compare/browserGeocoding.ts");
+    const payload = {
+      city: "Região Metropolitana do Rio de Janeiro", locality: "Rio de Janeiro", countryCode: "BR", principalSubdivisionCode: "BR-RJ",
+      localityInfo: { administrative: [
+        { name: "Rio de Janeiro", adminLevel: 4 },
+        { name: "Região Metropolitana do Rio de Janeiro", adminLevel: 6 },
+        { name: "Rio de Janeiro", adminLevel: 8 },
+        { name: "Campo Grande", adminLevel: 10 },
+      ] },
+    };
+    const resolve = () => reverseGeocodeForComparison({ latitude: -22.9, longitude: -43.2, accuracy: 117 }, async () => { throw new Error("no Google key"); }, async () => ({ ok: true, json: async () => payload }));
+    assert.deepEqual(await resolve(), { city: "Rio de Janeiro", state: "RJ", neighborhood: "Campo Grande" });
+    payload.localityInfo.administrative.pop();
+    assert.deepEqual(await resolve(), { city: "Rio de Janeiro", state: "RJ", neighborhood: null }, "municipality must never become neighborhood when details are absent");
+    payload.localityInfo.administrative = [];
+    assert.deepEqual(await resolve(), { city: "Rio de Janeiro", state: "RJ", neighborhood: null });
+  } finally { await server.close(); }
+});

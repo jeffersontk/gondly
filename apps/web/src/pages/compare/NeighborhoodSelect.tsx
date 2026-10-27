@@ -48,7 +48,7 @@ export function NeighborhoodSelect({ markets, city, state, value, onChange, usin
         <option value={OTHER}>Informar outro bairro</option>
       </select>
       {manual ? <label className="block text-sm font-semibold text-ink">Nome do bairro<input autoFocus value={value} onChange={event => onChange(event.target.value)} placeholder="Digite o bairro" className="mt-1.5 h-12 w-full rounded-xl border border-line bg-white px-3 text-sm outline-none focus:border-mint" /></label> : null}
-      <p className="text-xs text-ink/55">{!city.trim() ? "Informe a cidade ou use sua localização para escolher um bairro." : "Opções dos mercados cadastrados nesta cidade e da sua localização. Se faltar um bairro, escolha Informar outro bairro."}</p>
+      <p className="text-xs text-ink/55">{!city.trim() ? "Informe a cidade ou use sua localização para escolher um bairro." : usingGps && !value ? "A localização não identificou o bairro. Escolha uma opção ou use Informar outro bairro; o raio continua ativo." : "Opções dos mercados cadastrados nesta cidade e da sua localização. Se faltar um bairro, escolha Informar outro bairro."}</p>
     </div>
   );
 }
