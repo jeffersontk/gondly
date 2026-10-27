@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { roundMoney } from "@gondly/utils";
 import { PrismaService } from "../prisma/prisma.service";
 import { toNumber } from "../common/utils/money";
+import { purchaseAccessWhere } from "../purchases/purchase-access";
 import { CreateMarketDto, UpdateMarketDto } from "./dto";
 
 @Injectable()
@@ -94,7 +95,7 @@ export class MarketsService {
   async summary(userId: string, id: string) {
     const market = await this.get(userId, id);
     const purchases = await this.prisma.purchase.findMany({
-      where: { userId, marketId: id, status: "completed", deletedAt: null },
+      where: { ...purchaseAccessWhere(userId), marketId: id, status: "completed", deletedAt: null },
       include: { items: true },
       orderBy: { completedAt: "desc" },
     });
@@ -107,6 +108,7 @@ export class MarketsService {
 
     for (const purchase of purchases) {
       for (const item of purchase.items) {
+        if (toNumber(item.pricePaid) <= 0) continue;
         productCounts.set(item.productName, (productCounts.get(item.productName) ?? 0) + item.quantity);
       }
     }

@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-const reportKeys = ["dashboard", "insights", "purchases", "price-comparison-mine", "price-comparison-insights", "product-price-details", "price-hint"];
+const reportKeys = ["dashboard", "insights", "purchases", "market-summary", "price-comparison-mine", "price-comparison-insights", "product-price-details", "price-hint"];
 
 export function configurePurchaseReportQueries(client: QueryClient) {
   for (const key of reportKeys) {
