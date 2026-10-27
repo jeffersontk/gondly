@@ -1,6 +1,6 @@
 # Roadmap de evolução do Gondly
 
-Atualizado em 26/10/2026. Plano de execução proposto para as próximas entregas.
+Atualizado em 27/10/2026. Plano de execução proposto para as próximas entregas.
 Os números representam a ordem das entregas, não alterações já feitas na versão do pacote.
 
 ## Objetivo
@@ -42,6 +42,8 @@ testes e uso real antes de aumentar o número de funcionalidades.
 | V6 — Compras recorrentes | P2 | V3 e evidências de uso recorrente | Menos trabalho para preparar a próxima compra |
 | V7 — Operação e suporte | P1 | Base operacional iniciada na V1 | Deploy recuperável e suporte com contexto |
 | V8 — Publicidade e aprovação AdSense | P1 | V1, conteúdo da V2 e auditoria dos anúncios | Monetização aprovada e restrita a páginas elegíveis |
+| V9 — Listas por dieta e tamanho da família | P2 | V6 e modelos de listas revisados | Sugestões ajustáveis ao perfil alimentar e à quantidade de pessoas |
+| V10 — Contador de passos durante a compra | P3 | Estudo de viabilidade em celulares e PWA | Acompanhamento opcional dos passos durante a ida ao mercado |
 
 Fluxo principal: **V1 → V3 → V4 → V5 → V6**. Conteúdo da V2 pode avançar em paralelo
 após a V1. A V7 deve ser antecipada se surgirem falhas operacionais; backups e
@@ -50,6 +52,9 @@ A auditoria da V8 começa junto da V1/V2. O número V8 não significa esperar to
 as funcionalidades para tratar a reprovação. A espera pela decisão do AdSense
 não bloqueia as entregas de colaboração, orçamento ou histórico.
 Sem calendário fixo: estimar cada entrega após detalhar suas tarefas e dependências.
+V9 e V10 ficam planejadas para depois da estabilização dos fluxos principais.
+A V10 começa por uma validação de viabilidade; a forma de implementação depende
+do suporte real dos dispositivos, sem pressupor contagem com o celular bloqueado.
 
 ## V1 — Publicar SEO e estabelecer medição
 
@@ -221,6 +226,47 @@ configuração das exclusões e teste das unidades. A auditoria pode ser conclu�
 enquanto a aprovação permanece explicitamente aguardando decisão do Google.
 
 Referência interna: [conteúdo público e anúncios](conteudo-publico.md).
+
+## V9 — Sugerir listas por dieta e quantidade de pessoas na família
+
+- [ ] Permitir informar o tipo de dieta ou preferência alimentar, a quantidade de
+  pessoas na família e o período da compra, como semana ou mês.
+- [ ] Definir modelos de listas revisados para os perfis alimentares escolhidos.
+- [ ] Ajustar as quantidades sugeridas ao número de pessoas e ao período, com
+  unidades e pesos explícitos e regras de cálculo documentadas.
+- [ ] Permitir informar restrições e alimentos a evitar, sem sugerir substituições
+  que contrariem essas escolhas.
+- [ ] Mostrar a sugestão para revisão antes de criar a lista; permitir trocar itens,
+  alterar quantidades e retirar produtos que a família já possui.
+- [ ] Explicar as premissas das quantidades e tratar a sugestão como planejamento
+  de compras, sem prometer uma prescrição nutricional individualizada.
+- [ ] Validar sugestões para diferentes tamanhos de família e períodos, evitando
+  duplicações e mantendo as quantidades editáveis após criar a lista.
+
+**Concluída quando:** o usuário escolhe dieta, número de pessoas e período, revisa
+os produtos e quantidades e cria uma lista utilizável no fluxo atual de compra.
+
+**Acompanhar:** uso das sugestões, listas criadas e ajustes de itens e quantidades.
+
+## V10 — Contar passos durante a compra
+
+- [ ] Confirmar o escopo com usuários: contagem durante a compra no mercado ou
+  também no trajeto; usar a sessão de compra como escopo inicial proposto.
+- [ ] Investigar suporte a sensores e permissões no Android, iOS e PWA, incluindo
+  comportamento em segundo plano e com a tela bloqueada.
+- [ ] Comparar as alternativas viáveis de integração antes de escolher a implementação.
+- [ ] Oferecer ativação opcional e controles para iniciar, pausar e encerrar a contagem.
+- [ ] Exibir passos da sessão e informar quando a contagem estiver indisponível ou
+  interrompida, sem bloquear a lista ou a finalização da compra.
+- [ ] Definir retenção dos dados e opção de exclusão antes de armazenar histórico.
+- [ ] Testar precisão, consumo de bateria, interrupções e retomada em aparelhos reais.
+
+**Concluída quando:** a viabilidade estiver comprovada nos dispositivos suportados,
+com limites documentados, e o contador puder ser usado opcionalmente sem prejudicar
+o fluxo de compras. Se o PWA não atender ao escopo, registrar a alternativa e o
+esforço necessário antes de agendar a implementação.
+
+**Acompanhar:** adesão, interrupções da contagem e impacto na bateria e na usabilidade.
 
 ## Como executar cada entrega
 
