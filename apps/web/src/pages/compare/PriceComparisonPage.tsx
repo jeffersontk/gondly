@@ -36,6 +36,8 @@ import type {
   ReverseGeocodeResult,
 } from "../../types";
 import { formatBRL, useDebouncedValue } from "../shared";
+import { COMPARISON_PAGE_SIZE, comparisonCategories, filterComparisonProducts, priceRangeVariation } from "./comparisonPresentation";
+import { ComparisonCategoryFilter, ComparisonResultsCount, PriceVariationBadge } from "./ComparisonControls";
 
 type TabKey = "mine" | "region" | "basket";
 type CardData = { kind: "mine"; item: PriceComparison } | { kind: "region"; item: PriceLibraryItem };
@@ -50,6 +52,8 @@ export function PriceComparisonPage() {
   const debouncedSearch = useDebouncedValue(search);
   const [brandId, setBrandId] = useState("");
   const [marketId, setMarketId] = useState("");
+  const [category, setCategory] = useState("");
+  const [visibleCount, setVisibleCount] = useState(COMPARISON_PAGE_SIZE);
   const [periodDays, setPeriodDays] = useState(30);
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
@@ -109,21 +113,15 @@ export function PriceComparisonPage() {
     enabled: tab === "basket" && Boolean(selectedPurchaseId),
   });
 
-  const mineItems = useMemo(() => {
-    const list = mineQuery.data ?? [];
-    const term = debouncedSearch.trim().toLowerCase();
-    return list.filter((item) => {
-      if (selectedBrandName && (item.brandName ?? "").toLowerCase() !== selectedBrandName.toLowerCase()) return false;
-      if (!term) return true;
-      return (
-        item.productName.toLowerCase().includes(term) ||
-        (item.brandName ?? "").toLowerCase().includes(term) ||
-        (item.category ?? "").toLowerCase().includes(term)
-      );
-    });
-  }, [mineQuery.data, debouncedSearch, selectedBrandName]);
+  const mineItems = useMemo(() => filterComparisonProducts(mineQuery.data ?? [], { category, search: debouncedSearch, brandName: selectedBrandName }), [mineQuery.data, category, debouncedSearch, selectedBrandName]);
+  const regionItems = useMemo(() => filterComparisonProducts(regionQuery.data ?? [], { category }), [regionQuery.data, category]);
+  const categories = useMemo(() => comparisonCategories(tab === "mine" ? mineQuery.data ?? [] : regionQuery.data ?? []), [tab, mineQuery.data, regionQuery.data]);
 
-  const regionSummary = useMemo(() => regionSummaryFromItems(regionQuery.data ?? []), [regionQuery.data]);
+  useEffect(() => {
+    setVisibleCount(COMPARISON_PAGE_SIZE);
+  }, [tab, category, debouncedSearch, brandId, marketId, periodDays, city, state, neighborhood]);
+
+  const regionSummary = useMemo(() => regionSummaryFromItems(regionItems), [regionItems]);
   const bestRegionKey = regionSummary ? priceLibraryCardKey(regionSummary.best) : null;
 
   useEffect(() => {
@@ -195,6 +193,7 @@ export function PriceComparisonPage() {
             </button>
           </div>
 
+          <ComparisonCategoryFilter categories={categories} selected={category} onChange={setCategory} />
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
             <FilterChip
               icon={Tag}
@@ -240,16 +239,17 @@ export function PriceComparisonPage() {
       {tab === "region" ? (
         <div className="mt-4 space-y-3">
           {regionQuery.isLoading ? <LoadingState /> : null}
-          {!regionQuery.isLoading && !regionQuery.data?.length ? (
+          {!regionQuery.isLoading && !regionItems.length ? (
             <EmptyState
               title={
-                debouncedSearch.trim()
-                  ? "Nenhum produto encontrado para essa busca."
+                debouncedSearch.trim() || category
+                  ? "Nenhum produto encontrado para a categoria e os filtros selecionados."
                   : "Ainda não há dados suficientes na sua região. Continue registrando compras para ajudar a comunidade."
               }
             />
           ) : null}
-          {regionQuery.data?.map((item) => (
+          <ComparisonResultsCount count={regionItems.length} visible={visibleCount} />
+          {regionItems.slice(0, visibleCount).map((item) => (
             <ProductCard
               key={priceLibraryCardKey(item)}
               data={{ kind: "region", item }}
@@ -258,6 +258,7 @@ export function PriceComparisonPage() {
               onMarkets={() => openMarkets(item)}
             />
           ))}
+          {visibleCount < regionItems.length ? <AppButton full variant="secondary" onClick={() => setVisibleCount(count => count + COMPARISON_PAGE_SIZE)}>Mostrar mais {Math.min(COMPARISON_PAGE_SIZE, regionItems.length - visibleCount)} produtos</AppButton> : null}
         </div>
       ) : null}
 
@@ -265,21 +266,24 @@ export function PriceComparisonPage() {
         <>
           <div className="mt-4">
             <MyPricesSummary report={insightsQuery.data} loading={insightsQuery.isLoading} />
+            {category || selectedBrandName || debouncedSearch.trim() ? <p className="mt-2 text-xs leading-5 text-ink/55">Resumo geral do período e mercado selecionados. Categoria, marca e busca filtram a lista de produtos abaixo.</p> : null}
           </div>
           <div className="mt-4 space-y-3">
             {mineQuery.isLoading ? <LoadingState /> : null}
             {!mineQuery.isLoading && !mineItems.length ? (
               <EmptyState
                 title={
-                  debouncedSearch.trim()
-                    ? "Nenhum produto encontrado para essa busca."
+                  debouncedSearch.trim() || category || selectedBrandName
+                    ? "Nenhum produto encontrado para a categoria e os filtros selecionados."
                     : "Você ainda não tem preços suficientes. Finalize compras para criar seu histórico."
                 }
               />
             ) : null}
-            {mineItems.map((item) => (
+            <ComparisonResultsCount count={mineItems.length} visible={visibleCount} />
+            {mineItems.slice(0, visibleCount).map((item) => (
               <ProductCard key={item.productName} data={{ kind: "mine", item }} onDetails={() => openDetail({ kind: "mine", item })} />
             ))}
+            {visibleCount < mineItems.length ? <AppButton full variant="secondary" onClick={() => setVisibleCount(count => count + COMPARISON_PAGE_SIZE)}>Mostrar mais {Math.min(COMPARISON_PAGE_SIZE, mineItems.length - visibleCount)} produtos</AppButton> : null}
           </div>
         </>
       ) : null}
@@ -296,7 +300,7 @@ export function PriceComparisonPage() {
       ) : null}
 
       <div className="mt-4">
-        <AdSlot slot="compare_inline" hasContent={tab === "region" ? Boolean(regionQuery.data?.length) : tab === "mine" ? mineItems.length > 0 : false} disabled={tab === "region" ? regionQuery.isLoading || regionQuery.isError : tab === "mine" ? mineQuery.isLoading || mineQuery.isError || insightsQuery.isLoading || insightsQuery.isError : true} />
+        <AdSlot slot="compare_inline" hasContent={tab === "region" ? regionItems.length > 0 : tab === "mine" ? mineItems.length > 0 : false} disabled={tab === "region" ? regionQuery.isLoading || regionQuery.isError : tab === "mine" ? mineQuery.isLoading || mineQuery.isError || insightsQuery.isLoading || insightsQuery.isError : true} />
       </div>
 
       {helpOpen ? <HelpModal onClose={() => setHelpOpen(false)} /> : null}
@@ -724,20 +728,22 @@ function cardPrices(data: CardData) {
 function ProductCard({ data, highlight, onDetails, onMarkets }: { data: CardData; highlight?: boolean; onDetails: () => void; onMarkets?: () => void }) {
   const prices = cardPrices(data);
   const category = cardCategory(data);
+  const hasVariation = data.kind === "mine" && (priceRangeVariation(prices.min, prices.max)?.difference ?? 0) > 0;
 
   return (
-    <article className="rounded-2xl border border-line bg-white p-4 shadow-sm">
+    <article className={`rounded-2xl border p-4 shadow-sm ${hasVariation ? "border-amber-300 bg-amber-50/30" : "border-line bg-white"}`}>
       {highlight ? (
         <span className="mb-3 inline-block rounded-full bg-mint/10 px-2.5 py-1 text-[11px] font-black text-mint">Mais barato da região</span>
       ) : null}
       <div className="flex items-start gap-3">
-        <div className="flex-none text-center">
+        <div className="hidden flex-none text-center sm:block">
           <CategoryIcon category={category} />
           <div className="mt-1.5">
             <CategoryBadge category={category} />
           </div>
         </div>
         <div className="min-w-0 flex-1">
+          <div className="mb-2 sm:hidden"><CategoryBadge category={category} /></div>
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <h3 className="break-words text-base font-black text-ink">{cardTitle(data)}</h3>
@@ -746,10 +752,11 @@ function ProductCard({ data, highlight, onDetails, onMarkets }: { data: CardData
           </div>
 
           <div className="mt-3 grid grid-cols-3 gap-2">
-            <PriceColumn label="Menor" value={prices.min != null ? formatBRL(prices.min) : "--"} />
-            <PriceColumn label="Média" value={prices.avg != null ? formatBRL(prices.avg) : "--"} />
-            <PriceColumn label="Maior" value={prices.max != null ? formatBRL(prices.max) : "--"} />
+            <PriceColumn label="Menor" value={prices.min != null ? formatBRL(prices.min) : "--"} tone={data.kind === "mine" ? hasVariation ? "low" : "neutral" : undefined} />
+            <PriceColumn label="Média" value={prices.avg != null ? formatBRL(prices.avg) : "--"} tone={data.kind === "mine" ? "neutral" : undefined} />
+            <PriceColumn label="Maior" value={prices.max != null ? formatBRL(prices.max) : "--"} tone={data.kind === "mine" ? hasVariation ? "high" : "neutral" : undefined} />
           </div>
+          {data.kind === "mine" ? <PriceVariationBadge min={prices.min} max={prices.max} purchasesCount={data.item.purchasesCount} /> : null}
 
           <div className="mt-3 flex gap-2">
             <AppButton variant="secondary" className="h-9 flex-1 px-3 text-xs" onClick={onDetails}>
@@ -771,11 +778,12 @@ function ProductCard({ data, highlight, onDetails, onMarkets }: { data: CardData
   );
 }
 
-function PriceColumn({ label, value }: { label: string; value: string }) {
+function PriceColumn({ label, value, tone }: { label: string; value: string; tone?: "low" | "high" | "neutral" }) {
+  const colors = tone === "low" ? "border border-emerald-200 bg-emerald-50 text-emerald-800" : tone === "high" ? "border border-rose-200 bg-rose-50 text-rose-800" : "bg-paper text-ink";
   return (
-    <div className="rounded-lg bg-paper p-2 text-center">
-      <p className="text-[11px] font-semibold text-ink/55">{label}</p>
-      <p className="mt-0.5 text-sm font-black text-mint">{value}</p>
+    <div className={`rounded-lg p-2 text-center ${colors}`}>
+      <p className="text-[11px] font-semibold opacity-75">{label}</p>
+      <p className={`mt-0.5 text-sm font-black ${tone ? "" : "text-mint"}`}>{value}</p>
     </div>
   );
 }
@@ -865,6 +873,7 @@ function ProductDetailSheet({
         <DetailStat label={data.kind === "region" ? "Maior preço regional" : "Maior preço"} value={prices.max != null ? formatBRL(prices.max) : "--"} />
         {normalizedLine ? <DetailStat label="Preço normalizado" value={normalizedLine} /> : null}
       </div>
+      {data.kind === "mine" ? <PriceVariationBadge min={prices.min} max={prices.max} purchasesCount={data.item.purchasesCount} /> : null}
 
       {data.kind === "region" ? (
         <>
