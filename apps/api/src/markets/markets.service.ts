@@ -149,7 +149,7 @@ export function normalizeMarketName(name: string) {
 
 function marketLocationData(dto: Partial<CreateMarketDto>, options: { defaultCountry?: boolean } = {}) {
   return {
-    address: optionalText(dto.address),
+    address: dto.address === undefined ? undefined : optionalText(dto.address) ?? null,
     neighborhood: optionalText(dto.neighborhood),
     city: optionalText(dto.city),
     state: optionalText(dto.state)?.toUpperCase(),

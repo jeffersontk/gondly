@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Edit, Trash2 } from "lucide-react";
 import { AppButton, ConfirmDialog, ErrorState, LoadingState, ScreenContainer, SummaryCard } from "../../components";
 import { api } from "../../lib/api";
+import { marketLocationLabel } from "../../lib/marketCache";
 import type { Market } from "../../types";
 import { formatBRL, removeById } from "../shared";
 
@@ -24,7 +25,7 @@ export function MarketDetailPage() {
 
   if (summary.isLoading) return <LoadingState />;
   if (!summary.data) return <ScreenContainer title="Mercado"><ErrorState /></ScreenContainer>;
-  const location = [summary.data.market.neighborhood, summary.data.market.city, summary.data.market.state].filter(Boolean).join(" · ");
+  const location = marketLocationLabel(summary.data.market);
 
   return (
     <ScreenContainer title={summary.data.market.name} subtitle={location || undefined}>

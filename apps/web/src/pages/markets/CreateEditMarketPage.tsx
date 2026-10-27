@@ -3,10 +3,11 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AppButton, AppInput, ScreenContainer } from "../../components";
+import { AppButton, AppInput, ErrorState, LoadingState, ScreenContainer } from "../../components";
 import { api } from "../../lib/api";
 import type { Market } from "../../types";
-import { MarketForm, marketSchema, upsertById } from "../shared";
+import { MarketForm, marketSchema } from "../shared";
+import { updateMarketCaches } from "../../lib/marketCache";
 
 export function CreateEditMarketPage() {
   const { id } = useParams();
@@ -39,13 +40,13 @@ export function CreateEditMarketPage() {
   const save = useMutation({
     mutationFn: (values: MarketForm) => (isEdit ? api<Market>(`/markets/${id}`, { method: "PATCH", body: values }) : api<Market>("/markets", { method: "POST", body: values })),
     onSuccess: (saved) => {
-      queryClient.setQueryData<Market[]>(["markets"], (current) => upsertById(current, saved));
-      queryClient.setQueryData<{ market: Market; purchaseCount: number; totalSpent: number; averageTicket: number; topProduct: string | null }>(["market-summary", saved.id], (current) =>
-        current ? { ...current, market: saved } : { market: saved, purchaseCount: 0, totalSpent: 0, averageTicket: 0, topProduct: null },
-      );
+      void updateMarketCaches(queryClient, saved);
       navigate(`/app/markets/${saved.id}`);
     },
   });
+
+  if (isEdit && market.isLoading) return <ScreenContainer title="Editar mercado"><LoadingState /></ScreenContainer>;
+  if (isEdit && (market.isError || !market.data)) return <ScreenContainer title="Editar mercado"><ErrorState /></ScreenContainer>;
 
   return (
     <ScreenContainer title={isEdit ? "Editar mercado" : "Novo mercado"}>
@@ -54,8 +55,9 @@ export function CreateEditMarketPage() {
         <AppInput label="Cidade" {...form.register("city")} />
         <AppInput label="Bairro" {...form.register("neighborhood")} />
         <AppInput label="Estado" maxLength={2} {...form.register("state")} />
-        <AppInput label="Endereço" {...form.register("address")} />
+        <AppInput label="Endereço" maxLength={180} error={form.formState.errors.address?.message} {...form.register("address")} />
         <AppInput label="Observações" {...form.register("notes")} />
+        {save.isError ? <p role="alert" className="rounded-xl border border-tomato/20 bg-tomato/5 p-3 text-sm font-semibold text-tomato">Não foi possível salvar o mercado. Confira os campos e sua conexão e tente novamente.</p> : null}
         <AppButton full type="submit" loading={save.isPending} loadingLabel="Salvando">
           Salvar
         </AppButton>
