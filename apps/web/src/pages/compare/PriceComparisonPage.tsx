@@ -33,12 +33,13 @@ import type {
   PriceLibraryMarket,
   Purchase,
   PurchaseRegionalPriceComparison,
+  ReverseGeocodeResult,
 } from "../../types";
 import { formatBRL, useDebouncedValue } from "../shared";
 import { COMPARISON_PAGE_SIZE, comparisonCategories, filterComparisonProducts, priceRangeVariation } from "./comparisonPresentation";
 import { ComparisonCategoryFilter, ComparisonResultsCount, PriceVariationBadge } from "./ComparisonControls";
 
-import { comparisonRegionParams, requestComparisonLocation, type ComparisonLocation } from "./comparisonLocation";
+import { comparisonRegionParams, locateComparisonRegion, type ComparisonLocation, type LocatedComparisonRegion } from "./comparisonLocation";
 
 type TabKey = "mine" | "region" | "basket";
 type CardData = { kind: "mine"; item: PriceComparison } | { kind: "region"; item: PriceLibraryItem };
@@ -326,7 +327,7 @@ export function PriceComparisonPage() {
           neighborhood={neighborhood}
           onNeighborhood={value => { setNeighborhood(value); setLocation(null); }}
           location={location}
-          onLocation={value => { setLocation(value); setCity(""); setState(""); setNeighborhood(""); }}
+          onLocation={({ location: value, region }) => { setLocation(value); setCity(region.city); setState(region.state); setNeighborhood(region.neighborhood); }}
           radiusKm={radiusKm}
           onRadiusKm={setRadiusKm}
         />
@@ -476,7 +477,7 @@ function FiltersSheet({
   neighborhood: string;
   onNeighborhood: (value: string) => void;
   location: ComparisonLocation | null;
-  onLocation: (value: ComparisonLocation) => void;
+  onLocation: (value: LocatedComparisonRegion) => void;
   radiusKm: number;
   onRadiusKm: (value: number) => void;
 }) {
@@ -569,8 +570,8 @@ function FiltersSheet({
   );
 }
 
-function UseMyLocationButton({ onResolve }: { onResolve: (result: ComparisonLocation) => void }) {
-  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+function UseMyLocationButton({ onResolve }: { onResolve: (result: LocatedComparisonRegion) => void }) {
+  const [status, setStatus] = useState<"idle" | "loading" | "error" | "region-unavailable">("idle");
 
   async function handleClick() {
     if (!navigator.geolocation) {
@@ -580,10 +581,12 @@ function UseMyLocationButton({ onResolve }: { onResolve: (result: ComparisonLoca
 
     setStatus("loading");
     try {
-      const result = await requestComparisonLocation(navigator.geolocation);
+      const result = await locateComparisonRegion(navigator.geolocation, ({ latitude, longitude }) =>
+        api<ReverseGeocodeResult>(`/geocoding/reverse?${new URLSearchParams({ latitude: String(latitude), longitude: String(longitude) })}`),
+      );
       onResolve(result);
       trackEvent("use_my_location", { context: "compare_region_filter" });
-      setStatus("idle");
+      setStatus(result.regionResolved ? "idle" : "region-unavailable");
     } catch {
       setStatus("error");
     }
@@ -602,6 +605,9 @@ function UseMyLocationButton({ onResolve }: { onResolve: (result: ComparisonLoca
       </button>
       {status === "error" ? (
         <p className="mt-1.5 text-xs font-semibold text-tomato">Não foi possível obter sua localização. Preencha manualmente ou tente novamente.</p>
+      ) : null}
+      {status === "region-unavailable" ? (
+        <p role="status" className="mt-1.5 text-xs font-semibold text-ink/60">Sua posição foi obtida e o raio está ativo, mas o serviço de endereços não conseguiu preencher cidade, UF e bairro. Tente novamente ou preencha manualmente; ao editar os campos, a busca passa a usar a região informada.</p>
       ) : null}
     </div>
   );

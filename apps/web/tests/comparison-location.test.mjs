@@ -18,3 +18,23 @@ test("GPS requests send the radius and coordinates, manual regions never pretend
     assert.equal(location.accuracy, 30);
   } finally { await server.close(); }
 });
+
+test("GPS resolves city, state and neighborhood for the form without changing radius search", async () => {
+  const server = await createServer({ root: fileURLToPath(new URL("../", import.meta.url)), server: { middlewareMode: true, hmr: false, ws: false }, appType: "custom" });
+  try {
+    const { locateComparisonRegion, comparisonRegionParams } = await server.ssrLoadModule("/src/pages/compare/comparisonLocation.ts");
+    const gps = { getCurrentPosition(resolve) { resolve({ coords: { latitude: -22.9, longitude: -43.2, accuracy: 127 } }); } };
+    const result = await locateComparisonRegion(gps, async location => {
+      assert.equal(location.latitude, -22.9);
+      return { city: "Rio de Janeiro", state: "RJ", neighborhood: "Campo Grande", country: "BR" };
+    });
+    assert.deepEqual(result.region, { city: "Rio de Janeiro", state: "RJ", neighborhood: "Campo Grande" });
+    assert.equal(result.regionResolved, true);
+    assert.deepEqual(comparisonRegionParams(result.region, result.location, 5), { latitude: "-22.9", longitude: "-43.2", radiusKm: "5" });
+    const unavailable = await locateComparisonRegion(gps, async () => { throw new Error("provider unavailable"); });
+    assert.equal(unavailable.location.accuracy, 127);
+    assert.equal(unavailable.regionResolved, false);
+    const empty = await locateComparisonRegion(gps, async () => ({ city: null, state: null, neighborhood: null }));
+    assert.equal(empty.regionResolved, false, "empty reverse geocode is not a successful autofill");
+  } finally { await server.close(); }
+});
