@@ -10,6 +10,7 @@ import { useAuth } from "../../lib/auth";
 import { promptPwaInstall, usePwaInstall } from "../../lib/pwaInstall";
 import type { ShareLocationLevel } from "@gondly/types";
 import type { PriceSharingPreference, User } from "../../types";
+import { NotificationSettings } from "./NotificationSettings";
 
 type PriceSharingPreferencePatch = Partial<Pick<PriceSharingPreference, "sharePrices" | "shareLocationLevel">>;
 
@@ -97,6 +98,7 @@ export function SettingsPage() {
         </div>
       </div>
 
+      <NotificationSettings />
       <section className="mt-4 rounded-xl border border-line bg-white p-4 shadow-soft">
         <div className="flex items-start gap-3">
           <span className="grid h-11 w-11 flex-none place-items-center rounded-xl bg-mint/10 text-mint">

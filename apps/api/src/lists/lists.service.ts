@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { ListItemStatus, SharedRole, Unit } from "@prisma/client";
 import { normalizePrice } from "@gondly/utils";
 import { randomUUID } from "crypto";
@@ -9,6 +9,7 @@ import { normalizeSearchName, optionalNumber, optionalText } from "../common/uti
 import { PrismaService } from "../prisma/prisma.service";
 import { ItemSnapshotResolver, type ItemProductInput, type ProductSnapshot } from "../products/item-snapshot.resolver";
 import { RealtimeService } from "../realtime/realtime.service";
+import { PushService } from "../push/push.service";
 import { CreateInviteDto, CreateListDto, CreateListItemDto, ImportListItemsDto, UpdateListDto, UpdateListItemDto } from "./dto";
 
 @Injectable()
@@ -19,6 +20,7 @@ export class ListsService {
     private readonly prisma: PrismaService,
     private readonly billingService: BillingService,
     private readonly realtime: RealtimeService,
+    @Optional() private readonly push?: PushService,
   ) {
     this.snapshots = new ItemSnapshotResolver(prisma);
   }
@@ -491,6 +493,7 @@ export class ListsService {
     });
 
     this.realtime.emitToList(listId, "listMessageCreated", { listId, message, byUserId: userId });
+    void this.push?.notifyListMessage(listId, userId, message.user.name, message.id).catch(() => undefined);
     return message;
   }
 

@@ -19,7 +19,7 @@ const BATCH_SIZE = 200;
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
-type PushPayload = { title: string; body: string; url: string; tag: string };
+type PushPayload = { title: string; body: string; url: string; tag: string; type?: "chat"; listId?: string; messageId?: string };
 
 @Injectable()
 export class PushService implements OnModuleInit, OnModuleDestroy {
@@ -70,6 +70,24 @@ export class PushService implements OnModuleInit, OnModuleDestroy {
   async unsubscribe(userId: string, endpoint: string) {
     await this.prisma.pushSubscription.deleteMany({ where: { userId, endpoint } });
     return { subscribed: false };
+  }
+
+  async notifyListMessage(listId: string, senderId: string, senderName: string, messageId: string) {
+    if (!this.publicKey) return 0;
+    const list = await this.prisma.marketList.findFirst({
+      where: { id: listId, deletedAt: null },
+      select: { userId: true, name: true, members: { where: { status: "accepted" }, select: { userId: true } } },
+    });
+    if (!list) return 0;
+    const participants = new Set([list.userId, ...list.members.map(member => member.userId)]);
+    if (!participants.has(senderId)) return 0;
+    participants.delete(senderId);
+    return this.sendToUsers([...participants], {
+      type: "chat", listId, messageId,
+      title: "Nova mensagem no Gondly",
+      body: `${senderName.slice(0, 80)} enviou uma mensagem em ${list.name}.`,
+      url: `/app/lists/${listId}?chat=1`, tag: `chat-${listId}`,
+    });
   }
 
   async runFinishReminders(now = new Date()) {
@@ -145,7 +163,7 @@ export class PushService implements OnModuleInit, OnModuleDestroy {
         await webpush.sendNotification(
           { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
           JSON.stringify(payload),
-          { TTL: 60 * 60, urgency: "normal" },
+          { TTL: payload.type === "chat" ? 300 : 60 * 60, urgency: payload.type === "chat" ? "high" : "normal" },
         );
         sent += 1;
         await this.prisma.pushSubscription.update({ where: { id: subscription.id }, data: { lastUsedAt: new Date() } });

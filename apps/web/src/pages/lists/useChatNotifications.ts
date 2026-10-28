@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ListMessage } from "../../types";
 import { getListLastMessageReadAt, setListLastMessageReadAt } from "../../lib/listActivity";
-import { CHAT_SOUND_CHANGED, getChatSoundEnabled, playChatSound, saveChatSoundEnabled, unlockChatSound } from "../../lib/chatSound";
+import { CHAT_SOUND_CHANGED, getChatSoundEnabled, playChatSound, unlockChatSound } from "../../lib/chatSound";
 import { createChatAlertTracker, unreadChatMessages } from "./chatNotifications";
 
 export function useChatNotifications(listId: string | undefined, messages: ListMessage[], currentUserId: string | undefined, chatOpen: boolean) {
@@ -48,19 +48,10 @@ export function useChatNotifications(listId: string | undefined, messages: ListM
     if (tracker.current.accept(message, { currentUserId, chatOpen, visible: document.visibilityState === "visible", lastReadAt }) && soundEnabled) playChatSound();
   }, [currentUserId, chatOpen, lastReadAt, soundEnabled]);
 
-  const toggleSound = () => {
-    const next = !soundEnabled;
-    setSoundEnabled(next);
-    saveChatSoundEnabled(next);
-    if (next) unlockChatSound();
-  };
-
   return {
     unreadCount: chatOpen && visible ? 0 : unread.length,
     notice: !chatOpen && visible && latest && dismissed !== noticeKey ? latest : undefined,
     dismissNotice: () => setDismissed(noticeKey),
-    soundEnabled,
-    toggleSound,
     onIncoming,
   };
 }

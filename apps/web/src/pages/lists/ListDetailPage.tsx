@@ -1,5 +1,5 @@
 import { Fragment, lazy, Suspense, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Loader2, Menu, MessageCircle, Plus, ShoppingCart, SlidersHorizontal, Star, Tags, Trash2 } from "lucide-react";
 import type { ListItemStatus, Unit } from "@gondly/types";
@@ -51,6 +51,7 @@ const ListImportPanel = lazy(() =>
 );
 
 export function ListDetailPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { id = "" } = useParams();
   const { user, token } = useAuth();
   const navigate = useNavigate();
@@ -72,6 +73,13 @@ export function ListDetailPage() {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(() => new Set());
   const [replacePurchaseOpen, setReplacePurchaseOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  useEffect(() => {
+    if (searchParams.get("chat") !== "1") return;
+    setChatOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete("chat");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
   const [realtimeSocket, setRealtimeSocket] = useState<Socket | undefined>(undefined);
   const debouncedItemSearch = useDebouncedValue(itemSearch);
   const listRealtimeNoticeTimeoutRef = useRef<number | undefined>(undefined);
@@ -485,7 +493,7 @@ export function ListDetailPage() {
         }}
       />
 
-      <ChatMessageNotice message={chat.notice} count={chat.unreadCount} onOpen={() => setChatOpen(true)} onDismiss={chat.dismissNotice} soundEnabled={chat.soundEnabled} onToggleSound={chat.toggleSound} />
+      <ChatMessageNotice message={chat.notice} count={chat.unreadCount} onOpen={() => setChatOpen(true)} onDismiss={chat.dismissNotice} />
       <ListChatDrawer
         open={chatOpen}
         messages={chat.messages}
@@ -493,8 +501,6 @@ export function ListDetailPage() {
         sending={chat.sending}
         onClose={() => setChatOpen(false)}
         onSend={chat.send}
-        soundEnabled={chat.soundEnabled}
-        onToggleSound={chat.toggleSound}
       />
 
       {showShare && isOwner ? (

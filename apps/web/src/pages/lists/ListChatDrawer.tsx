@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { MessageCircle, Send, X } from "lucide-react";
 import { AppButton, MemberAvatar } from "../../components";
 import type { ListMessage } from "../../types";
-import { ChatSoundButton } from "./ChatMessageNotice";
 
 export function ListChatDrawer({
   open,
@@ -11,8 +10,6 @@ export function ListChatDrawer({
   sending,
   onClose,
   onSend,
-  soundEnabled,
-  onToggleSound,
 }: {
   open: boolean;
   messages: ListMessage[];
@@ -20,8 +17,6 @@ export function ListChatDrawer({
   sending: boolean;
   onClose: () => void;
   onSend: (body: string) => void;
-  soundEnabled: boolean;
-  onToggleSound: () => void;
 }) {
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -72,7 +67,6 @@ export function ListChatDrawer({
           </button>
         </div>
 
-        <div className="mt-2 flex justify-end"><ChatSoundButton enabled={soundEnabled} onToggle={onToggleSound} /></div>
         <div ref={scrollRef} className="mt-3 flex-1 space-y-3 overflow-y-auto">
           {!messages.length ? (
             <div className="grid h-full place-items-center text-center">

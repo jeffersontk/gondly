@@ -424,7 +424,7 @@ export function ActivePurchasePage() {
         confirmLoading={cancel.isPending}
       />
 
-      <ChatMessageNotice message={chat.notice} count={chat.unreadCount} onOpen={() => setChatOpen(true)} onDismiss={chat.dismissNotice} soundEnabled={chat.soundEnabled} onToggleSound={chat.toggleSound} />
+      <ChatMessageNotice message={chat.notice} count={chat.unreadCount} onOpen={() => setChatOpen(true)} onDismiss={chat.dismissNotice} />
       <ListChatDrawer
         open={chatOpen}
         messages={chat.messages}
@@ -432,8 +432,6 @@ export function ActivePurchasePage() {
         sending={chat.sending}
         onClose={() => setChatOpen(false)}
         onSend={chat.send}
-        soundEnabled={chat.soundEnabled}
-        onToggleSound={chat.toggleSound}
       />
     </ScreenContainer>
   );

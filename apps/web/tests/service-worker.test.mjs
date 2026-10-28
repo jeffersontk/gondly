@@ -6,11 +6,13 @@ const source = await readFile(
   new URL("../public/sw.js", import.meta.url),
   "utf8",
 );
+const pushSource = await readFile(new URL("../public/push-events.js", import.meta.url), "utf8");
 function worker({ offline = false } = {}) {
   const writes = [];
   const matches = [];
   const handlers = {};
   const context = vm.createContext({
+    importScripts: () => vm.runInContext(pushSource, context),
     URL,
     Response,
     console,

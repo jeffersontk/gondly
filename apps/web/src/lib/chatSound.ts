@@ -12,16 +12,29 @@ export function saveChatSoundEnabled(enabled: boolean) {
   try { window.localStorage.setItem(SOUND_KEY, enabled ? "on" : "off"); }
   catch { /* Keep the in-memory preference when storage is unavailable. */ }
   window.dispatchEvent(new Event(CHAT_SOUND_CHANGED));
+  if ("serviceWorker" in navigator) void navigator.serviceWorker.getRegistration().then(registration => {
+    registration?.active?.postMessage({ type: "chat-sound-preference", enabled });
+  }).catch(() => undefined);
 }
 
 export function createChatSoundPlayer(createContext: () => AudioContext | undefined, now = Date.now) {
   let context: AudioContext | undefined;
   let lastPlayed = -Infinity;
-  return {
+  let primed = false;
+  const player = {
     unlock() {
       try {
+        if (context?.state === "closed") { context = undefined; primed = false; }
         context ??= createContext();
-        if (context && context.state !== "running") void context.resume().catch(() => {});
+        if (context && !primed && context.createBufferSource) {
+          const source = context.createBufferSource();
+          source.buffer = context.createBuffer(1, 1, context.sampleRate);
+          source.connect(context.destination);
+          source.onended = () => source.disconnect();
+          source.start();
+          primed = true;
+        }
+        if (context && context.state !== "running") return context.resume().catch(() => {});
       } catch { /* Audio is optional; notifications remain visible. */ }
     },
     play() {
@@ -34,7 +47,7 @@ export function createChatSoundPlayer(createContext: () => AudioContext | undefi
           oscillator.type = "sine";
           oscillator.frequency.setValueAtTime(frequency, start);
           gain.gain.setValueAtTime(0.0001, start);
-          gain.gain.exponentialRampToValueAtTime(0.06, start + 0.015);
+          gain.gain.exponentialRampToValueAtTime(0.18, start + 0.015);
           gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.17);
           oscillator.connect(gain);
           gain.connect(context.destination);
@@ -46,7 +59,15 @@ export function createChatSoundPlayer(createContext: () => AudioContext | undefi
         return true;
       } catch { return false; }
     },
+    async playAfterResume() {
+      if (!context) return false;
+      try {
+        if (context.state !== "running") await context.resume();
+        return player.play();
+      } catch { return false; }
+    },
   };
+  return player;
 }
 
 const player = createChatSoundPlayer(() => {
@@ -56,4 +77,9 @@ const player = createChatSoundPlayer(() => {
 
 // Call unlock from a user gesture. Never queue an old notification for later playback.
 export const unlockChatSound = () => player.unlock();
-export const playChatSound = () => player.play();
+export const playChatSound = () => player.playAfterResume();
+
+export function installChatSoundUnlock() {
+  const unlock = () => { if (getChatSoundEnabled()) void unlockChatSound(); };
+  for (const event of ["pointerup", "touchend", "click", "keydown"]) window.addEventListener(event, unlock, { capture: true, passive: true });
+}

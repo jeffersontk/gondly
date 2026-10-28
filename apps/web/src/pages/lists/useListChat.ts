@@ -44,13 +44,26 @@ export function useListChat(listId: string | undefined, socket: Socket | undefin
       if (isNew) onIncomingRef.current(payload.message);
     };
     const resyncMessages = () => { void queryClient.invalidateQueries({ queryKey: ["list-messages", listId] }); };
+    const syncChatView = () => {
+      navigator.serviceWorker?.controller?.postMessage({ type: "chat-view", listId, connected: socket.connected && document.visibilityState === "visible" });
+    };
 
     socket.on("listMessageCreated", handleMessageCreated);
     socket.on("connect", resyncMessages);
+    socket.on("connect", syncChatView);
+    socket.on("disconnect", syncChatView);
+    document.addEventListener("visibilitychange", syncChatView);
+    navigator.serviceWorker?.addEventListener("controllerchange", syncChatView);
+    syncChatView();
     if (socket.connected) resyncMessages();
     return () => {
       socket.off("listMessageCreated", handleMessageCreated);
       socket.off("connect", resyncMessages);
+      socket.off("connect", syncChatView);
+      socket.off("disconnect", syncChatView);
+      document.removeEventListener("visibilitychange", syncChatView);
+      navigator.serviceWorker?.removeEventListener("controllerchange", syncChatView);
+      navigator.serviceWorker?.controller?.postMessage({ type: "chat-view", listId: null, connected: false });
     };
   }, [socket, listId, queryClient]);
 

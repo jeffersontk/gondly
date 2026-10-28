@@ -10,6 +10,9 @@ import { installOfflineQueueSync } from "./lib/offlineQueue";
 import { initPwaInstall } from "./lib/pwaInstall";
 import { installBackgroundQuerySync, installQueryCachePersistence, queryClient, restorePersistedQueryCache } from "./lib/queryClient";
 import "./styles.css";
+import { installChatSoundUnlock } from "./lib/chatSound";
+
+installChatSoundUnlock();
 
 async function bootstrap() {
   await restorePersistedQueryCache();
