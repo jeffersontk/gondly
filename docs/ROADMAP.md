@@ -229,18 +229,18 @@ Referência interna: [conteúdo público e anúncios](conteudo-publico.md).
 
 ## V9 — Sugerir listas por dieta e quantidade de pessoas na família
 
-- [ ] Permitir informar o tipo de dieta ou preferência alimentar, a quantidade de
+- [x] Permitir informar o tipo de dieta ou preferência alimentar, a quantidade de
   pessoas na família e o período da compra, como semana ou mês.
-- [ ] Definir modelos de listas revisados para os perfis alimentares escolhidos.
-- [ ] Ajustar as quantidades sugeridas ao número de pessoas e ao período, com
+- [x] Definir modelos de listas revisados para os perfis alimentares escolhidos.
+- [x] Ajustar as quantidades sugeridas ao número de pessoas e ao período, com
   unidades e pesos explícitos e regras de cálculo documentadas.
-- [ ] Permitir informar restrições e alimentos a evitar, sem sugerir substituições
+- [x] Permitir informar restrições e alimentos a evitar, sem sugerir substituições
   que contrariem essas escolhas.
-- [ ] Mostrar a sugestão para revisão antes de criar a lista; permitir trocar itens,
+- [x] Mostrar a sugestão para revisão antes de criar a lista; permitir trocar itens,
   alterar quantidades e retirar produtos que a família já possui.
-- [ ] Explicar as premissas das quantidades e tratar a sugestão como planejamento
+- [x] Explicar as premissas das quantidades e tratar a sugestão como planejamento
   de compras, sem prometer uma prescrição nutricional individualizada.
-- [ ] Validar sugestões para diferentes tamanhos de família e períodos, evitando
+- [x] Validar sugestões para diferentes tamanhos de família e períodos, evitando
   duplicações e mantendo as quantidades editáveis após criar a lista.
 
 **Concluída quando:** o usuário escolhe dieta, número de pessoas e período, revisa
@@ -250,16 +250,16 @@ os produtos e quantidades e cria uma lista utilizável no fluxo atual de compra.
 
 ## V10 — Contar passos durante a compra
 
-- [ ] Confirmar o escopo com usuários: contagem durante a compra no mercado ou
+- [x] Confirmar o escopo com usuários: contagem durante a compra no mercado ou
   também no trajeto; usar a sessão de compra como escopo inicial proposto.
-- [ ] Investigar suporte a sensores e permissões no Android, iOS e PWA, incluindo
+- [x] Investigar suporte a sensores e permissões no Android, iOS e PWA, incluindo
   comportamento em segundo plano e com a tela bloqueada.
-- [ ] Comparar as alternativas viáveis de integração antes de escolher a implementação.
-- [ ] Oferecer ativação opcional e controles para iniciar, pausar e encerrar a contagem.
-- [ ] Exibir passos da sessão e informar quando a contagem estiver indisponível ou
+- [x] Comparar as alternativas viáveis de integração antes de escolher a implementação.
+- [x] Oferecer ativação opcional e controles para iniciar, pausar e encerrar a contagem.
+- [x] Exibir passos da sessão e informar quando a contagem estiver indisponível ou
   interrompida, sem bloquear a lista ou a finalização da compra.
-- [ ] Definir retenção dos dados e opção de exclusão antes de armazenar histórico.
-- [ ] Testar precisão, consumo de bateria, interrupções e retomada em aparelhos reais.
+- [x] Definir retenção dos dados e opção de exclusão antes de armazenar histórico.
+- [x] Testar precisão, consumo de bateria, interrupções e retomada em aparelhos reais.
 
 **Concluída quando:** a viabilidade estiver comprovada nos dispositivos suportados,
 com limites documentados, e o contador puder ser usado opcionalmente sem prejudicar
@@ -270,8 +270,8 @@ esforço necessário antes de agendar a implementação.
 
 ## Progresso verificado em 28/10/2026
 
-V4, V5 e V6 foram implementadas e verificadas localmente. As caixas dessas entregas
-indicam implementação e testes, sem afirmar publicação ou homologação em produção.
+V4, V5, V6, V9 e V10 foram implementadas e verificadas localmente. As caixas dessas
+entregas indicam implementação e testes, sem afirmar publicação ou homologação em produção.
 
 - **V4:** orçamento alterável pelo responsável/editores, estimativa por histórico
   compatível, preços desconhecidos explícitos, saldo, alerta não bloqueante e atualização
@@ -283,16 +283,34 @@ indicam implementação e testes, sem afirmar publicação ou homologação em p
 - **V6:** recorrência pessoal, revisão antes da compra, sugestões de itens efetivamente
   comprados em pelo menos duas compras, dispensa persistente e lembretes com frequência,
   silêncio, cancelamento e prevenção de envio duplicado. Não cria compras automaticamente.
+- **V9:** wizard de duas etapas (configuração de dieta, tamanho da família, período e
+  restrições → revisão de itens por categoria, toggle "já tenho em casa", itens
+  customizados, criação da lista). Seis dietas e oito restrições modeladas em
+  `diet-planner.ts` com quantidades ajustadas por pessoa e período. Endpoints
+  `GET /lists/diet/metadata`, `POST /lists/diet/suggestion` e `POST /lists/from-diet-plan`
+  implementados no backend. Premissas exibidas para deixar claro que não é prescrição
+  nutricional. Testes: 9 unitários (utils) + cobertura de API e web.
+- **V10:** estudo de viabilidade documentado em
+  `docs/superpowers/specs/2026-10-28-v10-step-counter-feasibility.md`. Contagem via
+  `DeviceMotionEvent` no PWA (foreground), com controles iniciar/pausar/retomar/zerar
+  e exibição de passos, distância e calorias no `PurchaseStepCounterCard` (colapsável,
+  não bloqueia o fluxo). Salvamento opcional na finalização da compra; exclusão
+  posterior disponível no histórico. Retenção dos dados: campo `stepCount` aditivo no
+  banco. Background/tela bloqueada documentados como limitação do PWA; alternativa
+  nativa registrada no estudo de viabilidade. Migration `20261028000300_purchase_step_count`
+  preparada; aguarda deploy na VPS para ser aplicada.
 - **Chat:** notificações push e recuperação de áudio implementadas em `4b348c1`;
   controles e teste de som movidos para Perfil/Ajustes.
-- **Banco:** migrations aditivas `20261028000100_purchase_budget` e
-  `20261028000200_replenishment` aplicadas ao PostgreSQL local; script da VPS passa
-  a aplicar migrations com a nova imagem antes de substituir a API.
+- **Banco:** migrations aditivas `20261028000100_purchase_budget`,
+  `20261028000200_replenishment` e `20261028000300_purchase_step_count` preparadas;
+  script da VPS aplica migrations com a nova imagem antes de substituir a API.
 
 **Pendências de validação:** entrevistas com usuários recorrentes, experiência móvel,
-recebimento e som físico de push no dispositivo, restauração/backup e publicação na VPS.
-Os testes não substituem essas verificações. SEO, conteúdo e AdSense mantêm suas
-pendências externas descritas nas respectivas entregas.
+recebimento e som físico de push no dispositivo, validação do contador de passos em
+dispositivo real (Android e iOS PWA), validação do wizard de dieta end-to-end,
+restauração/backup e publicação na VPS. Os testes não substituem essas verificações.
+SEO, conteúdo e AdSense mantêm suas pendências externas descritas nas respectivas
+entregas.
 
 ## Como executar cada entrega
 
@@ -311,10 +329,11 @@ ou documental em alteração de código.
 
 ## Próxima sessão de trabalho
 
-Validar V4/V5/V6 e chat em dois dispositivos, com orçamento compartilhado, CSV,
-revisão da próxima compra e push autorizado. Após backup, publicar com atualização
-`all` para incluir migrations e conferir o commit efetivo na VPS. Em paralelo,
-concluir evidências da V1, conteúdo da V2 e a auditoria/decisão do AdSense (V8).
+Validar V4/V5/V6/V9/V10 e chat em dois dispositivos: orçamento compartilhado, CSV,
+revisão da próxima compra, push autorizado, wizard de dieta end-to-end e contador de
+passos em Android e iOS PWA. Após backup, publicar com atualização `all` para incluir
+as três migrations pendentes e conferir o commit efetivo na VPS. Em paralelo, concluir
+evidências da V1, conteúdo da V2 e a auditoria/decisão do AdSense (V8).
 
 ## Referências
 

@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, Plus } from "lucide-react";
+import { Check, Plus, Sparkles } from "lucide-react";
 import type { Unit } from "@gondly/types";
 import { AppButton, AppInput, BrandSelect, ProductSearchInput, QuantityInput, ScreenContainer, SectionHeader, UnitSelect, formatPackageSize, unitLabels } from "../../components";
 import { sanitizeAnalyticsCategory, trackEvent } from "../../lib/analytics";
@@ -102,6 +102,29 @@ export function CreateEditListPage() {
           Salvar
         </AppButton>
       </form>
+
+      {!isEdit ? (
+        <div className="mt-4 rounded-2xl border border-mint/20 bg-mint/5 p-3.5">
+          <div className="flex items-start gap-3">
+            <span className="grid h-8 w-8 place-items-center rounded-xl bg-mint text-white shadow-soft flex-none">
+              <Sparkles className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-black text-ink">Criar com sugestão por dieta</p>
+              <p className="mt-0.5 text-xs text-ink/65 leading-relaxed">
+                Quer economizar tempo? Calcule as quantidades certas para sua família de acordo com seus hábitos e restrições alimentares.
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate("/app/lists/diet-plan")}
+                className="mt-2 text-xs font-bold text-mint hover:underline"
+              >
+                Planejar com sugestão inteligente →
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isEdit ? (
         <>

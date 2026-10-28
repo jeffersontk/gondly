@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { BarChart3, RefreshCcw } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { BarChart3, Footprints, RefreshCcw } from "lucide-react";
+import { formatStepDistance } from "@gondly/utils";
 import { AppButton, ErrorState, LoadingState, PurchaseItemCard, ScreenContainer, SectionHeader, SummaryCard } from "../../components";
 import { ReportPriceAction } from "../../components/ReportPriceAction";
 import { trackEvent } from "../../lib/analytics";
@@ -12,6 +13,7 @@ import { formatBRL } from "../shared";
 export function PurchaseDetailPage() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [showRegionalComparison, setShowRegionalComparison] = useState(false);
   const purchase = useQuery({ queryKey: ["purchase", id], queryFn: () => api<Purchase>(`/purchases/${id}`), enabled: Boolean(id) });
   const purchaseComparisonQuery = purchase.data ? buildPurchaseComparisonQuery(purchase.data) : "";
@@ -23,6 +25,12 @@ export function PurchaseDetailPage() {
   const duplicate = useMutation({
     mutationFn: () => api<MarketList>(`/purchases/${id}/duplicate-as-list`, { method: "POST" }),
     onSuccess: (list) => navigate(`/app/lists/${list.id}`),
+  });
+  const removeSteps = useMutation({
+    mutationFn: () => api<Purchase>(`/purchases/${id}`, { method: "PUT", body: { stepCount: null } }),
+    onSuccess: () => {
+      queryClient.setQueryData<Purchase>(["purchase", id], (curr) => (curr ? { ...curr, stepCount: null } : curr));
+    },
   });
 
   useEffect(() => {
@@ -47,6 +55,30 @@ export function PurchaseDetailPage() {
         <SummaryCard label="Total" value={formatBRL(purchase.data.finalPaidAmount ?? purchase.data.subtotalCalculated)} />
         <SummaryCard label="Desconto" value={formatBRL(purchase.data.discountAmount ?? 0)} tone="tomato" />
       </div>
+      {purchase.data.stepCount != null && purchase.data.stepCount > 0 ? (
+        <div className="mt-3 flex items-center justify-between rounded-2xl border border-line bg-white p-3.5 shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <span className="grid h-8 w-8 place-items-center rounded-xl bg-mint/10 text-mint">
+              <Footprints className="h-4 w-4" />
+            </span>
+            <div>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-ink/60">Passos no mercado</span>
+              <p className="text-sm font-black text-ink">
+                {purchase.data.stepCount.toLocaleString("pt-BR")} passos · ~{formatStepDistance(purchase.data.stepCount * 0.75)}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => removeSteps.mutate()}
+            disabled={removeSteps.isPending}
+            className="text-xs font-bold text-tomato hover:underline disabled:opacity-50"
+            title="Excluir passos gravados"
+          >
+            {removeSteps.isPending ? "Excluindo..." : "Excluir passos"}
+          </button>
+        </div>
+      ) : null}
       <AppButton
         className="mt-3"
         full

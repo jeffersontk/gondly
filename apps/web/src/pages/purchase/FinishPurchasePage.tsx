@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ListPlus, MapPin, Users } from "lucide-react";
+import { Footprints, ListPlus, MapPin, Users } from "lucide-react";
 import { AppButton, AppInput, LoadingState, MarketSelect, MoneyInput, ScreenContainer } from "../../components";
 import { ItemFeedback } from "../../components/ItemFeedback";
 import { trackEvent } from "../../lib/analytics";
@@ -12,6 +12,7 @@ import { useAuth } from "../../lib/auth";
 import { useOutboxStatus } from "../../lib/offlineQueue";
 import { invalidatePurchaseReports } from "../../lib/purchaseReportCache";
 import { updateMarketCaches } from "../../lib/marketCache";
+import { clearStoredPurchaseSteps, getStoredPurchaseSteps } from "../../lib/stepCounter";
 import { marketPlacePayload, matchNearbyMarket } from "../markets/nearbyMarketMatching";
 import type { Market, MarketList, NearbyMarketPlace, PriceSharingPreference, Purchase } from "../../types";
 import { decimalValue, finishSchema, FinishForm, formatBRL, MarketForm, marketSchema, removeActivePurchaseCache } from "../shared";
@@ -41,6 +42,17 @@ export function FinishPurchasePage() {
   });
   const purchase = active.data?.find((entry) => entry.id === purchaseId) ?? active.data?.[0];
   const outbox = useOutboxStatus(purchase?.id);
+  const sessionSteps = purchase?.id ? getStoredPurchaseSteps(purchase.id) : 0;
+  const [saveSteps, setSaveSteps] = useState(sessionSteps > 0);
+  const [manualSteps, setManualSteps] = useState(sessionSteps);
+
+  useEffect(() => {
+    if (sessionSteps > 0) {
+      setSaveSteps(true);
+      setManualSteps(sessionSteps);
+    }
+  }, [sessionSteps]);
+
   const form = useForm<FinishForm>({
     resolver: zodResolver(finishSchema),
     defaultValues: { marketId: "", finalPaidAmount: 0, sharePrices: false, notes: "" },
@@ -52,6 +64,7 @@ export function FinishPurchasePage() {
   const finish = useMutation({
     mutationFn: (values: FinishForm) => api<Purchase>(`/purchases/${purchase?.id}/finish`, { method: "POST", body: values }),
     onSuccess: async (saved, values) => {
+      if (saved.id) clearStoredPurchaseSteps(saved.id);
       queryClient.setQueryData<Purchase[]>(["active-purchases"], (current) => removeActivePurchaseCache(current, saved.id));
       if (createMissingList && saved.items.some((item) => Number(item.pricePaid ?? 0) <= 0)) {
         // Best effort: the purchase is already saved even if the list cannot be created.
@@ -196,7 +209,12 @@ export function FinishPurchasePage() {
           </div>
         ) : null}
       </div>
-      <form className="space-y-3" onSubmit={form.handleSubmit((values) => finish.mutate(values))}>
+      <form
+        className="space-y-3"
+        onSubmit={form.handleSubmit((values) =>
+          finish.mutate({ ...values, stepCount: saveSteps && manualSteps > 0 ? manualSteps : null }),
+        )}
+      >
         {outbox.pendingCount > 0 ? (
           <ItemFeedback
             tone="info"
@@ -296,6 +314,39 @@ export function FinishPurchasePage() {
           </button>
         </div>
         <MoneyInput label="Valor pago no caixa" error={form.formState.errors.finalPaidAmount?.message} {...form.register("finalPaidAmount")} />
+        <div className="rounded-xl border border-line bg-white p-3.5 shadow-sm">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 rounded border-line text-mint focus:ring-mint"
+              checked={saveSteps}
+              onChange={(event) => setSaveSteps(event.target.checked)}
+            />
+            <div className="min-w-0 flex-1">
+              <span className="flex items-center gap-1.5 text-sm font-black text-ink">
+                <Footprints className="h-4 w-4 text-mint" />
+                Registrar passos no histórico da compra (opcional)
+              </span>
+              <p className="mt-0.5 text-xs font-semibold leading-5 text-ink/60">
+                Acompanhe sua caminhada no mercado. Você pode alterar a quantidade ou desmarcar para não salvar.
+              </p>
+              {saveSteps ? (
+                <div className="mt-2.5 flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100000}
+                    value={manualSteps || ""}
+                    onChange={(e) => setManualSteps(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                    placeholder="Ex.: 850"
+                    className="h-10 w-32 rounded-xl border border-line bg-white px-3 text-sm font-bold text-ink outline-none transition focus:border-mint focus:ring-2 focus:ring-mint/20"
+                  />
+                  <span className="text-xs font-bold text-ink/60">passos</span>
+                </div>
+              ) : null}
+            </div>
+          </label>
+        </div>
         <AppInput label="Observações" {...form.register("notes")} />
         <div className="rounded-xl bg-white p-3 shadow-soft">
           <p className="text-xs font-semibold text-ink/50">Desconto/diferenca</p>

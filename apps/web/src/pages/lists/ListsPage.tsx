@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { Sparkles } from "lucide-react";
 import { EmptyState, FloatingActionButton, LoadingState, MarketListCard, ScreenContainer, SearchBar } from "../../components";
 import { AdSlot } from "../../ads/AdSlot";
 import { trackEvent, trackSafeSearch } from "../../lib/analytics";
@@ -24,6 +25,25 @@ export function ListsPage() {
     <ScreenContainer>
       <h1 className="mb-5 text-3xl font-black tracking-[-0.04em] text-ink">Listas</h1>
       <SearchBar placeholder="Buscar lista" value={q} onChange={(event) => setQ(event.target.value)} />
+      <button
+        type="button"
+        onClick={() => {
+          trackEvent("click_diet_plan_shortcut", { source: "lists_page" });
+          navigate("/app/lists/diet-plan");
+        }}
+        className="mt-3 flex w-full items-center justify-between gap-3 rounded-2xl border border-mint/20 bg-mint/5 p-3.5 text-left transition hover:bg-mint/10 active:scale-[0.99]"
+      >
+        <div className="flex items-center gap-3">
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-mint text-white shadow-soft">
+            <Sparkles className="h-4 w-4" />
+          </span>
+          <div>
+            <span className="text-[11px] font-black uppercase tracking-wider text-mint">Planejador inteligente</span>
+            <p className="text-sm font-black text-ink">Sugerir lista por dieta e família</p>
+          </div>
+        </div>
+        <span className="text-xs font-bold text-mint">Começar →</span>
+      </button>
       <div className="mt-4 space-y-3">
         {isLoading ? <LoadingState /> : null}
         {!isLoading && !filtered.length ? <EmptyState title="Você ainda não tem listas. Crie sua primeira lista de mercado." /> : null}

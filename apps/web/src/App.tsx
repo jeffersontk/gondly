@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   NavLink,
   Navigate,
@@ -55,6 +55,11 @@ const ListDetailPage = lazy(() =>
 const CreateEditListPage = lazy(() =>
   import("./pages/lists/CreateEditListPage").then((module) => ({
     default: module.CreateEditListPage,
+  })),
+);
+const DietPlanPage = lazy(() =>
+  import("./pages/lists/DietPlanPage").then((module) => ({
+    default: module.DietPlanPage,
   })),
 );
 const SharedListPage = lazy(() =>
@@ -211,6 +216,7 @@ export function App() {
           <Route path="/app/home" element={<HomePage />} />
           <Route path="/app/lists" element={<ListsPage />} />
           <Route path="/app/lists/new" element={<CreateEditListPage />} />
+          <Route path="/app/lists/diet-plan" element={<DietPlanPage />} />
           <Route path="/app/lists/:id" element={<ListDetailPage />} />
           <Route path="/app/lists/:id/edit" element={<CreateEditListPage />} />
           <Route path="/app/purchase" element={<ActivePurchasePage />} />
@@ -259,6 +265,7 @@ export function App() {
 
           <Route path="/lists" element={<ListsPage />} />
           <Route path="/lists/new" element={<CreateEditListPage />} />
+          <Route path="/lists/diet-plan" element={<DietPlanPage />} />
           <Route path="/lists/:id" element={<ListDetailPage />} />
           <Route path="/lists/:id/edit" element={<CreateEditListPage />} />
           <Route path="/purchase/start" element={<StartPurchasePage />} />

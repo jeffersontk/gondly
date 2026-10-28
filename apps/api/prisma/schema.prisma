@@ -305,6 +305,7 @@ model Purchase {
   budgetAmount        Decimal?              @db.Decimal(12, 2)
   discountAmount      Decimal?              @db.Decimal(12, 2)
   notes               String?
+  stepCount           Int?
   // Last time an item was put in or changed in the cart; drives the "finish your purchase" push reminders.
   lastCartActivityAt  DateTime?
   finishRemindersSent Int                   @default(0)

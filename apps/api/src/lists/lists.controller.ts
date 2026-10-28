@@ -4,8 +4,10 @@ import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import type { JwtUser } from "../common/auth.types";
 import {
+  CreateFromDietPlanDto,
   CreateListDto,
   CreateListItemDto,
+  GenerateDietSuggestionDto,
   ImportListItemsDto,
   SetListItemImportantDto,
   SetListItemStateDto,
@@ -29,6 +31,21 @@ export class ListsController {
   @Post()
   create(@CurrentUser() user: JwtUser, @Body() dto: CreateListDto) {
     return this.listsService.create(user.id, dto);
+  }
+
+  @Get("diet/metadata")
+  getDietMetadata() {
+    return this.listsService.getDietMetadata();
+  }
+
+  @Post("diet/suggestion")
+  getDietSuggestion(@Body() dto: GenerateDietSuggestionDto) {
+    return this.listsService.getDietSuggestion(dto);
+  }
+
+  @Post("from-diet-plan")
+  createFromDietPlan(@CurrentUser() user: JwtUser, @Body() dto: CreateFromDietPlanDto) {
+    return this.listsService.createFromDietPlan(user.id, dto);
   }
 
   @Get(":id")

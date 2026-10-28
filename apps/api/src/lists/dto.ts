@@ -129,3 +129,41 @@ export class CreateListMessageDto {
   @MaxLength(1000)
   body!: string;
 }
+
+export class GenerateDietSuggestionDto {
+  @IsString()
+  dietType!: string;
+
+  @IsNumber()
+  @Min(1)
+  familySize!: number;
+
+  @IsNumber()
+  @Min(1)
+  periodDays!: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  restrictions?: string[];
+}
+
+export class CreateFromDietPlanDto {
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => CreateListItemDto)
+  items!: CreateListItemDto[];
+}
+

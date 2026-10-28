@@ -60,4 +60,50 @@ export type MoneySummary = {
   subtotalCalculated: number;
   finalPaidAmount?: number | null;
   discountAmount?: number | null;
+  stepCount?: number | null;
 };
+
+export const dietTypes = [
+  "balanced",
+  "vegetarian",
+  "vegan",
+  "low_carb",
+  "gluten_free",
+  "lactose_free",
+] as const;
+export type DietType = (typeof dietTypes)[number];
+
+export const dietRestrictions = [
+  "no_red_meat",
+  "no_pork",
+  "no_seafood",
+  "no_dairy",
+  "no_gluten",
+  "no_eggs",
+  "no_nuts",
+  "low_sugar",
+] as const;
+export type DietRestriction = (typeof dietRestrictions)[number];
+
+export type DietPlanItem = {
+  productName: string;
+  category: string;
+  unit: Unit;
+  packageSize?: number | null;
+  packageUnit?: Unit | null;
+  suggestedQuantity: number;
+  baseWeeklyPerPerson: number;
+  notes?: string;
+  alreadyAtHome?: boolean;
+};
+
+export type DietPlanSuggestion = {
+  dietType: DietType;
+  dietName: string;
+  familySize: number;
+  periodDays: number;
+  restrictions: DietRestriction[];
+  items: DietPlanItem[];
+  premises: string;
+};
+

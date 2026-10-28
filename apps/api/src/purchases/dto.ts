@@ -29,6 +29,12 @@ export class UpdatePurchaseDto {
   @IsString()
   @MaxLength(500)
   notes?: string;
+
+  @IsOptional()
+  @ValidateIf((value) => value.stepCount !== null)
+  @IsNumber()
+  @Min(0)
+  stepCount?: number | null;
 }
 
 export class CreatePurchaseItemDto {
@@ -84,6 +90,11 @@ export class CreatePurchaseItemDto {
   @IsString()
   @MaxLength(500)
   notes?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  stepCount?: number;
 }
 
 export class UpdatePurchaseItemDto extends PartialType(CreatePurchaseItemDto) {}
@@ -109,4 +120,9 @@ export class FinishPurchaseDto {
   @IsString()
   @MaxLength(500)
   notes?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  stepCount?: number;
 }

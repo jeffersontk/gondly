@@ -350,6 +350,7 @@ export class PurchasesService {
           finalPaidAmount: dto.finalPaidAmount,
           discountAmount,
           notes: dto.notes,
+          stepCount: typeof dto.stepCount === "number" && dto.stepCount >= 0 ? dto.stepCount : null,
         },
         include: { items: true, market: true, sourceList: true },
       });

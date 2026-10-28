@@ -1,4 +1,8 @@
 import type {
+  DietPlanItem,
+  DietPlanSuggestion,
+  DietRestriction,
+  DietType,
   EntitlementKey,
   ListItemStatus,
   MarketListStatus,
@@ -12,6 +16,13 @@ import type {
   SharedRole,
   Unit,
 } from "@gondly/types";
+
+export type {
+  DietPlanItem,
+  DietPlanSuggestion,
+  DietRestriction,
+  DietType,
+};
 
 export type User = {
   id: string;
@@ -254,7 +265,9 @@ export type Purchase = {
   completedAt?: string | null;
   subtotalCalculated: number;
   finalPaidAmount?: number | null;
+  budgetAmount?: number | null;
   discountAmount?: number | null;
+  stepCount?: number | null;
   notes?: string | null;
   updatedAt?: string;
   items: PurchaseItem[];

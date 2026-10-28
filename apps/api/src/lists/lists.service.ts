@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { ListItemStatus, SharedRole, Unit } from "@prisma/client";
-import { normalizePrice } from "@gondly/utils";
+import { DIET_DEFINITIONS, RESTRICTION_DEFINITIONS, generateDietSuggestion, normalizePrice } from "@gondly/utils";
 import { randomUUID } from "crypto";
 import { BillingService } from "../billing/billing.service";
 import { addDays } from "../common/utils/date";
@@ -10,7 +10,16 @@ import { PrismaService } from "../prisma/prisma.service";
 import { ItemSnapshotResolver, type ItemProductInput, type ProductSnapshot } from "../products/item-snapshot.resolver";
 import { RealtimeService } from "../realtime/realtime.service";
 import { PushService } from "../push/push.service";
-import { CreateInviteDto, CreateListDto, CreateListItemDto, ImportListItemsDto, UpdateListDto, UpdateListItemDto } from "./dto";
+import {
+  CreateFromDietPlanDto,
+  CreateInviteDto,
+  CreateListDto,
+  CreateListItemDto,
+  GenerateDietSuggestionDto,
+  ImportListItemsDto,
+  UpdateListDto,
+  UpdateListItemDto,
+} from "./dto";
 
 @Injectable()
 export class ListsService {
@@ -54,6 +63,62 @@ export class ListsService {
           acceptedAt: new Date(),
         },
       });
+
+      return tx.marketList.findUnique({ where: { id: list.id }, include: this.listInclude() });
+    });
+  }
+
+  getDietMetadata() {
+    return {
+      diets: DIET_DEFINITIONS,
+      restrictions: RESTRICTION_DEFINITIONS,
+    };
+  }
+
+  getDietSuggestion(dto: GenerateDietSuggestionDto) {
+    return generateDietSuggestion({
+      dietType: dto.dietType as any,
+      familySize: dto.familySize,
+      periodDays: dto.periodDays,
+      restrictions: (dto.restrictions || []) as any,
+    });
+  }
+
+  async createFromDietPlan(userId: string, dto: CreateFromDietPlanDto) {
+    return this.prisma.$transaction(async (tx) => {
+      const list = await tx.marketList.create({
+        data: {
+          name: dto.name.trim(),
+          description: dto.description?.trim() || null,
+          userId,
+        },
+      });
+
+      await tx.listMember.create({
+        data: {
+          listId: list.id,
+          userId,
+          role: "owner",
+          status: "accepted",
+          acceptedAt: new Date(),
+        },
+      });
+
+      if (dto.items && dto.items.length > 0) {
+        await tx.marketListItem.createMany({
+          data: dto.items.map((item) => ({
+            listId: list.id,
+            productName: item.productName.trim(),
+            category: item.category?.trim() || null,
+            unit: item.unit,
+            expectedQuantity: typeof item.expectedQuantity === "number" && item.expectedQuantity > 0 ? item.expectedQuantity : 1,
+            packageSize: typeof item.packageSize === "number" && item.packageSize > 0 ? item.packageSize : null,
+            packageUnit: item.packageSize ? item.packageUnit ?? null : null,
+            notes: item.notes?.trim() || null,
+            important: item.important ?? false,
+          })),
+        });
+      }
 
       return tx.marketList.findUnique({ where: { id: list.id }, include: this.listInclude() });
     });

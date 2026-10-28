@@ -557,6 +557,7 @@ export const finishSchema = z.object({
   finalPaidAmount: decimalNumber("Valor invalido"),
   sharePrices: z.boolean().default(false),
   notes: z.string().optional(),
+  stepCount: z.number().int().min(0).optional().nullable(),
 });
 
 export type ListForm = z.infer<typeof listSchema>;
