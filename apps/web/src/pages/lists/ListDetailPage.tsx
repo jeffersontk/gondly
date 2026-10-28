@@ -43,6 +43,7 @@ import { ListFiltersDrawer } from "./ListFiltersDrawer";
 import { ListSharingPanel } from "./SharedListMembers";
 import { useListChat } from "./useListChat";
 import { ListPurchaseOptions } from "./ListPurchaseOptions";
+import { ListItemBrandPreference } from "./ListItemBrandPreference";
 import { ChatMessageNotice, ChatUnreadBadge } from "./ChatMessageNotice";
 
 const ListImportPanel = lazy(() =>
@@ -656,6 +657,9 @@ export function ListDetailPage() {
                           {removeItem.isPending && removeItem.variables === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                         </button>
                       </div>
+                      {currentList.userId === user?.id || currentList.members?.some(member => member.user.id === user?.id && member.status === "accepted" && member.role === "editor") ? (
+                        <ListItemBrandPreference listId={id} item={item} />
+                      ) : null}
                       <ListPurchaseOptions
                         item={item}
                         onChangeStatus={status => setItemState.mutateAsync({ itemId: item.id, status })}

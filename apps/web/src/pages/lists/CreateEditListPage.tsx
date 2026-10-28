@@ -126,6 +126,7 @@ export function CreateEditListPage() {
               }}
             />
             <BrandSelect
+              label="Marca de preferência (opcional)"
               brandId={itemBrandId}
               brandName={itemBrandName}
               disabled={addItem.isPending}
