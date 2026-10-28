@@ -1,6 +1,6 @@
 # Roadmap de evolução do Gondly
 
-Atualizado em 27/10/2026. Plano de execução proposto para as próximas entregas.
+Atualizado em 28/10/2026. Plano de execução proposto para as próximas entregas.
 Os números representam a ordem das entregas, não alterações já feitas na versão do pacote.
 
 ## Objetivo
@@ -114,12 +114,12 @@ Definir metas numéricas depois de medir a linha de base.
 
 ## V4 — Planejar o gasto antes do caixa
 
-- [ ] Definir orçamento opcional por compra e quem pode alterá-lo em compras compartilhadas.
-- [ ] Exibir gasto confirmado, estimativa dos itens restantes e saldo do orçamento separadamente.
-- [ ] Usar histórico compatível de produto, unidade e embalagem para estimar preços.
-- [ ] Informar origem/data da referência e quantidade de itens sem preço conhecido.
-- [ ] Alertar ao ultrapassar o limite, sem impedir a conclusão da compra.
-- [ ] Validar cálculo com peso, volume, quantidades fracionadas, descontos e dados ausentes.
+- [x] Definir orçamento opcional por compra e quem pode alterá-lo em compras compartilhadas.
+- [x] Exibir gasto confirmado, estimativa dos itens restantes e saldo do orçamento separadamente.
+- [x] Usar histórico compatível de produto, unidade e embalagem para estimar preços.
+- [x] Informar origem/data da referência e quantidade de itens sem preço conhecido.
+- [x] Alertar ao ultrapassar o limite, sem impedir a conclusão da compra.
+- [x] Validar cálculo com peso, volume, quantidades fracionadas, descontos e dados ausentes.
 
 **Concluída quando:** estimativa não se confunde com valor pago, totais são calculados
 consistentemente no backend e todos os participantes veem o mesmo orçamento.
@@ -129,12 +129,12 @@ com dados suficientes; não tratar preço ausente como produto gratuito.
 
 ## V5 — Melhorar histórico e comparação
 
-- [ ] Exibir evolução do preço por produto, com período e unidade de comparação claros.
-- [ ] Mostrar data da referência, mercado e origem pessoal ou agregada dos dados.
-- [ ] Diferenciar produtos equivalentes de alternativas de marca ou embalagem.
-- [ ] Expandir relatórios por mercado e categoria, com filtros de período.
-- [ ] Permitir exportar o histórico pessoal em CSV, com valores e datas consistentes.
-- [ ] Validar autorização, amostras pequenas e proteção de dados de outros usuários.
+- [x] Exibir evolução do preço por produto, com período e unidade de comparação claros.
+- [x] Mostrar data da referência, mercado e origem pessoal ou agregada dos dados.
+- [x] Diferenciar produtos equivalentes de alternativas de marca ou embalagem.
+- [x] Expandir relatórios por mercado e categoria, com filtros de período.
+- [x] Permitir exportar o histórico pessoal em CSV, com valores e datas consistentes.
+- [x] Validar autorização, amostras pequenas e proteção de dados de outros usuários.
 
 **Concluída quando:** usuário consegue entender o que está sendo comparado, avaliar
 a atualidade dos dados e exportar apenas informações às quais tem acesso.
@@ -144,11 +144,11 @@ a atualidade dos dados e exportar apenas informações às quais tem acesso.
 ## V6 — Facilitar compras recorrentes
 
 - [ ] Entrevistar usuários recorrentes e identificar reposições que geram trabalho repetitivo.
-- [ ] Definir listas recorrentes com revisão antes de iniciar outra compra.
-- [ ] Sugerir itens frequentes com explicação e opção de remover ou dispensar sugestões.
-- [ ] Criar lembretes de reposição com frequência escolhida pelo usuário.
-- [ ] Reaproveitar a infraestrutura de push existente, respeitando preferências e horários.
-- [ ] Validar cancelamento, falta de permissão e prevenção de notificações duplicadas.
+- [x] Definir listas recorrentes com revisão antes de iniciar outra compra.
+- [x] Sugerir itens frequentes com explicação e opção de remover ou dispensar sugestões.
+- [x] Criar lembretes de reposição com frequência escolhida pelo usuário.
+- [x] Reaproveitar a infraestrutura de push existente, respeitando preferências e horários.
+- [x] Validar cancelamento, falta de permissão e prevenção de notificações duplicadas.
 
 **Concluída quando:** é possível preparar e revisar a próxima lista, controlar os
 lembretes e interromper recorrências sem duplicação de itens ou compras.
@@ -268,6 +268,32 @@ esforço necessário antes de agendar a implementação.
 
 **Acompanhar:** adesão, interrupções da contagem e impacto na bateria e na usabilidade.
 
+## Progresso verificado em 28/10/2026
+
+V4, V5 e V6 foram implementadas e verificadas localmente. As caixas dessas entregas
+indicam implementação e testes, sem afirmar publicação ou homologação em produção.
+
+- **V4:** orçamento alterável pelo responsável/editores, estimativa por histórico
+  compatível, preços desconhecidos explícitos, saldo, alerta não bloqueante e atualização
+  em tempo real. Referências de compras compartilhadas são acessíveis ao grupo.
+- **V5:** histórico por período/mercado/categoria, CSV autorizado com proteção contra
+  fórmulas e unidade/valor final/desconto explícitos, comparação separada por marca,
+  embalagem e unidade, além de histórico datado por produto. Datas escolhidas na tela
+  usam o dia local; o CSV registra os instantes em UTC.
+- **V6:** recorrência pessoal, revisão antes da compra, sugestões de itens efetivamente
+  comprados em pelo menos duas compras, dispensa persistente e lembretes com frequência,
+  silêncio, cancelamento e prevenção de envio duplicado. Não cria compras automaticamente.
+- **Chat:** notificações push e recuperação de áudio implementadas em `4b348c1`;
+  controles e teste de som movidos para Perfil/Ajustes.
+- **Banco:** migrations aditivas `20261028000100_purchase_budget` e
+  `20261028000200_replenishment` aplicadas ao PostgreSQL local; script da VPS passa
+  a aplicar migrations com a nova imagem antes de substituir a API.
+
+**Pendências de validação:** entrevistas com usuários recorrentes, experiência móvel,
+recebimento e som físico de push no dispositivo, restauração/backup e publicação na VPS.
+Os testes não substituem essas verificações. SEO, conteúdo e AdSense mantêm suas
+pendências externas descritas nas respectivas entregas.
+
 ## Como executar cada entrega
 
 1. Escolher a próxima entrega e conferir os bloqueios externos.
@@ -285,11 +311,10 @@ ou documental em alteração de código.
 
 ## Próxima sessão de trabalho
 
-**Começar pela V1:** confirmar verificação do domínio, deploy do frontend e respostas
-HTTP. Em seguida, preparar os cenários de duas contas da V3. Não iniciar orçamento
-ou recorrência antes de estabilizar a colaboração.
-Na mesma etapa inicial, conferir pendências de conta e exclusões do AdSense (V8),
-aproveitando a V2 para corrigir lacunas de conteúdo identificadas na auditoria.
+Validar V4/V5/V6 e chat em dois dispositivos, com orçamento compartilhado, CSV,
+revisão da próxima compra e push autorizado. Após backup, publicar com atualização
+`all` para incluir migrations e conferir o commit efetivo na VPS. Em paralelo,
+concluir evidências da V1, conteúdo da V2 e a auditoria/decisão do AdSense (V8).
 
 ## Referências
 

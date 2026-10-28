@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   Calendar,
@@ -28,7 +28,7 @@ import type {
   Brand,
   InsightsReport,
   Market,
-  PriceComparison,
+  PriceComparison as BasePriceComparison,
   PriceLibraryItem,
   PriceLibraryMarket,
   Purchase,
@@ -44,6 +44,7 @@ import { reverseGeocodeForComparison } from "./browserGeocoding";
 import { NeighborhoodSelect } from "./NeighborhoodSelect";
 
 type TabKey = "mine" | "region" | "basket";
+type PriceComparison = BasePriceComparison & { productId?: string | null; normalizedUnit?: string | null; samplesCount?: number };
 type CardData = { kind: "mine"; item: PriceComparison } | { kind: "region"; item: PriceLibraryItem };
 type FilterSection = "brand" | "period" | "market" | "region";
 
@@ -286,7 +287,7 @@ export function PriceComparisonPage() {
             ) : null}
             <ComparisonResultsCount count={mineItems.length} visible={visibleCount} />
             {mineItems.slice(0, visibleCount).map((item) => (
-              <ProductCard key={item.productName} data={{ kind: "mine", item }} onDetails={() => openDetail({ kind: "mine", item })} />
+              <ProductCard key={[item.productName, item.brandName, item.packageSize, item.packageUnit, item.normalizedUnit].join("|")} data={{ kind: "mine", item }} onDetails={() => openDetail({ kind: "mine", item })} />
             ))}
             {visibleCount < mineItems.length ? <AppButton full variant="secondary" onClick={() => setVisibleCount(count => count + COMPARISON_PAGE_SIZE)}>Mostrar mais {Math.min(COMPARISON_PAGE_SIZE, mineItems.length - visibleCount)} produtos</AppButton> : null}
           </div>
@@ -826,6 +827,7 @@ function RegionCardFooter({ item }: { item: PriceLibraryItem }) {
 function MineCardFooter({ item }: { item: PriceComparison }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] font-semibold text-ink/55">
+      <span>Origem pessoal · Preços por {item.normalizedUnit ?? "unidade não informada"}{(item.samplesCount ?? 0) < 3 ? " · Amostra pequena" : ""}</span>
       <span className="flex items-center gap-1">
         <Store className="h-3.5 w-3.5" /> Último mercado: {item.lastMarket ?? "-"}
       </span>
@@ -876,6 +878,7 @@ function ProductDetailSheet({
       <p className="text-sm font-semibold text-ink/55">{[cardIdentity(data), cardCategory(data)].filter(Boolean).join(" · ") || "Sem categoria"}</p>
 
       <h3 className="mt-4 text-sm font-bold text-ink">Resumo de preços</h3>
+      {data.kind === "mine" ? <p className="mt-2 text-xs text-ink/60">Origem pessoal · Comparação por {data.item.normalizedUnit ?? "unidade não informada"}. Marcas e embalagens diferentes são alternativas separadas. Desconto geral da compra não incluído.</p> : null}
       <div className="mt-2 grid grid-cols-2 gap-2">
         {data.kind === "mine" && data.item.lastPrice != null ? <DetailStat label="Você pagou" value={formatBRL(data.item.lastPrice)} /> : null}
         <DetailStat label={data.kind === "region" ? "Menor preço regional" : "Menor preço"} value={prices.min != null ? formatBRL(prices.min) : "--"} />
@@ -884,6 +887,7 @@ function ProductDetailSheet({
         {normalizedLine ? <DetailStat label="Preço normalizado" value={normalizedLine} /> : null}
       </div>
       {data.kind === "mine" ? <PriceVariationBadge min={prices.min} max={prices.max} purchasesCount={data.item.purchasesCount} /> : null}
+      {data.kind === "mine" && data.item.productId ? <Link className="mt-3 block text-sm font-bold text-mint" to={`/app/compare/products/${data.item.productId}`}>Ver evolução por data e mercado</Link> : null}
 
       {data.kind === "region" ? (
         <>

@@ -14,6 +14,7 @@ import { ListChatDrawer } from "../lists/ListChatDrawer";
 import { useListChat } from "../lists/useListChat";
 import { ChatMessageNotice, ChatUnreadBadge } from "../lists/ChatMessageNotice";
 import { usePurchaseRealtime } from "./usePurchaseRealtime";
+import { PurchaseBudgetCard } from "./PurchaseBudgetCard";
 import type { Purchase, PurchaseItem } from "../../types";
 import {
   formatBRL,
@@ -246,6 +247,7 @@ export function ActivePurchasePage() {
         </p>
       </div>
 
+      <PurchaseBudgetCard purchaseId={purchase.id} revision={purchase.updatedAt ?? ""} socket={realtimeSocket} />
       <div className="mt-3 grid grid-cols-[1.45fr_1fr] gap-2">
         <AppButton
           variant="primary"

@@ -21,6 +21,7 @@ type RequestOptions = Omit<RequestInit, "body"> & {
   body?: unknown;
   skipAuth?: boolean;
   timeoutMs?: number;
+  cacheFallback?: boolean;
 };
 
 type TimeoutSignal = {
@@ -100,7 +101,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
 
     return data as T;
   } catch (error) {
-    if (method === "GET" && isNetworkFailure(error)) {
+    if (method === "GET" && options.cacheFallback !== false && isNetworkFailure(error)) {
       const cached = await cacheGetRecord<T>(cacheKey);
       if (cached) return cached.value;
     }

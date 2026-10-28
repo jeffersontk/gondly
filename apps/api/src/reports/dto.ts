@@ -1,13 +1,17 @@
-import { IsIn, IsOptional, IsString } from "class-validator";
+import { IsDateString, IsIn, IsOptional, IsString } from "class-validator";
 
 export class ReportFiltersDto {
   @IsOptional()
-  @IsString()
+  @IsDateString()
   startDate?: string;
 
   @IsOptional()
-  @IsString()
+  @IsDateString()
   endDate?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
 
   @IsOptional()
   @IsString()

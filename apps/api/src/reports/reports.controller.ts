@@ -1,4 +1,5 @@
-import { Controller, Get, Param, Query, UseGuards } from "@nestjs/common";
+import { Controller, Get, Param, Query, Res, UseGuards } from "@nestjs/common";
+import type { Response } from "express";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
@@ -12,6 +13,15 @@ import { ReportsService } from "./reports.service";
 @Controller("reports")
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
+
+  @Get("history.csv")
+  async exportHistory(@CurrentUser() user: JwtUser, @Query() filters: ReportFiltersDto, @Res() response: Response) {
+    const csv = await this.reportsService.exportHistory(user.id, filters);
+    response.setHeader("Content-Type", "text/csv; charset=utf-8");
+    response.setHeader("Content-Disposition", 'attachment; filename="gondly-history.csv"');
+    response.setHeader("Cache-Control", "no-store");
+    response.send(csv);
+  }
 
   @Get("dashboard")
   dashboard(@CurrentUser() user: JwtUser, @Query() filters: ReportFiltersDto) {

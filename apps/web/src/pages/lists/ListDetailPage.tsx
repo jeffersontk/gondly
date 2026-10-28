@@ -1,3 +1,4 @@
+import { ReplenishmentPanel } from "./ReplenishmentPanel";
 import { Fragment, lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -56,6 +57,8 @@ export function ListDetailPage() {
   const { user, token } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [recurring, setRecurring] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -404,11 +407,13 @@ export function ListDetailPage() {
     });
   }
 
-  function handleStartPurchaseFromList() {
+  function handleStartPurchaseFromList(reviewed = false) {
     if (listPurchase) {
       navigate(`/app/purchase/${listPurchase.id}`);
       return;
     }
+
+    if (recurring && !reviewed) { setReviewOpen(true); return; }
 
     if (activePurchase && activePurchase.sourceListId !== id) {
       setReplacePurchaseOpen(true);
@@ -421,7 +426,7 @@ export function ListDetailPage() {
   return (
     <ScreenContainer title={currentList.name} subtitle={currentList.description ?? undefined}>
       <div className="grid grid-cols-[1fr_auto_auto] gap-2">
-        <AppButton icon={<ShoppingCart className="h-5 w-5" />} onClick={handleStartPurchaseFromList} loading={start.isPending} loadingLabel="Iniciando">
+        <AppButton icon={<ShoppingCart className="h-5 w-5" />} onClick={() => handleStartPurchaseFromList()} loading={start.isPending} loadingLabel="Iniciando">
           {listPurchase ? (listPurchase.userId && listPurchase.userId !== user?.id ? "Entrar na compra" : "Continuar compra") : "Comprar"}
         </AppButton>
         <AppButton className="relative w-14 px-0" variant="secondary" icon={<MessageCircle className="h-5 w-5" />} onClick={() => setChatOpen(true)} aria-label={`Abrir mensagens da lista${chat.unreadCount ? `, ${chat.unreadCount} não lidas` : ""}`}>
@@ -438,6 +443,9 @@ export function ListDetailPage() {
           <span>{listRealtimeNotice}</span>
         </div>
       ) : null}
+
+      <ReplenishmentPanel listId={id} onRecurringChange={setRecurring} />
+      <ConfirmDialog open={reviewOpen} title="Revisar próxima compra" description="Confira os itens, quantidades e o que já tem em casa nesta lista. Somente itens marcados para comprar serão levados à próxima compra." onCancel={() => setReviewOpen(false)} onConfirm={() => { setReviewOpen(false); handleStartPurchaseFromList(true); }} />
 
       <ListActionsDrawer
         open={actionsOpen}

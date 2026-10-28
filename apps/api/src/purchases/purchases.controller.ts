@@ -10,6 +10,7 @@ import {
   StartPurchaseDto,
   UpdatePurchaseDto,
   UpdatePurchaseItemDto,
+  UpdatePurchaseBudgetDto,
 } from "./dto";
 import { PurchasesService } from "./purchases.service";
 
@@ -38,6 +39,16 @@ export class PurchasesController {
   @Get(":id")
   get(@CurrentUser() user: JwtUser, @Param("id") id: string) {
     return this.purchasesService.get(user.id, id);
+  }
+
+  @Get(":id/budget")
+  budget(@CurrentUser() user: JwtUser, @Param("id") id: string) {
+    return this.purchasesService.budget(user.id, id);
+  }
+
+  @Put(":id/budget")
+  setBudget(@CurrentUser() user: JwtUser, @Param("id") id: string, @Body() dto: UpdatePurchaseBudgetDto) {
+    return this.purchasesService.setBudget(user.id, id, dto);
   }
 
   @Delete("history")

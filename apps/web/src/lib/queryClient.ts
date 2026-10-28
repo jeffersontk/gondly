@@ -68,7 +68,7 @@ function shouldPersistQuery(query: Query) {
   if (query.state.status !== "success" || query.state.data === undefined) return false;
 
   const [scope, value] = query.queryKey;
-  if (scope === "active-purchases") return false;
+  if (scope === "active-purchases" || scope === "purchase-budget") return false;
   if (scope === "products-search" && typeof value === "string" && value.trim().length > 40) {
     return false;
   }

@@ -6,6 +6,8 @@ import { type NumericLike, toNumber } from "../common/utils/money";
 import { normalizeSearchName } from "../common/utils/normalize";
 import { PrismaService } from "../prisma/prisma.service";
 import { purchaseAccessWhere } from "./purchase-access";
+import { calculatePurchaseBudget } from "./purchase-budget";
+import { UpdatePurchaseBudgetDto } from "./dto";
 import { ItemSnapshotResolver } from "../products/item-snapshot.resolver";
 import { RealtimeService } from "../realtime/realtime.service";
 import { CreatePurchaseItemDto, FinishPurchaseDto, StartPurchaseDto, UpdatePurchaseDto, UpdatePurchaseItemDto } from "./dto";
@@ -137,6 +139,34 @@ export class PurchasesService {
 
   async get(userId: string, id: string) {
     return this.assertPurchaseAccess(userId, id);
+  }
+
+  async budget(userId: string, id: string) {
+    const purchase = await this.assertPurchaseAccess(userId, id);
+    const pending = purchase.status === "in_progress" ? purchase.items.filter(item => toNumber(item.pricePaid) <= 0) : [];
+    const history = pending.length ? await this.prisma.purchaseItem.findMany({
+      where: {
+        pricePaid: { gt: 0 }, quantity: { gt: 0 },
+        OR: pending.map(item => item.productId ? { productId: item.productId } : { productName: { equals: item.productName, mode: "insensitive" as const } }),
+        purchase: {
+          status: "completed", deletedAt: null,
+          completedAt: { gte: new Date(Date.now() - 365 * 86400_000) },
+          ...(purchase.sourceListId ? { sourceListId: purchase.sourceListId } : {
+            AND: [...new Set([purchase.userId, ...purchase.participants.map(participant => participant.userId)])].map(purchaseAccessWhere),
+          }),
+        },
+      },
+      include: { purchase: { select: { completedAt: true, market: { select: { name: true } } } } },
+      orderBy: { purchase: { completedAt: "desc" } }, take: 2000,
+    }) : [];
+    return { ...calculatePurchaseBudget(purchase, history), canEdit: purchase.status === "in_progress" && this.canEditPurchase(userId, purchase), referenceWindowDays: 365 };
+  }
+
+  async setBudget(userId: string, id: string, dto: UpdatePurchaseBudgetDto) {
+    const purchase = await this.assertPurchaseEditable(userId, id);
+    const saved = await this.prisma.purchase.update({ where: { id: purchase.id }, data: { budgetAmount: dto.budgetAmount } });
+    this.realtime.emitToPurchase(purchase.id, "purchaseBudgetChanged", { purchaseId: purchase.id, budgetAmount: saved.budgetAmount == null ? null : toNumber(saved.budgetAmount), byUserId: userId });
+    return { budgetAmount: saved.budgetAmount == null ? null : toNumber(saved.budgetAmount) };
   }
 
   async update(userId: string, id: string, dto: UpdatePurchaseDto) {

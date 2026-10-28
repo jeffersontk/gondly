@@ -1,3 +1,4 @@
+import { isQuietHour as replenishmentQuietHour, nextOccurrence } from "../replenishment/rules";
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import webpush from "web-push";
@@ -45,7 +46,7 @@ export class PushService implements OnModuleInit, OnModuleDestroy {
     this.publicKey = publicKey;
     // The API runs continuously on the VPS, so an in-process timer is enough. POST /push/reminders/run can trigger
     // the same check manually; each reminder stage is reserved before sending, so overlapping runs never double-send.
-    this.interval = setInterval(() => void this.runFinishReminders(), IN_PROCESS_INTERVAL);
+    this.interval = setInterval(() => { void this.runFinishReminders(); void this.runReplenishmentReminders(); }, IN_PROCESS_INTERVAL);
     this.interval.unref();
   }
 
@@ -152,6 +153,42 @@ export class PushService implements OnModuleInit, OnModuleDestroy {
     }
 
     return result;
+  }
+
+  async runReplenishmentReminders(now = new Date()) {
+    if (!this.publicKey) return { sent: 0 };
+    let sent = 0;
+    try {
+      const due = await this.prisma.listReplenishment.findMany({
+        where: { enabled: true, nextReminderAt: { lte: now }, list: { deletedAt: null, status: "active" } },
+        include: { list: { select: { name: true, userId: true, members: { where: { status: "accepted" }, select: { userId: true } } } } },
+        take: BATCH_SIZE, orderBy: { nextReminderAt: "asc" },
+      });
+      for (const reminder of due) {
+        const authorized = reminder.list.userId === reminder.userId || reminder.list.members.some(m => m.userId === reminder.userId);
+        if (!authorized) {
+          await this.prisma.listReplenishment.updateMany({ where: { id: reminder.id, updatedAt: reminder.updatedAt }, data: { enabled: false } });
+          continue;
+        }
+        if (replenishmentQuietHour(now, reminder.quietStart, reminder.quietEnd, reminder.timeZone)) continue;
+        const hasPermission = await this.prisma.pushSubscription.count({ where: { userId: reminder.userId } });
+        if (!hasPermission) continue;
+        // Compare-and-swap includes preferences/version: cancellation or edits invalidate this reservation.
+        const reserved = await this.prisma.listReplenishment.updateMany({
+          where: { id: reminder.id, enabled: true, nextReminderAt: reminder.nextReminderAt, updatedAt: reminder.updatedAt },
+          data: { nextReminderAt: nextOccurrence(reminder.nextReminderAt, reminder.intervalDays, now) },
+        });
+        if (!reserved.count) continue;
+        sent += await this.sendToUsers([reminder.userId], {
+          title: "Hora de revisar sua lista",
+            body: 'Revise os itens de "' + reminder.list.name + '" antes da próxima compra.',
+          url: '/app/lists/' + reminder.listId + '?review=1', tag: 'replenishment-' + reminder.id,
+        });
+      }
+    } catch (error) {
+      this.logger.error("Replenishment reminders failed", error instanceof Error ? error.stack : String(error));
+    }
+    return { sent };
   }
 
   private async sendToUsers(userIds: string[], payload: PushPayload) {

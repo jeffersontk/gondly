@@ -54,6 +54,12 @@ fi
 "${compose[@]}" config --quiet
 echo "Construindo: ${services[*]}..."
 "${compose[@]}" build "${services[@]}"
+
+# Apply additive migrations with the new image before replacing containers.
+if [[ " ${services[*]} " == *" api "* ]]; then
+  echo "Aplicando migrations do banco..."
+  "${compose[@]}" run --rm --no-deps api sh -c 'export DIRECT_URL="${DIRECT_URL:-$DATABASE_URL}"; npm run prisma:deploy --workspace @gondly/api'
+fi
 echo "Atualizando os containers e aguardando a verificação de saúde..."
 "${compose[@]}" up -d --no-deps --wait --wait-timeout 180 "${services[@]}"
 "${compose[@]}" ps "${services[@]}"

@@ -11,6 +11,29 @@ import { ReportFiltersDto } from "./dto";
 export class ReportsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async exportHistory(userId: string, filters: ReportFiltersDto = {}) {
+    const { pricePaid: _pricePaid, ...scope } = this.purchaseItemWhere(userId, undefined, filters);
+    const where: Prisma.PurchaseItemWhereInput = {
+      ...scope,
+      ...(filters.q ? { OR: [{ productName: { contains: filters.q, mode: "insensitive" } }, { purchase: { market: { name: { contains: filters.q, mode: "insensitive" } } } }] } : {}),
+    };
+    const items = await this.prisma.purchaseItem.findMany({ where, include: { purchase: { include: { market: true } } }, orderBy: { purchase: { completedAt: "desc" } } });
+    const cell = (value: unknown) => {
+      let text = String(value ?? "");
+      if (/^\s*[=+@-]/.test(text) || /^[\t\r\n]/.test(text)) text = "'" + text;
+      return '"' + text.replace(/"/g, '""') + '"';
+    };
+    const rows: unknown[][] = [["purchase_id", "completed_at_utc", "market", "product", "category", "brand", "quantity", "quantity_unit", "package_size", "package_unit", "paid_brl", "normalized_price_brl", "comparison_unit", "source", "purchase_final_paid_brl_repeated_per_item", "purchase_discount_brl_repeated_per_item"]];
+    for (const item of items) rows.push([
+      item.purchaseId, item.purchase.completedAt?.toISOString() ?? "", item.purchase.market?.name,
+      item.productName, item.category, item.brandNameSnapshot ?? item.brand, item.quantity, item.unit, item.packageSize, item.packageUnit,
+      toNumber(item.pricePaid).toFixed(2), item.unitPriceNormalized === null ? "" : toNumber(item.unitPriceNormalized).toFixed(4), item.normalizedUnitLabel, "personal",
+      item.purchase.finalPaidAmount == null ? "" : toNumber(item.purchase.finalPaidAmount).toFixed(2),
+      item.purchase.discountAmount == null ? "" : toNumber(item.purchase.discountAmount).toFixed(2),
+    ]);
+    return "\uFEFF" + rows.map(row => row.map(cell).join(",")).join("\r\n") + "\r\n";
+  }
+
   async dashboard(userId: string, filters: ReportFiltersDto = {}) {
     const monthStart = startOfMonth();
     const monthFilters = { ...filters, startDate: filters.startDate ?? monthStart.toISOString(), period: filters.period ?? "all" };
@@ -168,7 +191,7 @@ export class ReportsService {
     return this.prisma.purchaseItem.findMany({
       where: this.purchaseItemWhere(userId, undefined, { ...filters, productId }),
       include: { purchase: { include: { market: true } } },
-      orderBy: { createdAt: "asc" },
+      orderBy: { purchase: { completedAt: "asc" } },
     });
   }
 
@@ -177,7 +200,7 @@ export class ReportsService {
       this.productPriceHistory(userId, productId, filters),
       this.productMarketsComparison(userId, productId, filters),
     ]);
-    const best = [...markets].sort((a, b) => a.averagePrice - b.averagePrice)[0] ?? null;
+    const best = new Set(markets.map(entry => entry.comparisonKey)).size <= 1 ? [...markets].sort((a, b) => a.averagePrice - b.averagePrice)[0] ?? null : null;
 
     return { history, markets, best };
   }
@@ -190,21 +213,31 @@ export class ReportsService {
         purchase: { ...this.purchaseWhere(userId, filters), marketId: filters.marketId ?? { not: null } },
       },
       include: { purchase: { include: { market: true } } },
+      orderBy: { purchase: { completedAt: "asc" } },
     });
 
-    const grouped = new Map<string, { marketId: string; marketName: string; prices: number[]; lastPrice: number }>();
+    const grouped = new Map<string, { marketId: string; marketName: string; prices: number[]; lastPrice: number; comparisonKey: string; normalizedUnit: string | null; brandName: string | null; packageSize: number | null; packageUnit: Unit | null; lastPurchasedAt: Date }>();
     for (const item of items) {
       if (!item.purchase.market || item.unitPriceNormalized === null) continue;
       const normalizedPrice = toNumber(item.unitPriceNormalized);
-      const entry = grouped.get(item.purchase.market.id) ?? {
+      const comparisonKey = JSON.stringify([item.normalizedUnitLabel, item.brandNameSnapshot ?? item.brand, item.packageSize, item.packageUnit]);
+      const key = item.purchase.market.id + comparisonKey;
+      const entry = grouped.get(key) ?? {
         marketId: item.purchase.market.id,
         marketName: item.purchase.market.name,
         prices: [],
         lastPrice: normalizedPrice,
+        comparisonKey,
+        normalizedUnit: item.normalizedUnitLabel,
+        brandName: item.brandNameSnapshot ?? item.brand,
+        packageSize: item.packageSize,
+        packageUnit: item.packageUnit,
+        lastPurchasedAt: item.purchase.completedAt ?? item.createdAt,
       };
       entry.prices.push(normalizedPrice);
       entry.lastPrice = normalizedPrice;
-      grouped.set(item.purchase.market.id, entry);
+      entry.lastPurchasedAt = item.purchase.completedAt ?? item.createdAt;
+      grouped.set(key, entry);
     }
 
     return [...grouped.values()].map((entry) => ({
@@ -214,11 +247,20 @@ export class ReportsService {
       maxPrice: roundMoney(Math.max(...entry.prices)),
       averagePrice: roundMoney(entry.prices.reduce((sum, value) => sum + value, 0) / entry.prices.length),
       lastPrice: entry.lastPrice,
+      comparisonKey: entry.comparisonKey,
+      normalizedUnit: entry.normalizedUnit,
+      brandName: entry.brandName,
+      packageSize: entry.packageSize,
+      packageUnit: entry.packageUnit,
+      lastPurchasedAt: entry.lastPurchasedAt,
+      samplesCount: entry.prices.length,
+      source: "personal",
     }));
   }
 
   async productBestMarket(userId: string, productId: string, filters: ReportFiltersDto = {}) {
     const markets = await this.productMarketsComparison(userId, productId, filters);
+    if (new Set(markets.map(entry => entry.comparisonKey)).size > 1) return null;
     return markets.sort((a, b) => a.averagePrice - b.averagePrice)[0] ?? null;
   }
 
@@ -226,7 +268,7 @@ export class ReportsService {
     return this.prisma.purchaseItem.findMany({
       where: this.purchaseItemWhere(userId, q, filters),
       include: { purchase: { include: { market: true } } },
-      orderBy: { createdAt: "desc" },
+      orderBy: { purchase: { completedAt: "desc" } },
     });
   }
 
@@ -236,6 +278,8 @@ export class ReportsService {
       string,
       {
         productName: string;
+        productId: string | null;
+        normalizedUnit: string | null;
         prices: number[];
         lastPrice: number | null;
         lastMarket: string | null;
@@ -249,8 +293,11 @@ export class ReportsService {
     >();
 
     for (const item of items) {
-      const entry = grouped.get(item.productName) ?? {
+      const key = JSON.stringify([item.productId ?? item.productName, item.brandNameSnapshot ?? item.brand ?? null, item.packageSize, item.packageUnit, item.normalizedUnitLabel]);
+      const entry = grouped.get(key) ?? {
         productName: item.productName,
+        productId: item.productId,
+        normalizedUnit: item.normalizedUnitLabel,
         prices: [],
         lastPrice: null,
         lastMarket: null,
@@ -281,11 +328,15 @@ export class ReportsService {
         }
       }
 
-      grouped.set(item.productName, entry);
+      grouped.set(key, entry);
     }
 
     return [...grouped.values()].map((entry) => ({
       productName: entry.productName,
+      productId: entry.productId,
+      normalizedUnit: entry.normalizedUnit,
+      source: "personal",
+      samplesCount: entry.prices.length,
       category: entry.category,
       brandName: entry.brandName,
       packageSize: entry.packageSize,
@@ -303,6 +354,7 @@ export class ReportsService {
   private purchaseItemWhere(userId: string, q?: string, filters: ReportFiltersDto = {}): Prisma.PurchaseItemWhereInput {
     return {
       pricePaid: { gt: 0 },
+      ...(filters.category ? { category: filters.category } : {}),
       ...(q ? { productName: { contains: q, mode: "insensitive" } } : {}),
       ...(filters.productId ? { productId: filters.productId } : {}),
       purchase: this.purchaseWhere(userId, filters),
@@ -316,7 +368,7 @@ export class ReportsService {
       status: "completed",
       deletedAt: null,
       ...(filters.marketId ? { marketId: filters.marketId } : {}),
-      ...(filters.productId ? { items: { some: { productId: filters.productId } } } : {}),
+      ...((filters.productId || filters.category) ? { items: { some: { ...(filters.productId ? { productId: filters.productId } : {}), ...(filters.category ? { category: filters.category } : {}) } } } : {}),
       ...(completedAt ? { completedAt } : {}),
     };
   }
@@ -324,6 +376,7 @@ export class ReportsService {
   private dateFilter(filters: ReportFiltersDto): Prisma.DateTimeNullableFilter | undefined {
     const start = filters.startDate ? new Date(filters.startDate) : this.periodStart(filters.period);
     const end = filters.endDate ? new Date(filters.endDate) : undefined;
+    if (end && /^\d{4}-\d{2}-\d{2}$/.test(filters.endDate!)) end.setUTCHours(23, 59, 59, 999);
 
     if (!start && !end) {
       return undefined;

@@ -1,3 +1,4 @@
+import { ReplenishmentModule } from "./replenishment/replenishment.module";
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { ConfigService } from "@nestjs/config";
@@ -55,6 +56,7 @@ import { UsersModule } from "./users/users.module";
     BillingModule,
     RealtimeModule,
     PushModule,
+    ReplenishmentModule,
   ],
   providers: [
     {

@@ -1,6 +1,14 @@
 import { PartialType } from "@nestjs/swagger";
 import { Unit } from "@prisma/client";
-import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString, MaxLength, Min, MinLength } from "class-validator";
+import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateIf } from "class-validator";
+
+export class UpdatePurchaseBudgetDto {
+  @ValidateIf(value => value.budgetAmount !== null)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(9999999999.99)
+  budgetAmount!: number | null;
+}
 
 export class StartPurchaseDto {
   @IsOptional()
