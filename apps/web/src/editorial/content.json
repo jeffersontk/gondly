@@ -1,1 +1,53 @@
-[]
+[
+  {
+    "slug": "comparar-embalagens-preco-por-quilo",
+    "title": "500 g ou 1 kg: como comparar embalagens na mesma unidade",
+    "summary": "Faça a conta do preço por quilo ou litro e veja quando a embalagem maior realmente custa menos.",
+    "category": "Economia",
+    "status": "published",
+    "author": "Conteúdo elaborado com auxílio de IA",
+    "reviewedBy": "Verificação automatizada dos exemplos numéricos; sem teste de mercado",
+    "publishedAt": "2026-11-04",
+    "sections": [
+      { "title": "Comece pelo conteúdo da embalagem", "paragraphs": ["Uma etiqueta menor não significa necessariamente uma compra mais barata. Antes de comparar, confirme se os produtos têm a mesma finalidade, observe o peso ou volume e separe diferenças de marca, composição e apresentação que importam para você. O preço por unidade de medida ajuda na conta; ele não torna produtos diferentes equivalentes.", "Os valores deste artigo são fictícios e servem para demonstrar o cálculo. Não são ofertas nem uma pesquisa de preços. Confira sempre a etiqueta e as condições da loja."] },
+      { "title": "Exemplo completo: dois pacotes de arroz", "paragraphs": ["O pacote A tem 500 g e custa R$ 4,80. Converta 500 g para 0,5 kg e divida: 4,80 ÷ 0,5 = R$ 9,60 por kg. O pacote B tem 1 kg e custa R$ 9,00: 9,00 ÷ 1 = R$ 9,00 por kg. Para a mesma quantidade de 1 kg, dois pacotes A custam R$ 9,60 e um pacote B custa R$ 9,00. A diferença é R$ 0,60 nesse exemplo.", "A fórmula é preço da embalagem ÷ conteúdo em kg. Para converter gramas em quilos, divida por 1.000. Com líquidos, divida os mililitros por 1.000 e use preço por litro. Não compare diretamente reais por litro com reais por quilo."] },
+      { "title": "Quando a embalagem maior não compensa", "paragraphs": ["Um pacote de 5 kg por R$ 42,00 custa R$ 8,40 por kg. A unidade é mais barata que a do pacote de 1 kg por R$ 9,00, mas o desembolso agora é R$ 42,00. Se você precisa de apenas 1 kg, tem pouco espaço ou não consegue aproveitar o restante, o preço unitário sozinho não decide a compra.", "Faça duas perguntas: quanto cabe no orçamento desta compra e quanto será usado antes de perder qualidade, respeitando as instruções da embalagem? Para comparar o mesmo volume de 5 kg, cinco pacotes de 1 kg custariam R$ 45,00. A diferença de R$ 3,00 só é relevante se comprar e aproveitar os 5 kg fizer sentido para sua casa."] },
+      { "title": "Promoções e unidades que confundem", "items": ["Leve 3 e pague 2: some o valor efetivamente cobrado e divida pelo conteúdo total dos três produtos.", "Preço de clube ou aplicativo: use o valor para o qual você atende às condições. Registre essa condição junto da referência.", "Caixas com unidades: compare também o tamanho de cada unidade. Doze embalagens de 200 ml somam 2,4 litros.", "Produtos concentrados: preço por litro pode ser insuficiente; considere a diluição indicada e o rendimento declarado pelo fabricante."] },
+      { "title": "Como registrar no Gondly", "paragraphs": ["Na lista, informe o nome, a quantidade necessária, a unidade e, se for importante, a marca de preferência. No carrinho, confira a embalagem que realmente escolheu e registre o preço pago. Ao consultar o histórico, confira a data e o mercado; um registro antigo é uma referência, não uma promessa de preço atual.", "Você pode praticar a conta na demonstração pública do Gondly antes de entrar na sua conta. Para usar no mercado, leve a comparação escrita na mesma unidade e atualize o valor quando a etiqueta mudar."] }
+    ]
+  },
+  {
+    "slug": "planejar-lista-com-orcamento",
+    "title": "Como montar uma lista com orçamento e acompanhar o total no mercado",
+    "summary": "Um exemplo de orçamento de R$ 150 mostra como separar preços conhecidos, estimativas e itens ainda sem preço.",
+    "category": "Organização",
+    "status": "published",
+    "author": "Conteúdo elaborado com auxílio de IA",
+    "reviewedBy": "Verificação automatizada dos exemplos numéricos; sem teste de mercado",
+    "publishedAt": "2026-11-04",
+    "sections": [
+      { "title": "Defina o que precisa caber nesta compra", "paragraphs": ["Escolha o período que a lista vai atender e quais refeições e reposições entram nele. Confira o que já existe antes de repetir a lista anterior. Quantidades dependem do consumo da sua casa; uma lista de exemplo não determina o que uma família deve comprar.", "Separe os itens necessários daqueles que podem esperar. Defina um limite para o desembolso desta ida ao mercado. Esse limite pode incluir uma reserva para mudanças de preço, mas não existe uma porcentagem que funcione para todas as casas."] },
+      { "title": "Uma lista ilustrativa com contas abertas", "paragraphs": ["Imagine um limite de R$ 150,00 e estes preços fictícios: 2 pacotes de arroz de 1 kg a R$ 6,00 cada; 2 pacotes de feijão de 1 kg a R$ 8,00; 1 litro de óleo a R$ 7,00; 2 litros de leite a R$ 5,00 por litro; e 1,5 kg de tomate a R$ 8,00 por kg. O total estimado é 12 + 16 + 7 + 10 + 12 = R$ 57,00.", "A diferença para o limite é R$ 93,00, mas ela só considera esses cinco itens. Se ainda faltam preços de produtos de limpeza ou outros alimentos, não trate esse valor como saldo livre. Escreva quais itens ainda não entraram na estimativa."] },
+      { "title": "Troque estimativas por valores confirmados", "paragraphs": ["Ao colocar um produto no carrinho, confira quantidade, peso e valor. Para um item vendido por peso, multiplique o preço por quilo pelo peso comprado. Se o tomate tiver 1,2 kg a R$ 8,00 por kg, o total será R$ 9,60, não os R$ 12,00 previstos para 1,5 kg.", "Mantenha separados o total confirmado no carrinho e o custo previsto dos itens restantes. Somar os dois dá uma projeção, sujeita aos preços que você ainda encontrará. Quando não houver uma referência compatível, deixe o preço como desconhecido em vez de usar zero."] },
+      { "title": "O que fazer se passar do limite", "items": ["Confira primeiro erros de quantidade, embalagem e unidade.", "Revise os itens opcionais e o que já existe em casa.", "Compare alternativas que atendam ao mesmo uso, conferindo conteúdo e preço por unidade de medida.", "Se mudar o plano, atualize a lista com quem está comprando junto para evitar recolocar um item retirado."] },
+      { "title": "Feche a compra e prepare a próxima", "paragraphs": ["Depois do caixa, confira o valor final e eventuais descontos. O valor estimado antes da compra, a soma dos produtos e o total efetivamente pago podem ser diferentes. Registre o valor pago para que o histórico reflita a compra encerrada.", "No Gondly, o orçamento da compra é opcional. Ele ajuda a acompanhar a projeção e sinaliza quando o limite é ultrapassado, mas não impede a finalização. Referências de histórico precisam corresponder ao produto e à apresentação; itens sem referência continuam identificados como desconhecidos. Experimente a demonstração pública para entender a diferença entre quantidade e total."] }
+    ]
+  },
+  {
+    "slug": "organizar-compra-compartilhada",
+    "title": "Uma lista para duas pessoas: como evitar itens duplicados e quantidades erradas",
+    "summary": "Combine quantidade, unidade e preferência de marca antes de dividir os corredores do supermercado.",
+    "category": "Organização",
+    "status": "published",
+    "author": "Conteúdo elaborado com auxílio de IA",
+    "reviewedBy": "Revisão automatizada de consistência; sem relato de teste independente",
+    "publishedAt": "2026-11-04",
+    "sections": [
+      { "title": "Descreva a necessidade antes da marca", "paragraphs": ["Quando duas pessoas montam a lista, nomes curtos podem esconder decisões diferentes. “Leite, 2” pode significar duas caixas, dois litros ou duas unidades de um pacote maior. Registre nome, quantidade e unidade; acrescente o tamanho da embalagem quando ele fizer parte da escolha.", "A marca de preferência é útil quando alguém conhece melhor o produto usado em casa. Escreva a preferência no item, mas combine se outra marca serve quando ela não estiver disponível. Uma preferência não confirma a marca que será comprada: confira o produto escolhido no carrinho."] },
+      { "title": "Exemplo de uma conferência em casa", "paragraphs": ["Ana encontra um pacote fechado de arroz de 1 kg; Bruno pretende comprar 2 kg para o período planejado. A necessidade adicional é 1 kg se ambos estiverem falando do mesmo período e do mesmo uso. A lista deve registrar esse 1 kg a comprar, e não repetir 2 kg sem descontar o estoque.", "Esse é um exemplo de organização, não uma recomendação de consumo. Faça a conferência com as pessoas da casa e ajuste às refeições previstas. Itens marcados como desnecessários neste mês podem permanecer na lista como lembrete, sem entrar na próxima compra."] },
+      { "title": "Antes de separar os corredores", "items": ["Confirmem que estão na mesma lista e na mesma compra em andamento.", "Combinem setores ou produtos que cada pessoa vai buscar.", "Avisem no chat quando uma quantidade ou preferência precisar mudar.", "Antes de pegar um produto, confiram se ele já foi colocado no carrinho por outra pessoa."] },
+      { "title": "Mudou a embalagem: atualize a conta", "paragraphs": ["Se a lista pede 1 kg e só existe um pacote de 500 g, dois pacotes atendem à mesma quantidade. Um único pacote não atende. Se a lista pede duas unidades de uma embalagem de 500 g, substituir por uma embalagem de 1 kg atende ao peso total, mas pode mudar o modo de uso; confirmem se isso importa.", "Ao trocar a marca ou a apresentação, atualize o item comprado e registre o preço real. Isso evita atribuir no histórico o preço de uma marca à outra. Para comparar embalagens, use o guia de preço por quilo ou litro e mantenha as condições de promoção explícitas."] },
+      { "title": "Sinal fraco e conferência final", "paragraphs": ["Atualizações compartilhadas dependem da conexão. Se uma mudança ainda não apareceu no outro celular, confirmem a sincronização antes de assumir que o item falta. O chat ajuda a coordenar, mas uma mensagem enviada não significa que a outra pessoa já leu.", "No caixa, uma pessoa pode revisar os produtos enquanto a outra confere quantidades e substituições. Finalizem a compra depois de confirmar o total pago. Na próxima ida, usem os itens que ficaram faltando e as quantidades que realmente foram usadas para revisar a lista, em vez de copiar tudo sem conferência."] }
+    ]
+  }
+]

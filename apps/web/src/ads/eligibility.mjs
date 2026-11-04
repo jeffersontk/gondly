@@ -1,9 +1,9 @@
 const routes = {
-  home_inline: ["/app/home"],
-  lists_inline: ["/app/lists", "/lists"],
-  history_inline: ["/app/history", "/history"],
-  compare_inline: ["/app/compare", "/prices"],
-  landing_inline: ["/"],
+  home_inline: [],
+  lists_inline: [],
+  history_inline: [],
+  compare_inline: [],
+  landing_inline: [],
 };
 export function canShowAd({
   enabled,

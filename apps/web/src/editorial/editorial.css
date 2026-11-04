@@ -617,3 +617,12 @@
     transition: none;
   }
 }
+.ed-demo { display: grid; gap: 20px; margin: 32px 0; }
+.ed-demo-item { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; min-width: 0; padding: 16px; border: 1px solid #dfe3eb; border-radius: 16px; }
+.ed-demo-item legend { padding: 0 6px; font-weight: 700; }
+.ed-demo label { display: grid; gap: 8px; min-width: 0; font-size: 14px; }
+.ed-demo input { width: 100%; min-width: 0; box-sizing: border-box; min-height: 48px; border: 1px solid #a4acbd; border-radius: 8px; padding: 10px; font: inherit; background: white; color: #15203b; }
+.ed-demo input:focus-visible { outline: 3px solid #6355e8; outline-offset: 2px; }
+.ed-demo-result { padding: 20px; border-radius: 16px; background: #eeecff; color: #24204d; }
+.ed-demo-result strong { display: block; font-size: 24px; }
+@media (max-width: 420px) { .ed-demo-item { grid-template-columns: 1fr; } }

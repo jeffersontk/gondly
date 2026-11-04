@@ -55,7 +55,7 @@ export function LandingPage({
           </Link>
           <nav aria-label="Conteúdos públicos" className="flex flex-wrap gap-3 text-xs font-semibold sm:text-sm">
             <a href="/blog">Blog</a>
-            <a href="/receitas">Receitas</a>
+            <a href="/guias/demonstracao">Experimentar</a>
             <a href="/sobre">Sobre</a>
           </nav>
           {clientId ? (
@@ -185,7 +185,7 @@ export function LandingPage({
         </Link>
         <nav className="flex flex-wrap gap-x-5 gap-y-2">
           <a href="/blog">Blog</a>
-          <a href="/receitas">Receitas</a>
+          <a href="/guias/demonstracao">Experimentar sem cadastro</a>
           <a href="/guias/lista-de-compras">Guia de compras</a>
           <a href="/sobre">Sobre</a>
           <Link className="transition hover:text-mint" to="/privacy">

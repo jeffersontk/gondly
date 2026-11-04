@@ -1,6 +1,6 @@
 export const basePaths = [
   "/blog",
-  "/receitas",
+  "/guias/demonstracao",
   "/guias/lista-de-compras",
   "/guias/comparar-precos",
   "/sobre",
@@ -46,6 +46,7 @@ export function publishedArticles(articles) {
 export function publicPaths(articles) {
   return [
     ...basePaths,
+    ...(publishedArticles(articles).some(article => article.category === "Receitas") ? ["/receitas"] : []),
     ...publishedArticles(articles).map((article) => `/blog/${article.slug}`),
   ];
 }

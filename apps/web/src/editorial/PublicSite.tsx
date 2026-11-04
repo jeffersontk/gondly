@@ -11,18 +11,19 @@ import content from "./content.json";
 import guides from "./guides.json";
 import { publishedArticles } from "./catalog.mjs";
 import type { Article, Section } from "./types";
+import { PublicDemo } from "./PublicDemo";
 import { AdSenseAd } from "../ads/AdSenseAd";
 import { canShowAd } from "../ads/eligibility.mjs";
 
 export const articles = publishedArticles(content as Article[]);
-const categories = ["Todas", "Receitas", "Economia", "Organização"];
 export function pageMeta(path: string, items = articles) {
   const article = items.find((item) => `/blog/${item.slug}` === path);
   const guide = guides.find((item) => item.path === path);
   const pages: Record<string, [string, string]> = {
+    "/guias/demonstracao": ["Experimente uma lista de compras sem cadastro", "Altere quantidades e preços ilustrativos para calcular o total e acompanhar um orçamento no Gondly."],
     "/blog": [
       "Ideias para comprar melhor e cozinhar com mais intenção",
-      "Receitas, organização e dicas práticas para planejar as compras da sua casa.",
+      "Guias de organização, orçamento e comparação de preços para planejar as compras da sua casa.",
     ],
     "/receitas": [
       "Da sua lista para a mesa",
@@ -171,6 +172,8 @@ export function PublicSite({
   category?: string;
 }) {
   const visible = preview ? items : publishedArticles(items);
+  const categories = ["Todas", ...new Set(visible.map(item => item.category))];
+  const hasRecipes = visible.some(item => item.category === "Receitas");
   const article = visible.find((item) => `/blog/${item.slug}` === path);
   const guide = guides.find((item) => item.path === path);
   const meta = pageMeta(path, visible);
@@ -198,12 +201,13 @@ export function PublicSite({
           <a href="/blog" aria-current={path === "/blog" ? "page" : undefined}>
             Blog
           </a>
-          <a
+          {hasRecipes ? <a
             href="/receitas"
             aria-current={path === "/receitas" ? "page" : undefined}
           >
             Receitas
-          </a>
+          </a> : null}
+          <a href="/guias/demonstracao">Experimentar</a>
           <a
             href="/sobre"
             aria-current={path === "/sobre" ? "page" : undefined}
@@ -222,7 +226,7 @@ export function PublicSite({
         </div>
       )}
       <main id="conteudo">
-        {index ? (
+        {path === "/guias/demonstracao" ? <PublicDemo /> : index ? (
           <>
             <section className="ed-hero">
               <div>
@@ -494,7 +498,8 @@ export function PublicSite({
         </div>
         <nav aria-label="Rodapé">
           <a href="/blog">Blog</a>
-          <a href="/receitas">Receitas</a>
+          {hasRecipes ? <a href="/receitas">Receitas</a> : null}
+          <a href="/guias/demonstracao">Experimentar sem cadastro</a>
           <a href="/sobre">Sobre</a>
           <a href="/privacy">Privacidade</a>
           <a href="/terms">Termos</a>

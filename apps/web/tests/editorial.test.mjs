@@ -54,8 +54,11 @@ const eligible = {
   pathname: "/app/lists",
   slot: "lists_inline",
 };
-test("ad only on correct route with available content", () => {
-  assert.equal(canShowAd(eligible), true);
+test("operational screens never show programmatic ad slots", () => {
+  assert.equal(canShowAd(eligible), false);
+  for (const [slot, pathname] of [["home_inline", "/app/home"], ["history_inline", "/app/history"], ["compare_inline", "/app/compare"], ["landing_inline", "/"], ["article_inline", "/guias/demonstracao"]]) {
+    assert.equal(canShowAd({ ...eligible, slot, pathname, published: true }), false);
+  }
   for (const override of [
     { loading: true },
     { error: true },

@@ -1,6 +1,6 @@
 # Roadmap de evolução do Gondly
 
-Atualizado em 28/10/2026. Plano de execução proposto para as próximas entregas.
+Atualizado em 04/11/2026. Plano de execução proposto para as próximas entregas.
 Os números representam a ordem das entregas, não alterações já feitas na versão do pacote.
 
 ## Objetivo
@@ -334,6 +334,16 @@ revisão da próxima compra, push autorizado, wizard de dieta end-to-end e conta
 passos em Android e iOS PWA. Após backup, publicar com atualização `all` para incluir
 as três migrations pendentes e conferir o commit efetivo na VPS. Em paralelo, concluir
 evidências da V1, conteúdo da V2 e a auditoria/decisão do AdSense (V8).
+
+## Ajustes após a reprovação do AdSense em 04/11/2026
+
+- [x] Adicionar três artigos públicos com exemplos de orçamento, comparação de embalagens e compras compartilhadas; assistência de IA e natureza ilustrativa identificadas.
+- [x] Adicionar demonstração interativa sem cadastro em `/guias/demonstracao`, com quantidades, preços, total e orçamento.
+- [x] Retirar receitas vazias da navegação e do sitemap; exibir somente categorias com conteúdo publicado.
+- [x] Bloquear slots programáticos de anúncios na landing e nas telas operacionais; permitir apenas artigos publicados.
+- [ ] Publicar na VPS e revisar os artigos no domínio público antes de pedir nova análise.
+- [ ] Conferir no painel AdSense anúncios automáticos e exclusões de `/app`, login, demonstração e demais telas sem conteúdo editorial; conferir também possíveis tags do GTM.
+- [ ] Solicitar nova revisão após as correções publicadas e acompanhar a decisão do Google.
 
 ## Referências
 

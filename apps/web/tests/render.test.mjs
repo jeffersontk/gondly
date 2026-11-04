@@ -53,6 +53,15 @@ test("production artifacts exclude drafts and have complete public HTML", async 
   const sitemap = await readFile(path.join(dist, "sitemap.xml"), "utf8");
   assert.ok(sitemap.includes("/guias/comparar-precos"));
   assert.ok(!sitemap.includes("preview"));
+  assert.ok(sitemap.includes("/guias/demonstracao"));
+  assert.ok(!sitemap.includes("/receitas"));
+  const blog = await readFile(path.join(dist, "blog/index.html"), "utf8");
+  assert.ok(blog.includes("comparar-embalagens-preco-por-quilo"));
+  assert.ok(!blog.includes('href="/receitas"'));
+  const demo = await readFile(path.join(dist, "guias/demonstracao/index.html"), "utf8");
+  assert.ok(demo.includes("Monte uma compra de exemplo"));
+  assert.ok(demo.includes("57,00"));
+  assert.ok(!demo.includes("adsbygoogle"));
   const drafts = JSON.parse(
     await readFile(path.join(root, "src/editorial/drafts.json"), "utf8"),
   );
