@@ -352,6 +352,18 @@ evidências da V1, conteúdo da V2 e a auditoria/decisão do AdSense (V8).
 - Sugestões ajustadas por grupos de refeições; revisão de quantidades e de itens já existentes em casa antes da confirmação. Não cria compra automaticamente.
 - Implementação sem migration. Publicação e teste do primeiro acesso em aparelho permanecem pendentes.
 
+## Base de receitas e despensa — 11/11/2026
+
+- [x] Schema de ingredientes globais, aliases, receitas, passos, tags e autoria.
+- [x] Campos de visibilidade privada/pública/por link, revisão e avaliações moderadas de 1 a 5, únicas por usuário/receita.
+- [x] Despensa confirmada, movimentos por usuário e vínculo rastreável com compras; planejamento por receita, data e porções.
+- [x] Importação administrativa transacional por JSON e modo de validação sem escrita.
+- [ ] API e telas para cadastrar receitas próprias, compartilhar, publicar e avaliar.
+- [ ] Associar produtos a ingredientes e confirmar compras recentes na despensa.
+- [ ] Geração de receitas a partir da despensa e montagem de lista a partir de receitas selecionadas.
+
+Detalhes e comandos em [RECIPE-CATALOG.md](RECIPE-CATALOG.md). Esta entrega é a base de dados, não o fluxo completo de receitas.
+
 ## Referências
 
 - [Eventos existentes e regras de privacidade](analytics-events.md).

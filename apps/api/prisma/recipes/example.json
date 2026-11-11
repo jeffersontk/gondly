@@ -1,0 +1,24 @@
+{
+  "ingredients": [
+    { "slug": "ovo-de-galinha", "name": "Ovo de galinha", "baseUnit": "un", "aliases": ["ovos"] },
+    { "slug": "tomate", "name": "Tomate", "baseUnit": "g", "aliases": ["tomates"] }
+  ],
+  "recipes": [
+    {
+      "slug": "rascunho-omelete-com-tomate",
+      "title": "Rascunho de omelete com tomate",
+      "description": "Exemplo técnico para validar a importação. Não foi testado na cozinha nem revisado para publicação.",
+      "servings": 1,
+      "prepMinutes": 5,
+      "cookMinutes": 10,
+      "status": "draft",
+      "origin": "ai_assisted",
+      "ingredients": [
+        { "ingredient": "ovo-de-galinha", "quantity": 2, "unit": "un" },
+        { "ingredient": "tomate", "quantity": 100, "unit": "g" }
+      ],
+      "steps": ["Rascunho técnico: revisar ingredientes, utensílios e instruções de preparo antes de publicar."],
+      "tags": [{ "slug": "contem-ovos", "name": "Contém ovos", "kind": "allergen" }]
+    }
+  ]
+}
