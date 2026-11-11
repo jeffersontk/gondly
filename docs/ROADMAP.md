@@ -1,6 +1,6 @@
 # Roadmap de evolução do Gondly
 
-Atualizado em 04/11/2026. Plano de execução proposto para as próximas entregas.
+Atualizado em 11/11/2026. Plano de execução proposto para as próximas entregas.
 Os números representam a ordem das entregas, não alterações já feitas na versão do pacote.
 
 ## Objetivo
@@ -344,6 +344,13 @@ evidências da V1, conteúdo da V2 e a auditoria/decisão do AdSense (V8).
 - [ ] Publicar na VPS e revisar os artigos no domínio público antes de pedir nova análise.
 - [ ] Conferir no painel AdSense anúncios automáticos e exclusões de `/app`, login, demonstração e demais telas sem conteúdo editorial; conferir também possíveis tags do GTM.
 - [ ] Solicitar nova revisão após as correções publicadas e acompanhar a decisão do Google.
+
+## Assistente opcional para primeira lista — 11/11/2026
+
+- Convite na tela inicial de contas sem listas, compra ativa ou compra anterior, com “Gerar minha lista” e “Fazer depois”. Dispensa salva localmente por usuário.
+- Assistente disponível também nas telas de Listas e Nova lista. Pergunta pessoas, período, perfil alimentar, refeições em casa e restrições opcionais.
+- Sugestões ajustadas por grupos de refeições; revisão de quantidades e de itens já existentes em casa antes da confirmação. Não cria compra automaticamente.
+- Implementação sem migration. Publicação e teste do primeiro acesso em aparelho permanecem pendentes.
 
 ## Referências
 

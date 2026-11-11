@@ -110,7 +110,7 @@ export function CreateEditListPage() {
               <Sparkles className="h-4 w-4" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-black text-ink">Criar com sugestão por dieta</p>
+              <p className="text-sm font-black text-ink">Gerar lista para minha rotina</p>
               <p className="mt-0.5 text-xs text-ink/65 leading-relaxed">
                 Quer economizar tempo? Calcule as quantidades certas para sua família de acordo com seus hábitos e restrições alimentares.
               </p>

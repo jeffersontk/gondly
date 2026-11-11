@@ -39,7 +39,7 @@ export function ListsPage() {
           </span>
           <div>
             <span className="text-[11px] font-black uppercase tracking-wider text-mint">Planejador inteligente</span>
-            <p className="text-sm font-black text-ink">Sugerir lista por dieta e família</p>
+            <p className="text-sm font-black text-ink">Gerar lista para minha rotina</p>
           </div>
         </div>
         <span className="text-xs font-bold text-mint">Começar →</span>

@@ -212,6 +212,7 @@ export type GenerateDietSuggestionOptions = {
   familySize: number;
   periodDays: number;
   restrictions?: DietRestriction[];
+  mealsAtHome?: Array<"breakfast" | "lunch" | "dinner" | "snack">;
 };
 
 export function calculateDietQuantity(baseWeekly: number, familySize: number, periodDays: number, unit: Unit): number {
@@ -240,6 +241,9 @@ export function calculateDietQuantity(baseWeekly: number, familySize: number, pe
 
 export function generateDietSuggestion(options: GenerateDietSuggestionOptions): DietPlanSuggestion {
   const { dietType, familySize, periodDays, restrictions = [] } = options;
+  const allMeals = ["breakfast", "lunch", "dinner", "snack"] as const;
+  const meals = [...new Set(options.mealsAtHome ?? allMeals)];
+  if (!meals.length || meals.some(meal => !allMeals.includes(meal))) throw new Error("Selecione pelo menos uma refeição em casa.");
   const dietDef = DIET_DEFINITIONS.find((d) => d.id === dietType) ?? DIET_DEFINITIONS[0];
   const catalog = DIET_CATALOG_MAP[dietType] ?? DIET_CATALOG_MAP.balanced;
 
@@ -257,7 +261,13 @@ export function generateDietSuggestion(options: GenerateDietSuggestionOptions): 
     const isExcluded = template.tags.some((tag) => activeExclusionTags.has(tag));
     if (isExcluded) continue;
 
-    const suggestedQuantity = calculateDietQuantity(template.baseWeeklyPerPerson, familySize, periodDays, template.unit);
+    // Practical template groups, not individual nutritional requirements.
+    const breakfastFood = /Padaria|Café|Laticínios/i.test(template.category) || /aveia|granola|tapioca|cuscuz|flocão/i.test(template.productName);
+    const sharedFood = /Hortifrúti|Temperos/i.test(template.category) || /ovos/i.test(template.productName);
+    const relevant = sharedFood ? [...allMeals] : breakfastFood ? ["breakfast", "snack"] : ["lunch", "dinner"];
+    const mealScale = relevant.filter(meal => meals.includes(meal as typeof meals[number])).length / relevant.length;
+    if (mealScale === 0) continue;
+    const suggestedQuantity = calculateDietQuantity(template.baseWeeklyPerPerson * mealScale, familySize, periodDays, template.unit);
 
     items.push({
       productName: template.productName,
@@ -272,9 +282,9 @@ export function generateDietSuggestion(options: GenerateDietSuggestionOptions): 
     });
   }
 
-  const premises = `Quantidades estimadas para consumo familiar médio de ${familySize} ${
+  const premises = `Quantidades iniciais de um modelo de compras para ${familySize} ${
     familySize === 1 ? "pessoa" : "pessoas"
-  } por ${periodDays} dias no perfil '${dietDef.title}'. Esta sugestão atua como planejamento prático de compras e despensa doméstica, sem constituir prescrição médica ou nutricional individualizada.`;
+  } por ${periodDays} dias no perfil '${dietDef.title}'. Refeições em casa: ${meals.map(meal => ({ breakfast: "café da manhã", lunch: "almoço", dinner: "jantar", snack: "lanches" })[meal]).join(", ")}. Quantidades de um modelo de compras, ajustadas por grupos de refeições; revise conforme o consumo real da sua casa. Esta sugestão atua como planejamento prático de compras e despensa doméstica, sem constituir prescrição médica ou nutricional individualizada.`;
 
   return {
     dietType,

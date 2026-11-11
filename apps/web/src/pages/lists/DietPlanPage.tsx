@@ -24,6 +24,7 @@ import {
 import { AppButton, AppInput, ScreenContainer, SectionHeader } from "../../components";
 import { trackEvent } from "../../lib/analytics";
 import { api } from "../../lib/api";
+import { useAuth } from "../../lib/auth";
 import type { MarketList } from "../../types";
 import { addListCache } from "../shared";
 
@@ -35,6 +36,7 @@ type EditablePlanItem = DietPlanItem & {
 export function DietPlanPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   // Wizard step: 'config' | 'review'
   const [step, setStep] = useState<"config" | "review">("config");
@@ -43,6 +45,7 @@ export function DietPlanPage() {
   const [dietType, setDietType] = useState<DietType>("balanced");
   const [familySize, setFamilySize] = useState<number>(2);
   const [periodDays, setPeriodDays] = useState<number>(7);
+  const [mealsAtHome, setMealsAtHome] = useState<Array<"breakfast" | "lunch" | "dinner" | "snack">>(["breakfast", "lunch", "dinner", "snack"]);
   const [selectedRestrictions, setSelectedRestrictions] = useState<DietRestriction[]>([]);
 
   // Review step state
@@ -65,6 +68,7 @@ export function DietPlanPage() {
       dietType,
       familySize,
       periodDays,
+      mealsAtHome,
       restrictions: selectedRestrictions,
     });
 
@@ -158,6 +162,9 @@ export function DietPlanPage() {
       }>;
     }) => api<MarketList>("/lists/from-diet-plan", { method: "POST", body }),
     onSuccess: (saved) => {
+      if (user?.id) {
+        try { localStorage.setItem(`gondly.firstList.dismissed.${user.id}`, "true"); } catch { /* List existence also hides the invitation. */ }
+      }
       queryClient.setQueryData<MarketList[]>(["lists"], (current) => addListCache(current, saved));
       trackEvent("create_list_from_diet_plan", {
         list_id: saved.id,
@@ -173,7 +180,7 @@ export function DietPlanPage() {
     if (!suggestedListTitle.trim()) return;
     createList.mutate({
       name: suggestedListTitle.trim(),
-      description: `Planejamento para ${familySize} ${familySize === 1 ? "pessoa" : "pessoas"} (${periodDays} dias) · ${premisesText}`,
+      description: `Planejamento para ${familySize} ${familySize === 1 ? "pessoa" : "pessoas"} (${periodDays} dias). Perfil: ${DIET_DEFINITIONS.find(diet => diet.id === dietType)?.title ?? dietType}. Refeições em casa: ${mealsAtHome.map(meal => ({ breakfast: "café da manhã", lunch: "almoço", dinner: "jantar", snack: "lanches" })[meal]).join(", ")}. Quantidades revisáveis conforme o consumo da casa.`,
       items: itemsToBuy.map((item) => ({
         productName: item.productName,
         category: item.category,
@@ -187,11 +194,13 @@ export function DietPlanPage() {
 
   return (
     <ScreenContainer
-      title={step === "config" ? "Planejar por dieta e família" : "Revisar lista sugerida"}
-      subtitle={step === "config" ? "Sugestão inteligente para sua despensa" : `${itemsToBuy.length} itens a comprar`}
+      title={step === "config" ? "Montar minha lista" : "Revisar lista sugerida"}
+      subtitle={step === "config" ? "Responda sobre a rotina da sua casa" : `${itemsToBuy.length} itens a comprar`}
     >
       {step === "config" ? (
         <div className="space-y-5">
+          <p className="text-sm text-muted">Este assistente é opcional. A lista só será criada quando você revisar e confirmar.</p>
+          <button type="button" className="min-h-11 text-sm font-bold text-mint" onClick={() => navigate("/app/home")}>Fazer depois</button>
           {/* 1. Escolha do Perfil / Dieta */}
           <div>
             <SectionHeader title="1. Perfil alimentar da família" />
@@ -288,9 +297,21 @@ export function DietPlanPage() {
             </div>
           </div>
 
-          {/* 3. Restrições e Alimentos a Evitar */}
+          <fieldset>
+            <legend className="mb-3 text-base font-black text-ink">3. Quais refeições vocês fazem em casa?</legend>
+            <p className="mb-3 text-xs text-muted">Marque as refeições habituais das pessoas incluídas na lista. Na revisão, ajuste para quem come fora ou tem outro consumo.</p>
+            <div className="grid grid-cols-2 gap-2">
+              {([{ id: "breakfast", name: "Café da manhã" }, { id: "lunch", name: "Almoço" }, { id: "dinner", name: "Jantar" }, { id: "snack", name: "Lanches" }] as const).map(meal => (
+                <label key={meal.id} className="flex min-h-12 items-center gap-2 rounded-xl border border-line bg-white p-3 text-sm font-semibold">
+                  <input type="checkbox" className="h-4 w-4 accent-mint" checked={mealsAtHome.includes(meal.id)} onChange={() => setMealsAtHome(current => current.includes(meal.id) ? current.filter(value => value !== meal.id) : [...current, meal.id])} />{meal.name}
+                </label>
+              ))}
+            </div>
+            {!mealsAtHome.length ? <p role="alert" className="mt-2 text-xs text-tomato">Selecione pelo menos uma refeição.</p> : null}
+          </fieldset>
+          {/* Restrições e Alimentos a Evitar */}
           <div>
-            <SectionHeader title="3. Restrições e itens a evitar (opcional)" />
+            <SectionHeader title="4. Restrições e itens a evitar (opcional)" />
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {RESTRICTION_DEFINITIONS.map((r) => {
                 const checked = selectedRestrictions.includes(r.id);
@@ -322,6 +343,7 @@ export function DietPlanPage() {
               variant="primary"
               icon={<Sparkles className="h-4 w-4" />}
               onClick={handleGenerate}
+              disabled={!mealsAtHome.length}
             >
               Gerar lista sugerida
             </AppButton>

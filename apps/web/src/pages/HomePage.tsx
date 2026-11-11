@@ -11,6 +11,7 @@ import type { DashboardReport, MarketList, Purchase } from "../types";
 import { formatBRL, addListCache, setActivePurchaseCache } from "./shared";
 import { PurchaseTitleDialog } from "./purchase/PurchaseTitleDialog";
 import { GondlyTutorialGuide } from "./TutorialPage";
+import { FirstListWelcome } from "./lists/FirstListWelcome";
 
 export function HomePage() {
   const { user } = useAuth();
@@ -62,8 +63,7 @@ export function HomePage() {
     if (!user?.id || sessionStorage.getItem(OPEN_TUTORIAL_ON_NEXT_HOME_KEY) !== "true") return;
 
     sessionStorage.removeItem(OPEN_TUTORIAL_ON_NEXT_HOME_KEY);
-    setTutorialOpen(true);
-    trackEvent("open_tutorial", { source: "first_login" });
+    // The optional first-list invitation replaces the automatic tutorial overlay.
   }, [user?.id]);
 
   if (dashboard.isLoading) return <LoadingState />;
@@ -100,6 +100,7 @@ export function HomePage() {
         </div>
       </header>
 
+      {user?.id && lists.isSuccess && active.isSuccess && !hasLists && !activePurchase && !data?.lastPurchase ? <FirstListWelcome key={user.id} userId={user.id} /> : null}
       <section className="rounded-[24px] bg-mint p-4 text-white shadow-[0_18px_44px_rgba(79,70,229,0.24)]">
         {active.isLoading ? (
           <div className="flex items-center gap-3">
