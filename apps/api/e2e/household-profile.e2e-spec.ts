@@ -32,6 +32,10 @@ it("private household profile saves, restores, validates and deletes only the si
     const own = await request(0);
     assert.equal(own.headers.get("cache-control"), "no-store");
     assert.deepEqual(await own.json(), profile);
+    const reference = { ...profile, members: [{ ...profile.members[0], biologicalSex: "male", ageYears: 35, activityLevel: "moderate", portionMode: "reference" }] };
+    assert.equal((await request(0, "PUT", reference)).status, 200);
+    assert.deepEqual(await (await request(0)).json(), reference);
+    assert.equal((await request(0, "PUT", { ...reference, members: [{ ...reference.members[0], ageYears: -1 }] })).status, 400);
     const other = await request(1);
     assert.ok(["", "null"].includes(await other.text()));
     assert.equal((await request(0, "PUT", { ...profile, members: [{ ...profile.members[0], mealsPerWeek: { breakfast: 99 } }] })).status, 400);

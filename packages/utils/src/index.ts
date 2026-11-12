@@ -147,5 +147,6 @@ function getInvalidPriceReason(quantity: number, pricePaid: number): PriceCalcul
 
 export * from "./diet-planner";
 export * from "./household-profile";
+export * from "./reference-portions";
 export * from "./step-counter";
 

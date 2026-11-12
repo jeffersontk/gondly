@@ -22,6 +22,7 @@ import {
   generateDietSuggestion,
   defaultHouseholdMember,
   validateHouseholdProfile,
+  householdPortion,
 } from "@gondly/utils";
 import { AppButton, AppInput, ScreenContainer, SectionHeader } from "../../components";
 import { trackEvent } from "../../lib/analytics";
@@ -50,6 +51,7 @@ export function DietPlanPage() {
   const [periodDays, setPeriodDays] = useState<number>(7);
   const [members, setMembers] = useState<HouseholdMember[]>(() => [defaultHouseholdMember(), defaultHouseholdMember()]);
   const mealsAtHome = (["breakfast", "lunch", "dinner", "snack"] as const).filter(meal => members.some(member => member.mealsPerWeek[meal] > 0));
+  const incompleteReference = members.findIndex(member => householdPortion(member).multiplier === null);
   const [profileMessage, setProfileMessage] = useState("");
   const [profileBusy, setProfileBusy] = useState(false);
   useEffect(() => { setMembers(current => Array.from({ length: familySize }, (_, index) => current[index] ?? defaultHouseholdMember())); }, [familySize]);
@@ -228,7 +230,7 @@ export function DietPlanPage() {
       {step === "config" ? (
         <div className="space-y-5">
           <p className="text-sm text-muted">Este assistente é opcional. A lista só será criada quando você revisar e confirmar.</p>
-          <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-ink">As quantidades ainda vêm de um catálogo provisório, sem referência de consumo validada. O perfil ajusta frequência e porções escolhidas; o cálculo por receitas e cardápio será integrado depois. Confira todos os itens antes de comprar.</p>
+          <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-ink">As quantidades ainda vêm de um catálogo provisório, sem referência de consumo validada para cada alimento. A referência adulta opcional ajusta a escala por sexo, idade e atividade; a porção manual sempre prevalece. O cálculo por receitas e cardápio será integrado depois. Confira todos os itens antes de comprar.</p>
           <div className="rounded-xl border border-line p-3">
             <p className="text-xs text-muted">As respostas ficam nesta tela até você escolher salvar. Você pode carregar ou excluir o perfil da sua conta. Idade, gênero e respostas alimentares não são enviados aos eventos de analytics.</p>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -382,10 +384,11 @@ export function DietPlanPage() {
               variant="primary"
               icon={<Sparkles className="h-4 w-4" />}
               onClick={handleGenerate}
-              disabled={!mealsAtHome.length}
+              disabled={!mealsAtHome.length || incompleteReference >= 0}
             >
               Gerar lista sugerida
             </AppButton>
+            {incompleteReference >= 0 ? <p role="alert" className="mt-2 text-xs text-tomato">Pessoa {incompleteReference + 1}: complete a referência adulta ou escolha porção manual.</p> : null}
           </div>
         </div>
       ) : (
@@ -400,7 +403,7 @@ export function DietPlanPage() {
             />
             <div className="mt-3 flex items-start gap-2 rounded-xl bg-mint/8 p-2.5 text-xs leading-relaxed text-ink/70">
               <Info className="mt-0.5 h-3.5 w-3.5 flex-none text-mint" />
-              <span>{premisesText} O catálogo de quantidades ainda é provisório, sem referência de consumo validada. Idade e gênero não são usados como multiplicadores; a geração por receitas e cardápio ainda será integrada.</span>
+              <span>{premisesText} O catálogo de quantidades ainda é provisório, sem referência de consumo validada para cada alimento. No modo de referência adulta, sexo, idade e atividade ajustam a escala; a porção manual prevalece e identidade de gênero não presume sexo. A geração por receitas e cardápio ainda será integrada.</span>
             </div>
           </div>
 

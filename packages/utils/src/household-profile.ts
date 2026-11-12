@@ -1,4 +1,5 @@
 import type { HouseholdMember, HouseholdPlanningProfile, DietType, DietRestriction } from "@gondly/types";
+import { ageBandForYears } from "./reference-portions";
 const dietValues: Record<DietType, true> = { balanced: true, vegetarian: true, vegan: true, low_carb: true, gluten_free: true, lactose_free: true };
 const restrictionValues: Record<DietRestriction, true> = { no_red_meat: true, no_pork: true, no_seafood: true, no_dairy: true, no_gluten: true, no_eggs: true, no_nuts: true, low_sugar: true };
 const dietTypes = Object.keys(dietValues);
@@ -13,7 +14,11 @@ export function validateHouseholdProfile(input: unknown): HouseholdPlanningProfi
   if (!object(input, ["version", "members", "periodDays", "dietType", "restrictions"])) return invalid();
   if (input.version !== 1 || ![7, 15, 30].includes(input.periodDays) || !dietTypes.includes(input.dietType) || !Array.isArray(input.members) || input.members.length < 1 || input.members.length > 20 || !Array.isArray(input.restrictions) || input.restrictions.length > dietRestrictions.length || new Set(input.restrictions).size !== input.restrictions.length || input.restrictions.some((r: any) => !dietRestrictions.includes(r))) return invalid();
   for (const member of input.members) {
-    if (!object(member, ["ageBand", "gender", "portion", "mealsPerWeek"]) || !["not_informed", "under_3", "3_5", "6_12", "13_17", "18_59", "60_plus"].includes(member.ageBand) || !["not_informed", "woman", "man", "other"].includes(member.gender) || !["small", "medium", "large"].includes(member.portion) || !object(member.mealsPerWeek, ["breakfast", "lunch", "dinner", "snack"])) return invalid();
+    if (!object(member, ["ageBand", "gender", "portion", "mealsPerWeek", "biologicalSex", "ageYears", "activityLevel", "portionMode"]) || !["not_informed", "under_3", "3_5", "6_12", "13_17", "18_59", "60_plus"].includes(member.ageBand) || !["not_informed", "woman", "man", "other"].includes(member.gender) || !["small", "medium", "large"].includes(member.portion) || !object(member.mealsPerWeek, ["breakfast", "lunch", "dinner", "snack"])) return invalid();
+    if (member.biologicalSex !== undefined && !["not_informed", "female", "male"].includes(member.biologicalSex)) return invalid();
+    if (member.activityLevel !== undefined && !["not_informed", "sedentary", "moderate", "active"].includes(member.activityLevel)) return invalid();
+    if (member.portionMode !== undefined && !["manual", "reference"].includes(member.portionMode)) return invalid();
+    if (member.ageYears !== undefined && (!Number.isInteger(member.ageYears) || member.ageYears < 0 || member.ageYears > 120 || member.ageBand !== "not_informed" && ageBandForYears(member.ageYears) !== member.ageBand)) return invalid();
     for (const meal of ["breakfast", "lunch", "dinner", "snack"]) if (!Number.isInteger(member.mealsPerWeek[meal]) || member.mealsPerWeek[meal] < 0 || member.mealsPerWeek[meal] > 7) return invalid();
   }
   return JSON.parse(JSON.stringify(input)) as HouseholdPlanningProfile;

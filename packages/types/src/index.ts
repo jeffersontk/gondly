@@ -6,6 +6,10 @@ export type HouseholdMember = {
   ageBand: "not_informed" | "under_3" | "3_5" | "6_12" | "13_17" | "18_59" | "60_plus";
   gender: "not_informed" | "woman" | "man" | "other";
   portion: "small" | "medium" | "large";
+  biologicalSex?: "not_informed" | "female" | "male";
+  ageYears?: number;
+  activityLevel?: "not_informed" | "sedentary" | "moderate" | "active";
+  portionMode?: "manual" | "reference";
   mealsPerWeek: Record<HouseholdMeal, number>;
 };
 export type HouseholdPlanningProfile = {

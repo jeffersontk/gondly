@@ -372,6 +372,14 @@ Detalhes e comandos em [RECIPE-CATALOG.md](RECIPE-CATALOG.md). Esta entrega é a
 - [ ] Substituir o catálogo quantitativo provisório pelo planejamento de receitas/porções/frequência, com referências e revisão do cardápio.
 - [ ] Validar a experiência no celular e publicar a migration do perfil na VPS.
 
+## Referência adulta de porções — 11/11/2026
+
+- [x] Modo opcional por sexo informado separadamente, idade em anos e atividade. Identidade de gênero não determina sexo; dados omitidos não são preenchidos automaticamente.
+- [x] Porção manual prevalece sobre a referência; perfis anteriores permanecem em modo manual.
+- [x] Fonte identificada na interface: DGA 2020–2025, tabela A2-2, pp. 140–141. Escala aproximada de compras usa razão em relação a 2.000 kcal; não é uma meta energética individual nem validação do peso de cada alimento.
+- [ ] Motor de cardápio/receitas para substituir as quantidades-base provisórias.
+- [ ] Verificação visual em aparelho e publicação na VPS.
+
 ## Referências
 
 - [Eventos existentes e regras de privacidade](analytics-events.md).

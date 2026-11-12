@@ -15,5 +15,11 @@ test("household editor exposes optional demographics, relative portions and sepa
     assert.ok(html.includes("3 dias"));
     assert.ok(html.includes("Porção habitual"));
     assert.ok(!html.includes('type="date"'));
+    const reference = renderToString(createElement(HouseholdMembersEditor, { members: [{ ...members[0], portionMode: "reference", biologicalSex: "male", ageYears: 35, activityLevel: "moderate" }], onChange: () => {} })).replace(/<!--[\s\S]*?-->/g, "");
+    assert.ok(reference.includes("Sexo para a referência"));
+    assert.ok(reference.includes("Atividade habitual"));
+    assert.ok(reference.includes("1,3×"));
+    assert.ok(reference.includes("tabela A2-2"));
+    assert.ok(!reference.includes("Porção habitual<select"));
   } finally { await server.close(); }
 });

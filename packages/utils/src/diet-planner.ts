@@ -1,5 +1,6 @@
 import type { DietPlanItem, DietPlanSuggestion, DietRestriction, DietType, Unit, HouseholdMember, HouseholdMeal } from "@gondly/types";
 import { validateHouseholdProfile } from "./household-profile";
+import { householdPortion } from "./reference-portions";
 
 export type DietDefinition = {
   id: DietType;
@@ -244,6 +245,11 @@ export function calculateDietQuantity(baseWeekly: number, familySize: number, pe
 export function generateDietSuggestion(options: GenerateDietSuggestionOptions): DietPlanSuggestion {
   const { dietType, familySize, periodDays, restrictions = [] } = options;
   const household = options.householdMembers ? validateHouseholdProfile({ version: 1, members: options.householdMembers, periodDays, dietType, restrictions }).members : undefined;
+  const portions = household?.map(member => {
+    const portion = householdPortion(member);
+    if (portion.multiplier === null) throw new Error(portion.reason);
+    return portion.multiplier;
+  });
   const allMeals = ["breakfast", "lunch", "dinner", "snack"] as const;
   const meals = [...new Set(options.mealsAtHome ?? allMeals)];
   if (!meals.length || meals.some(meal => !allMeals.includes(meal))) throw new Error("Selecione pelo menos uma refeição em casa.");
@@ -269,10 +275,10 @@ export function generateDietSuggestion(options: GenerateDietSuggestionOptions): 
     const sharedFood = /Hortifrúti|Temperos/i.test(template.category) || /ovos/i.test(template.productName);
     const relevant: HouseholdMeal[] = sharedFood ? [...allMeals] : breakfastFood ? ["breakfast", "snack"] : ["lunch", "dinner"];
     const mealScale = relevant.filter(meal => meals.includes(meal as typeof meals[number])).length / relevant.length;
-    const householdScale = household?.reduce((sum, member) => {
+    const householdScale = household?.reduce((sum, member, index) => {
       if (member.ageBand === "under_3") return sum;
       const frequency = relevant.reduce((days, meal) => days + (meals.includes(meal) ? member.mealsPerWeek[meal] : 0), 0) / (7 * relevant.length);
-      return sum + frequency * ({ small: 0.75, medium: 1, large: 1.25 })[member.portion];
+      return sum + frequency * portions![index];
     }, 0);
     if (mealScale === 0 || householdScale === 0) continue;
     const suggestedQuantity = calculateDietQuantity(template.baseWeeklyPerPerson * (householdScale ?? mealScale), household ? 1 : familySize, periodDays, template.unit);
