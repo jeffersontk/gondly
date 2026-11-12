@@ -390,6 +390,15 @@ Detalhes e comandos em [RECIPE-CATALOG.md](RECIPE-CATALOG.md). Esta entrega é a
 - [ ] Catálogo editorial com valores energéticos revisados; compartilhamento e avaliações de receitas.
 - [ ] Conferência visual em aparelho e deploy da migration na VPS.
 
+## Catálogo culinário inicial — 12/11/2026
+
+- [x] Lote com 45 fichas adaptadas, fontes, rendimento, ingredientes mensuráveis e instruções próprias.
+- [x] Cadastro local compartilhado; fonte visível no detalhe e pratos feitos com os componentes incluídos.
+- [x] Script para repetir a carga na VPS sem duplicar receitas ou substituir receitas de usuários.
+- [ ] Conferir energia das mesmas formulações para habilitá-las no planejador calórico.
+- [ ] Teste culinário e revisão nutricional; a revisão atual é editorial/técnica e assim está identificada.
+- [ ] Executar a carga na VPS.
+
 ## Referências
 
 - [Eventos existentes e regras de privacidade](analytics-events.md).

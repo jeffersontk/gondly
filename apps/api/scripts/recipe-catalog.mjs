@@ -72,8 +72,11 @@ export async function importRecipeCatalog(prisma, data) {
     const ingredients = new Map();
     for (const item of data.ingredients) {
       const existing = await tx.ingredient.findUnique({ where: { slug: item.slug } });
-      if (existing && existing.baseUnit !== item.baseUnit) fail("Não altere a unidade-base de um ingrediente existente.");
-      const saved = await tx.ingredient.upsert({ where: { slug: item.slug }, create: { slug: item.slug, name: item.name.trim(), category: item.category, baseUnit: item.baseUnit }, update: { name: item.name.trim(), category: item.category } });
+      const named = existing ? null : await tx.ingredientAlias.findUnique({ where: { normalizedName: normalizeIngredientName(item.name) }, include: { ingredient: true } });
+      const resolved = existing ?? named?.ingredient;
+      if (resolved && resolved.baseUnit !== item.baseUnit) fail("Não altere a unidade-base de um ingrediente existente.");
+      // Same identity + compatible unit: retain the user's original ID/slug and its references.
+      const saved = named?.ingredient ?? await tx.ingredient.upsert({ where: { slug: item.slug }, create: { slug: item.slug, name: item.name.trim(), category: item.category, baseUnit: item.baseUnit }, update: { name: item.name.trim(), category: item.category } });
       ingredients.set(item.slug, saved);
       for (const name of [item.name, ...(item.aliases ?? [])]) {
         const normalizedName = normalizeIngredientName(name);

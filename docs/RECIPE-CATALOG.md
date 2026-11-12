@@ -18,6 +18,33 @@ Schema Prisma, importador administrativo e fluxos autenticados em `/app/recipes`
 
 ## Alimentar o catálogo
 
+### Catálogo inicial cadastrado — 12/11/2026
+
+O lote [starter.json](../apps/api/prisma/recipes/starter.json) contém 45 receitas/preparos e 82 ingredientes canônicos. Foi importado no PostgreSQL **local** e está disponível a usuários autenticados em `/app/recipes`. As receitas são adaptações do Gondly com apoio de IA, instruções próprias, fonte de pesquisa e revisão editorial técnica pelo Codex identificada. Não foram testadas em cozinha nem revisadas nutricionalmente.
+
+Todas as fichas têm quantidades-base conhecidas e podem gerar uma lista. Os pratos feitos incluem os componentes; arroz, feijão e outros acompanhamentos isolados não recebem tags de refeição. As formulações adaptadas **não herdam as calorias das referências**: os 45 registros ficam fora do planejador por meta calórica até existir energia conferida para a mesma formulação.
+
+A fonte editável do catálogo é `apps/api/scripts/build-starter-recipe-catalog.mjs`; execute-o na pasta `apps/api` após editar as formulações e versione o JSON regenerado. A fonte/atribuição também aparece no detalhe da receita. A revisão registrada é editorial e de consistência, não um selo de segurança alimentar ou aprovação nutricional.
+
+Na VPS, depois de atualizar a imagem da API e aplicar migrations, rode:
+
+```bash
+cd /opt/gondly/monorepo
+bash scripts/import-starter-recipes-vps.sh
+```
+
+O script importa pela imagem da API e pelos arquivos Compose já usados no deploy. Não imprime variáveis de conexão. Pode ser reexecutado: os slugs estáveis são atualizados sem duplicar fichas e o importador recusa substituir receitas de usuários. Nome normalizado já existente é reutilizado quando a unidade-base é compatível, preservando o ID e referências; conflitos de unidade/alias interrompem a transação inteira.
+
+Para apenas validar o JSON dentro da imagem, use `bash scripts/import-starter-recipes-vps.sh check`. A importação na VPS **não foi executada por este ambiente**.
+
+Validação local adicional após importar o lote, com `DATABASE_URL` e `DIRECT_URL` explicitamente locais:
+
+```bash
+node --require ts-node/register --test e2e/starter-catalog.e2e-spec.ts
+```
+
+Esse teste exige o catálogo local já importado, cria somente uma conta de teste temporária e confere as 45 receitas, proveniência, cálculo de ingredientes, geração de lista e preservação de listas anteriores.
+
 Pesquisa inicial: [45 receitas e preparos para todas as refeições](research/2026-11-11-recipe-catalog-research.md), com [manifesto de fontes](research/2026-11-11-recipe-shortlist.json). Esse manifesto é uma curadoria de referências, não um lote importável; as fichas culinárias e energéticas ainda precisam ser preparadas e revisadas.
 
 Use como formato inicial [example.json](../apps/api/prisma/recipes/example.json). O exemplo é um rascunho técnico, não uma receita culinária validada. Todas as referências de ingrediente de um lote devem estar declaradas nesse mesmo JSON.
@@ -34,7 +61,7 @@ Para gravar, defina `DATABASE_URL` explicitamente no ambiente para o banco desej
 npm run recipes:import -- caminho/catalogo.json --write
 ```
 
-O importador não carrega `.env` automaticamente. O catálogo inteiro é validado e gravado em uma transação. Slugs existentes são atualizados; etapas e ingredientes daquela receita são substituídos. Receitas omitidas no lote não são excluídas. Aliases antigos são preservados. A unidade-base de um ingrediente existente não pode ser alterada. Não importe slugs de receitas pertencentes a usuários.
+O importador não carrega `.env` automaticamente. O catálogo inteiro é validado e gravado em uma transação. Slugs de receitas existentes são atualizados; etapas e ingredientes daquela receita são substituídos. Receitas omitidas no lote não são excluídas. Aliases antigos são preservados. Ingrediente com nome normalizado já conhecido pode ser reutilizado mesmo com outro slug; sua unidade-base não pode ser alterada. Não importe slugs de receitas pertencentes a usuários.
 
 Receitas entram como `draft` e `private` por padrão. Para publicar administrativamente, informe `status: "published"`, `visibility: "public"`, `reviewedBy`, `reviewedAt` e `publishedAt` (datas ISO completas). Não invente revisores nem declare testes não realizados. A origem `imported` exige URL HTTPS e atribuição; isso não concede direitos de reprodução. `ai_assisted` identifica auxílio de IA. Autores, tokens e avaliações não podem ser definidos pelo JSON administrativo.
 
