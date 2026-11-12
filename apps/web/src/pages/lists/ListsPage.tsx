@@ -25,6 +25,7 @@ export function ListsPage() {
     <ScreenContainer>
       <h1 className="mb-5 text-3xl font-black tracking-[-0.04em] text-ink">Listas</h1>
       <SearchBar placeholder="Buscar lista" value={q} onChange={(event) => setQ(event.target.value)} />
+      <button type="button" onClick={() => navigate("/app/recipes")} className="mt-3 min-h-12 w-full rounded-xl border border-mint/25 bg-white px-4 text-left text-sm font-bold text-mint">Montar lista a partir de receitas →</button>
       <button
         type="button"
         onClick={() => {

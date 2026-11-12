@@ -230,6 +230,7 @@ export function DietPlanPage() {
       {step === "config" ? (
         <div className="space-y-5">
           <p className="text-sm text-muted">Este assistente é opcional. A lista só será criada quando você revisar e confirmar.</p>
+          <button type="button" className="min-h-12 w-full rounded-xl border border-mint/25 bg-white px-3 text-left text-sm font-bold text-mint" onClick={() => navigate("/app/recipes")}>Prefiro escolher receitas e calcular os ingredientes →</button>
           <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-ink">As quantidades ainda vêm de um catálogo provisório, sem referência de consumo validada para cada alimento. A referência adulta opcional ajusta a escala por sexo, idade e atividade; a porção manual sempre prevalece. O cálculo por receitas e cardápio será integrado depois. Confira todos os itens antes de comprar.</p>
           <div className="rounded-xl border border-line p-3">
             <p className="text-xs text-muted">As respostas ficam nesta tela até você escolher salvar. Você pode carregar ou excluir o perfil da sua conta. Idade, gênero e respostas alimentares não são enviados aos eventos de analytics.</p>

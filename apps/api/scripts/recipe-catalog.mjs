@@ -24,9 +24,11 @@ export function validateRecipeCatalog(data) {
   }
   const seen = new Set();
   for (const recipe of data.recipes) {
-    allowedKeys(recipe, ["slug", "title", "description", "servings", "prepMinutes", "cookMinutes", "status", "visibility", "origin", "sourceUrl", "attribution", "reviewedBy", "reviewedAt", "publishedAt", "ingredients", "steps", "tags"]);
+    allowedKeys(recipe, ["slug", "title", "description", "servings", "prepMinutes", "cookMinutes", "status", "visibility", "origin", "sourceUrl", "attribution", "reviewedBy", "reviewedAt", "publishedAt", "ingredients", "steps", "tags", "caloriesPerServing", "nutritionSource"]);
     if (!slug(recipe.slug) || seen.has(recipe.slug) || !text(recipe.title, 160) || !text(recipe.description, 5000) || !quantity(recipe.servings)) fail("Receita inválida ou duplicada.");
     seen.add(recipe.slug);
+    if (recipe.caloriesPerServing !== undefined && (!quantity(recipe.caloriesPerServing) || recipe.caloriesPerServing > 10000 || Math.abs(recipe.caloriesPerServing * 100 - Math.round(recipe.caloriesPerServing * 100)) > 0.0001 || !text(recipe.nutritionSource, 1000))) fail("Calorias por porção exigem valor positivo e origem declarada.");
+    if (recipe.caloriesPerServing === undefined && recipe.nutritionSource !== undefined) fail("Informe calorias por porção junto da origem.");
     if (![recipe.prepMinutes, recipe.cookMinutes ?? 0].every(value => Number.isInteger(value) && value >= 0 && value <= 10080)) fail("Tempo de preparo inválido.");
     if (!["draft", "published"].includes(recipe.status ?? "draft") || !["private", "public"].includes(recipe.visibility ?? "private") || !["original", "imported", "ai_assisted"].includes(recipe.origin ?? "original")) fail("Estado ou origem inválida.");
     if (recipe.sourceUrl !== undefined && (!text(recipe.sourceUrl, 2048) || !/^https:\/\//.test(recipe.sourceUrl))) fail("Fonte deve usar HTTPS.");
@@ -89,7 +91,7 @@ export async function importRecipeCatalog(prisma, data) {
         if (previous && previous.kind !== tag.kind) fail("Tag já existe com outro tipo.");
         tags.push(await tx.recipeTag.upsert({ where: { slug: tag.slug }, create: tag, update: { name: tag.name } }));
       }
-      const record = { title: recipe.title.trim(), description: recipe.description.trim(), servings: recipe.servings, prepMinutes: recipe.prepMinutes, cookMinutes: recipe.cookMinutes ?? 0, status: recipe.status ?? "draft", visibility: recipe.visibility ?? "private", origin: recipe.origin ?? "original", sourceUrl: recipe.sourceUrl ?? null, attribution: recipe.attribution ?? null, reviewedBy: recipe.status === "published" ? recipe.reviewedBy : null, reviewedAt: recipe.status === "published" ? new Date(recipe.reviewedAt) : null, publishedAt: recipe.status === "published" ? new Date(recipe.publishedAt) : null };
+      const record = { title: recipe.title.trim(), description: recipe.description.trim(), servings: recipe.servings, prepMinutes: recipe.prepMinutes, cookMinutes: recipe.cookMinutes ?? 0, caloriesPerServing: recipe.caloriesPerServing ?? null, nutritionSource: recipe.nutritionSource ?? null, status: recipe.status ?? "draft", visibility: recipe.visibility ?? "private", origin: recipe.origin ?? "original", sourceUrl: recipe.sourceUrl ?? null, attribution: recipe.attribution ?? null, reviewedBy: recipe.status === "published" ? recipe.reviewedBy : null, reviewedAt: recipe.status === "published" ? new Date(recipe.reviewedAt) : null, publishedAt: recipe.status === "published" ? new Date(recipe.publishedAt) : null };
       const saved = await tx.recipe.upsert({ where: { slug: recipe.slug }, create: { slug: recipe.slug, ...record }, update: record });
       await tx.recipeIngredient.deleteMany({ where: { recipeId: saved.id } });
       await tx.recipeStep.deleteMany({ where: { recipeId: saved.id } });

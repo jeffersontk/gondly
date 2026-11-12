@@ -1,0 +1,8 @@
+export type IngredientOption = { id: string; name: string; baseUnit: "g" | "ml" | "un" };
+export type RecipeSummary = { id: string; title: string; description: string; servings: number; minutes: number; own: boolean; caloriesPerServing: number | null; nutritionSource: string | null; mealTypes: string[]; requiredIngredients: number; availableIngredients: number; coveredIngredients: number; missingIngredients: number };
+export type RecipeDetail = { id: string; title: string; description: string; servings: number; prepMinutes: number; cookMinutes: number; own: boolean; caloriesPerServing: number | null; nutritionSource: string | null; ingredients: { name: string; quantity: number | null; unit: string; optional: boolean; note: string | null }[]; steps: string[] };
+export type RecipePreview = { title: string; servings: number; ingredients: { ingredientId: string; name: string; unit: string; required: number | null; available: number; missing: number | null; unknown: boolean; covered: boolean }[] };
+export type PantryRow = { id: string; ingredientId: string; quantity: string; confirmedAt: string; ingredient: { name: string; baseUnit: string } };
+export type PurchaseCandidate = { id: string; productName: string; quantity: number; unit: string; packageSize: number | null; packageUnit: string | null; suggestedIngredientId: string | null; confirmed: boolean; purchase: { completedAt: string } };
+export const quantityLabel = (value: number) => value.toLocaleString("pt-BR", { maximumFractionDigits: 3 });
+export const readQuantity = (value: string) => value.trim() ? Number(value.replace(",", ".")) : NaN;

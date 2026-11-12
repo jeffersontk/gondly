@@ -380,6 +380,16 @@ Detalhes e comandos em [RECIPE-CATALOG.md](RECIPE-CATALOG.md). Esta entrega é a
 - [ ] Motor de cardápio/receitas para substituir as quantidades-base provisórias.
 - [ ] Verificação visual em aparelho e publicação na VPS.
 
+## Receitas e planejamento por calorias — 11/11/2026
+
+- [x] Cadastro privado de receitas com ingredientes, preparo, rendimento e energia por porção com origem declarada.
+- [x] Sugestões pela despensa confirmada e confirmação manual de compras, sem entrada automática no estoque.
+- [x] Nova lista por receita e porções, preservando listas anteriores.
+- [x] Cardápio por meta diária informada, refeições e período; mostrar energia real e exigir aceite de diferenças.
+- [x] Salvar cardápio e lista consolidada; descontar estoque uma vez e consultar refeições e receitas depois.
+- [ ] Catálogo editorial com valores energéticos revisados; compartilhamento e avaliações de receitas.
+- [ ] Conferência visual em aparelho e deploy da migration na VPS.
+
 ## Referências
 
 - [Eventos existentes e regras de privacidade](analytics-events.md).

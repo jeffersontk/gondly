@@ -2,7 +2,7 @@
 
 ## Entregue nesta etapa
 
-Schema Prisma e migration aditiva para catálogo, autoria, compartilhamento, avaliações, despensa e planejamento. Importador administrativo de JSON com validação e transação. Não há endpoints públicos nem telas de receitas nesta entrega.
+Schema Prisma, importador administrativo e fluxos autenticados em `/app/recipes`: cadastro de receita privada, consulta de catálogo publicado, despensa, confirmação de compras recentes, sugestão por disponibilidade, lista por receita e cardápio por meta diária informada pelo usuário. Publicação comunitária, compartilhamento por token e avaliações ainda não têm telas/endpoints nesta entrega.
 
 | Entidade | Finalidade |
 | --- | --- |
@@ -46,11 +46,21 @@ O schema usa associação composta entre movimento e despensa para impedir que u
 
 ## Próximos módulos
 
-1. CRUD autenticado de receitas próprias; apenas o autor edita. Ingredientes do catálogo são associados por IDs revisados.
+1. Completar edição e exclusão de receitas próprias; o cadastro privado e consulta já existem. Ingredientes do catálogo são associados por identidade normalizada e unidade compatível, sem densidade/peso inferidos.
 2. Publicação/moderação e consulta pública, retornando apenas receitas publicadas e visíveis. Receita privada nunca é consultável por conhecer seu slug. Compartilhamento por link usa token aleatório, revogável, consultado somente pelo servidor; não expor tokens em listagens públicas.
 3. Avaliações autenticadas: verificar acesso à receita, impedir autoavaliação e moderar comentários. Exibir apenas avaliações aprovadas na média pública. Unicidade e faixa da nota já são garantidas no banco; permissões e autoavaliação dependem do serviço futuro.
-4. Despensa: confirmar compras recentes acessíveis, registrar consumo/ajustes e revisar disponibilidade antiga. Não compartilhar estoque particular por participar de uma lista.
-5. Receitas→compras: ajustar porções, somar ingredientes compatíveis e descontar estoque confirmado. Despensa→receitas: destacar cobertura, quantidades desconhecidas e ingredientes faltantes. Nunca converter quantidades qualitativas para zero.
+4. Ampliar a despensa com baixa por preparo e lembretes de revisão. Já é possível ajustar saldo manual e confirmar compras acessíveis, sem compartilhar estoque particular por participar de uma lista.
+5. Ampliar sugestões e catalogação. Receitas→compras já ajusta porções, soma ingredientes repetidos e desconta estoque confirmado; Despensa→receitas destaca cobertura parcial/completa e ingredientes faltantes. Quantidade desconhecida bloqueia a geração da lista, sem virar zero.
+
+## Meta diária e receitas
+
+No cadastro, `caloriesPerServing` é a energia de uma porção, não do rendimento inteiro. `nutritionSource` registra a origem declarada. Ambos podem ser omitidos, mas receitas sem essas informações não entram no planejador calórico. O importador aceita os mesmos campos e tags `kind: "meal"` com slugs `meal-breakfast`, `meal-lunch`, `meal-dinner`, `meal-snack`.
+
+Em `/app/recipes/calorie-plan`, a pessoa informa a própria meta (por exemplo, 1600), distribuição entre refeições, receitas permitidas e período. O sistema não calcula necessidade energética individual nem valida adequação clínica. A distribuição inicial é uma convenção editável da aplicação. O catálogo de produção não é preenchido com calorias fictícias; cadastre ou importe receitas com dados conhecidos.
+
+O cardápio exibe porções, calorias calculadas e diferença para a meta. Uma diferença precisa ser aceita antes de salvar. A geração conserva as listas existentes e salva cardápio e nova lista atomicamente. Ingredientes de todos os dias são somados antes de descontar a despensa; porções e energia planejadas ficam registradas para consulta posterior. Não há reserva/baixa automática do estoque, nem cotação inventada para ingredientes sem histórico.
+
+Endpoints autenticados em `/recipes`: catálogo, cadastro privado, detalhe, preview/lista de uma receita, ingredients, pantry (GET/PUT), purchases/recent e purchases/:id/confirm, meal-plan/preview e meal-plan (POST), meal-plans e meal-plans/:id (GET). O perfil e estoques são sempre do usuário autenticado. Não existem endpoints anônimos de publicação nesta etapa.
 
 ## Verificação
 
@@ -60,4 +70,4 @@ npm run recipes:test
 npm run recipes:test:db
 ```
 
-O teste de integração recusa destinos fora de localhost nas portas de desenvolvimento e limpa somente suas próprias fixtures. A migration foi aplicada apenas no ambiente local. Deploy e criação de APIs/telas permanecem pendentes.
+O teste de integração recusa destinos fora de localhost nas portas de desenvolvimento e limpa somente suas próprias fixtures. As APIs e telas descritas acima estão implementadas. A migration foi aplicada apenas no ambiente local; publicação na VPS e verificação visual permanecem pendentes.

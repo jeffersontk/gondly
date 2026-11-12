@@ -247,6 +247,7 @@ model Product {
 }
 
 model MarketList {
+  recipeMealPlan MealPlan?
   id          String           @id @default(cuid())
   userId      String
   name        String
@@ -663,6 +664,8 @@ model IngredientAlias {
 }
 
 model Recipe {
+  caloriesPerServing Decimal? @db.Decimal(10, 2)
+  nutritionSource String?
   id String @id @default(cuid())
   authorId String?
   author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
@@ -777,6 +780,9 @@ model PantryMovement {
 }
 
 model MealPlan {
+  dailyCalorieTarget Decimal? @db.Decimal(10, 2)
+  shoppingListId String? @unique
+  shoppingList MarketList? @relation(fields: [shoppingListId], references: [id], onDelete: SetNull)
   id String @id @default(cuid())
   userId String
   name String
@@ -790,6 +796,8 @@ model MealPlan {
 }
 
 model MealPlanRecipe {
+  plannedCalories Decimal? @db.Decimal(10, 2)
+  titleSnapshot String?
   id String @id @default(cuid())
   mealPlanId String
   recipeId String

@@ -62,6 +62,10 @@ const DietPlanPage = lazy(() =>
     default: module.DietPlanPage,
   })),
 );
+const RecipesPage = lazy(() => import("./pages/recipes/RecipesPage").then(module => ({ default: module.RecipesPage })));
+const RecipeDetailPage = lazy(() => import("./pages/recipes/RecipeDetailPage").then(module => ({ default: module.RecipeDetailPage })));
+const CreateRecipePage = lazy(() => import("./pages/recipes/CreateRecipePage").then(module => ({ default: module.CreateRecipePage })));
+const CaloriePlanPage = lazy(() => import("./pages/recipes/CaloriePlanPage").then(module => ({ default: module.CaloriePlanPage })));
 const SharedListPage = lazy(() =>
   import("./pages/lists/SharedListPage").then((module) => ({
     default: module.SharedListPage,
@@ -214,6 +218,10 @@ export function App() {
         />
         <Route element={<ProtectedLayout />}>
           <Route path="/app/home" element={<HomePage />} />
+          <Route path="/app/recipes" element={<RecipesPage />} />
+          <Route path="/app/recipes/new" element={<CreateRecipePage />} />
+          <Route path="/app/recipes/calorie-plan" element={<CaloriePlanPage />} />
+          <Route path="/app/recipes/:id" element={<RecipeDetailPage />} />
           <Route path="/app/lists" element={<ListsPage />} />
           <Route path="/app/lists/new" element={<CreateEditListPage />} />
           <Route path="/app/lists/diet-plan" element={<DietPlanPage />} />

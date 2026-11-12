@@ -30,3 +30,11 @@ test("catalog rejects missing ingredients, negative quantities and implicit quan
   qualitative.recipes[0].ingredients[0].note = "A gosto: quantidade deve ser confirmada.";
   assert.doesNotThrow(() => validateRecipeCatalog(qualitative));
 });
+test("calorie metadata requires an explicit source and never invents absent energy", () => {
+  const data = structuredClone(fixture);
+  assert.equal(validateRecipeCatalog(data).recipes[0].caloriesPerServing, undefined);
+  data.recipes[0].caloriesPerServing = 400;
+  assert.throws(() => validateRecipeCatalog(data), /origem/);
+  data.recipes[0].nutritionSource = "Fixture declarada, não é valor nutricional real";
+  assert.doesNotThrow(() => validateRecipeCatalog(data));
+});

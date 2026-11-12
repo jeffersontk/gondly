@@ -194,6 +194,7 @@ export function HomePage() {
           />
           <HomeShortcut to="/app/markets" icon={<Store className="h-5 w-5" />} label="Mercados" />
           <HomeShortcut to="/app/history" icon={<History className="h-5 w-5" />} label="Histórico" />
+          <HomeShortcut to="/app/recipes" icon={<Sparkles className="h-5 w-5" />} label="Receitas e despensa" />
         </div>
       </section>
 

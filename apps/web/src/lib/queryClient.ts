@@ -69,6 +69,7 @@ function shouldPersistQuery(query: Query) {
 
   const [scope, value] = query.queryKey;
   if (scope === "active-purchases" || scope === "purchase-budget") return false;
+  if (typeof scope === "string" && (scope === "recipes" || scope.startsWith("recipe"))) return false;
   if (scope === "products-search" && typeof value === "string" && value.trim().length > 40) {
     return false;
   }
