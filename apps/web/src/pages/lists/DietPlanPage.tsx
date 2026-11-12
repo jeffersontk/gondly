@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -15,11 +15,13 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
-import type { DietPlanItem, DietPlanSuggestion, DietRestriction, DietType, Unit } from "@gondly/types";
+import type { DietPlanItem, DietPlanSuggestion, DietRestriction, DietType, Unit, HouseholdMember, HouseholdPlanningProfile } from "@gondly/types";
 import {
   DIET_DEFINITIONS,
   RESTRICTION_DEFINITIONS,
   generateDietSuggestion,
+  defaultHouseholdMember,
+  validateHouseholdProfile,
 } from "@gondly/utils";
 import { AppButton, AppInput, ScreenContainer, SectionHeader } from "../../components";
 import { trackEvent } from "../../lib/analytics";
@@ -27,6 +29,7 @@ import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import type { MarketList } from "../../types";
 import { addListCache } from "../shared";
+import { HouseholdMembersEditor } from "./HouseholdMembersEditor";
 
 type EditablePlanItem = DietPlanItem & {
   id: string;
@@ -45,7 +48,34 @@ export function DietPlanPage() {
   const [dietType, setDietType] = useState<DietType>("balanced");
   const [familySize, setFamilySize] = useState<number>(2);
   const [periodDays, setPeriodDays] = useState<number>(7);
-  const [mealsAtHome, setMealsAtHome] = useState<Array<"breakfast" | "lunch" | "dinner" | "snack">>(["breakfast", "lunch", "dinner", "snack"]);
+  const [members, setMembers] = useState<HouseholdMember[]>(() => [defaultHouseholdMember(), defaultHouseholdMember()]);
+  const mealsAtHome = (["breakfast", "lunch", "dinner", "snack"] as const).filter(meal => members.some(member => member.mealsPerWeek[meal] > 0));
+  const [profileMessage, setProfileMessage] = useState("");
+  const [profileBusy, setProfileBusy] = useState(false);
+  useEffect(() => { setMembers(current => Array.from({ length: familySize }, (_, index) => current[index] ?? defaultHouseholdMember())); }, [familySize]);
+  async function manageProfile(action: "save" | "load" | "delete") {
+    if (profileBusy) return;
+    setProfileBusy(true);
+    setProfileMessage("");
+    try {
+      if (action === "save") {
+        const profile: HouseholdPlanningProfile = { version: 1, members, periodDays, dietType, restrictions: selectedRestrictions };
+        await api("/users/me/planning-profile", { method: "PUT", body: validateHouseholdProfile(profile) });
+        setProfileMessage("Perfil salvo na sua conta. Ele não é compartilhado com participantes das listas.");
+      } else if (action === "load") {
+        const data = await api<HouseholdPlanningProfile | null>("/users/me/planning-profile", { cacheFallback: false });
+        if (!data) { setProfileMessage("Você ainda não salvou um perfil."); return; }
+        const profile = validateHouseholdProfile(data);
+        setMembers(profile.members); setFamilySize(profile.members.length); setPeriodDays(profile.periodDays); setDietType(profile.dietType); setSelectedRestrictions(profile.restrictions);
+        setProfileMessage("Perfil carregado. Revise a rotina antes de gerar a lista.");
+      } else {
+        await api("/users/me/planning-profile", { method: "DELETE" });
+        setMembers(Array.from({ length: familySize }, defaultHouseholdMember));
+        setProfileMessage("Perfil salvo excluído. Os campos de cada pessoa foram limpos.");
+      }
+    } catch { setProfileMessage("Não foi possível concluir. Confira a conexão e tente novamente."); }
+    finally { setProfileBusy(false); }
+  }
   const [selectedRestrictions, setSelectedRestrictions] = useState<DietRestriction[]>([]);
 
   // Review step state
@@ -69,6 +99,7 @@ export function DietPlanPage() {
       familySize,
       periodDays,
       mealsAtHome,
+      householdMembers: members,
       restrictions: selectedRestrictions,
     });
 
@@ -84,10 +115,8 @@ export function DietPlanPage() {
     );
     setStep("review");
     trackEvent("generate_diet_plan", {
-      diet_type: dietType,
       family_size: familySize,
       period_days: periodDays,
-      restrictions_count: selectedRestrictions.length,
     });
   };
 
@@ -170,7 +199,6 @@ export function DietPlanPage() {
         list_id: saved.id,
         items_count: itemsToBuy.length,
         items_at_home_count: itemsAtHome.length,
-        diet_type: dietType,
       });
       navigate(`/app/lists/${saved.id}`);
     },
@@ -200,6 +228,16 @@ export function DietPlanPage() {
       {step === "config" ? (
         <div className="space-y-5">
           <p className="text-sm text-muted">Este assistente é opcional. A lista só será criada quando você revisar e confirmar.</p>
+          <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-ink">As quantidades ainda vêm de um catálogo provisório, sem referência de consumo validada. O perfil ajusta frequência e porções escolhidas; o cálculo por receitas e cardápio será integrado depois. Confira todos os itens antes de comprar.</p>
+          <div className="rounded-xl border border-line p-3">
+            <p className="text-xs text-muted">As respostas ficam nesta tela até você escolher salvar. Você pode carregar ou excluir o perfil da sua conta. Idade, gênero e respostas alimentares não são enviados aos eventos de analytics.</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <AppButton disabled={profileBusy} variant="secondary" onClick={() => void manageProfile("load")}>Carregar perfil</AppButton>
+              <AppButton disabled={profileBusy} variant="secondary" onClick={() => void manageProfile("save")}>Salvar perfil</AppButton>
+              <AppButton disabled={profileBusy} variant="ghost" onClick={() => void manageProfile("delete")}>Excluir perfil salvo</AppButton>
+            </div>
+            {profileMessage ? <p role="status" className="mt-2 text-xs text-muted">{profileMessage}</p> : null}
+          </div>
           <button type="button" className="min-h-11 text-sm font-bold text-mint" onClick={() => navigate("/app/home")}>Fazer depois</button>
           {/* 1. Escolha do Perfil / Dieta */}
           <div>
@@ -297,13 +335,14 @@ export function DietPlanPage() {
             </div>
           </div>
 
+          <HouseholdMembersEditor members={members} onChange={setMembers} />
           <fieldset>
             <legend className="mb-3 text-base font-black text-ink">3. Quais refeições vocês fazem em casa?</legend>
-            <p className="mb-3 text-xs text-muted">Marque as refeições habituais das pessoas incluídas na lista. Na revisão, ajuste para quem come fora ou tem outro consumo.</p>
+            <p className="mb-3 text-xs text-muted">Atalho para ativar ou desativar uma refeição para todos: ao ativar, serão 7 dias por semana. Ajuste a frequência individual nos cartões acima.</p>
             <div className="grid grid-cols-2 gap-2">
               {([{ id: "breakfast", name: "Café da manhã" }, { id: "lunch", name: "Almoço" }, { id: "dinner", name: "Jantar" }, { id: "snack", name: "Lanches" }] as const).map(meal => (
                 <label key={meal.id} className="flex min-h-12 items-center gap-2 rounded-xl border border-line bg-white p-3 text-sm font-semibold">
-                  <input type="checkbox" className="h-4 w-4 accent-mint" checked={mealsAtHome.includes(meal.id)} onChange={() => setMealsAtHome(current => current.includes(meal.id) ? current.filter(value => value !== meal.id) : [...current, meal.id])} />{meal.name}
+                  <input type="checkbox" className="h-4 w-4 accent-mint" checked={mealsAtHome.includes(meal.id)} onChange={() => setMembers(current => current.map(member => ({ ...member, mealsPerWeek: { ...member.mealsPerWeek, [meal.id]: mealsAtHome.includes(meal.id) ? 0 : 7 } })))} />{meal.name}
                 </label>
               ))}
             </div>
@@ -361,7 +400,7 @@ export function DietPlanPage() {
             />
             <div className="mt-3 flex items-start gap-2 rounded-xl bg-mint/8 p-2.5 text-xs leading-relaxed text-ink/70">
               <Info className="mt-0.5 h-3.5 w-3.5 flex-none text-mint" />
-              <span>{premisesText}</span>
+              <span>{premisesText} O catálogo de quantidades ainda é provisório, sem referência de consumo validada. Idade e gênero não são usados como multiplicadores; a geração por receitas e cardápio ainda será integrada.</span>
             </div>
           </div>
 

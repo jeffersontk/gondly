@@ -1,4 +1,5 @@
-import type { DietPlanItem, DietPlanSuggestion, DietRestriction, DietType, Unit } from "@gondly/types";
+import type { DietPlanItem, DietPlanSuggestion, DietRestriction, DietType, Unit, HouseholdMember, HouseholdMeal } from "@gondly/types";
+import { validateHouseholdProfile } from "./household-profile";
 
 export type DietDefinition = {
   id: DietType;
@@ -213,6 +214,7 @@ export type GenerateDietSuggestionOptions = {
   periodDays: number;
   restrictions?: DietRestriction[];
   mealsAtHome?: Array<"breakfast" | "lunch" | "dinner" | "snack">;
+  householdMembers?: HouseholdMember[];
 };
 
 export function calculateDietQuantity(baseWeekly: number, familySize: number, periodDays: number, unit: Unit): number {
@@ -241,6 +243,7 @@ export function calculateDietQuantity(baseWeekly: number, familySize: number, pe
 
 export function generateDietSuggestion(options: GenerateDietSuggestionOptions): DietPlanSuggestion {
   const { dietType, familySize, periodDays, restrictions = [] } = options;
+  const household = options.householdMembers ? validateHouseholdProfile({ version: 1, members: options.householdMembers, periodDays, dietType, restrictions }).members : undefined;
   const allMeals = ["breakfast", "lunch", "dinner", "snack"] as const;
   const meals = [...new Set(options.mealsAtHome ?? allMeals)];
   if (!meals.length || meals.some(meal => !allMeals.includes(meal))) throw new Error("Selecione pelo menos uma refeição em casa.");
@@ -264,10 +267,15 @@ export function generateDietSuggestion(options: GenerateDietSuggestionOptions): 
     // Practical template groups, not individual nutritional requirements.
     const breakfastFood = /Padaria|Café|Laticínios/i.test(template.category) || /aveia|granola|tapioca|cuscuz|flocão/i.test(template.productName);
     const sharedFood = /Hortifrúti|Temperos/i.test(template.category) || /ovos/i.test(template.productName);
-    const relevant = sharedFood ? [...allMeals] : breakfastFood ? ["breakfast", "snack"] : ["lunch", "dinner"];
+    const relevant: HouseholdMeal[] = sharedFood ? [...allMeals] : breakfastFood ? ["breakfast", "snack"] : ["lunch", "dinner"];
     const mealScale = relevant.filter(meal => meals.includes(meal as typeof meals[number])).length / relevant.length;
-    if (mealScale === 0) continue;
-    const suggestedQuantity = calculateDietQuantity(template.baseWeeklyPerPerson * mealScale, familySize, periodDays, template.unit);
+    const householdScale = household?.reduce((sum, member) => {
+      if (member.ageBand === "under_3") return sum;
+      const frequency = relevant.reduce((days, meal) => days + (meals.includes(meal) ? member.mealsPerWeek[meal] : 0), 0) / (7 * relevant.length);
+      return sum + frequency * ({ small: 0.75, medium: 1, large: 1.25 })[member.portion];
+    }, 0);
+    if (mealScale === 0 || householdScale === 0) continue;
+    const suggestedQuantity = calculateDietQuantity(template.baseWeeklyPerPerson * (householdScale ?? mealScale), household ? 1 : familySize, periodDays, template.unit);
 
     items.push({
       productName: template.productName,

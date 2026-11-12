@@ -364,6 +364,14 @@ evidências da V1, conteúdo da V2 e a auditoria/decisão do AdSense (V8).
 
 Detalhes e comandos em [RECIPE-CATALOG.md](RECIPE-CATALOG.md). Esta entrega é a base de dados, não o fluxo completo de receitas.
 
+## Perfil da casa — 11/11/2026
+
+- [x] Informar por pessoa faixa etária e gênero opcionais, porção habitual e frequência semanal por refeição.
+- [x] Salvar, carregar e excluir perfil privado na própria conta; respostas demográficas fora de analytics e de descrições de listas compartilhadas.
+- [x] Ajustar a escala provisória pela porção escolhida e refeições em casa. Não usar coeficientes de gênero ou idade; menores de 3 anos ficam fora da estimativa genérica e exigem itens manuais.
+- [ ] Substituir o catálogo quantitativo provisório pelo planejamento de receitas/porções/frequência, com referências e revisão do cardápio.
+- [ ] Validar a experiência no celular e publicar a migration do perfil na VPS.
+
 ## Referências
 
 - [Eventos existentes e regras de privacidade](analytics-events.md).

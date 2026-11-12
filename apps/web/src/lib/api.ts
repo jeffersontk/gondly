@@ -94,7 +94,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     }
 
     if (method === "GET") {
-      void cacheSet(cacheKey, data).catch(() => undefined);
+      if (options.cacheFallback !== false) void cacheSet(cacheKey, data).catch(() => undefined);
     } else {
       void clearHttpCache().catch(() => undefined);
     }

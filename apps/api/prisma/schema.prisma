@@ -137,6 +137,7 @@ enum ShareLocationLevel {
 }
 
 model User {
+  planningProfile Json?
   id                     String                      @id @default(cuid())
   name                   String
   email                  String                      @unique

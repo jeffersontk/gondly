@@ -1,6 +1,21 @@
 export const units = ["un", "kg", "g", "l", "ml", "pacote", "caixa", "outro"] as const;
 export type Unit = (typeof units)[number];
 
+export type HouseholdMeal = "breakfast" | "lunch" | "dinner" | "snack";
+export type HouseholdMember = {
+  ageBand: "not_informed" | "under_3" | "3_5" | "6_12" | "13_17" | "18_59" | "60_plus";
+  gender: "not_informed" | "woman" | "man" | "other";
+  portion: "small" | "medium" | "large";
+  mealsPerWeek: Record<HouseholdMeal, number>;
+};
+export type HouseholdPlanningProfile = {
+  version: 1;
+  members: HouseholdMember[];
+  periodDays: number;
+  dietType: DietType;
+  restrictions: DietRestriction[];
+};
+
 export const marketListStatuses = ["active", "archived"] as const;
 export type MarketListStatus = (typeof marketListStatuses)[number];
 
