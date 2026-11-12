@@ -18,6 +18,8 @@ Schema Prisma, importador administrativo e fluxos autenticados em `/app/recipes`
 
 ## Alimentar o catálogo
 
+Pesquisa inicial: [45 receitas e preparos para todas as refeições](research/2026-11-11-recipe-catalog-research.md), com [manifesto de fontes](research/2026-11-11-recipe-shortlist.json). Esse manifesto é uma curadoria de referências, não um lote importável; as fichas culinárias e energéticas ainda precisam ser preparadas e revisadas.
+
 Use como formato inicial [example.json](../apps/api/prisma/recipes/example.json). O exemplo é um rascunho técnico, não uma receita culinária validada. Todas as referências de ingrediente de um lote devem estar declaradas nesse mesmo JSON.
 
 Na pasta `apps/api`, valide sem acessar o banco:
