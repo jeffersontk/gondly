@@ -399,6 +399,15 @@ Detalhes e comandos em [RECIPE-CATALOG.md](RECIPE-CATALOG.md). Esta entrega é a
 - [ ] Teste culinário e revisão nutricional; a revisão atual é editorial/técnica e assim está identificada.
 - [ ] Executar a carga na VPS.
 
+## Receitas públicas da comunidade — 13/11/2026
+
+- [x] Escolha explícita de publicar e retirar a própria receita; publicação imediata conforme decisão do usuário.
+- [x] Páginas HTML sem login com autor, ingredientes, preparo, canonical e dados estruturados reais.
+- [x] Índice paginado e sitemap dinâmico, sem cache offline de receitas retiradas.
+- [x] Atualização da interface e informações sobre conteúdo público; receitas privadas existentes preservadas.
+- [ ] Fotos próprias e avaliações, sem resultados enriquecidos prometidos antes dos dados necessários.
+- [ ] Ferramentas de denúncia/moderação e conferência do proxy após deploy na VPS.
+
 ## Referências
 
 - [Eventos existentes e regras de privacidade](analytics-events.md).

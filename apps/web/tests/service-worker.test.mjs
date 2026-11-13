@@ -65,6 +65,14 @@ test("private HTML never enters navigation cache", async () => {
   await w.navigate("/app/home");
   assert.equal(w.writes.length, 0);
 });
+test("community pages are never cached or served from offline cache after withdrawal", async () => {
+  const live = worker();
+  await live.navigate("/receitas/minha-receita");
+  assert.equal(live.writes.length,0);
+  const offline = worker({offline:true});
+  assert.equal((await offline.navigate("/receitas/minha-receita")).status,503);
+  assert.equal(offline.matches.length,0);
+});
 test("offline article does not fall back to home or another article", async () => {
   const w = worker({ offline: true });
   const r = await w.navigate("/blog/inexistente");

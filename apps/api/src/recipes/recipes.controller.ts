@@ -2,7 +2,7 @@ import { Body, Controller, Get, Header, Param, Post, Put, Query, UseGuards } fro
 import type { JwtUser } from "../common/auth.types";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
-import { CaloriePlanDto, ConfirmPurchaseIngredientDto, CreateRecipeDto, PantryQuantityDto, RecipePlanDto } from "./dto";
+import { CaloriePlanDto, ConfirmPurchaseIngredientDto, CreateRecipeDto, PantryQuantityDto, RecipePlanDto, RecipePublicationDto } from "./dto";
 import { RecipesService } from "./recipes.service";
 @Controller("recipes")
 @UseGuards(JwtAuthGuard)
@@ -10,6 +10,7 @@ export class RecipesController {
   constructor(private readonly service: RecipesService) {}
   @Get() @Header("Cache-Control", "no-store") list(@CurrentUser() user: JwtUser, @Query("q") q?: string) { return this.service.list(user.id, typeof q === "string" ? q : ""); }
   @Post() create(@CurrentUser() user: JwtUser, @Body() body: CreateRecipeDto) { return this.service.create(user.id, body); }
+  @Post(":id/publication") publication(@CurrentUser() user: JwtUser, @Param("id") id: string, @Body() body: RecipePublicationDto) { return this.service.publication(user.id, id, body.publish); }
   @Post("meal-plan/preview") caloriePreview(@CurrentUser() user: JwtUser, @Body() body: CaloriePlanDto) { return this.service.caloriePreview(user.id, body); }
   @Post("meal-plan") saveCaloriePlan(@CurrentUser() user: JwtUser, @Body() body: CaloriePlanDto) { return this.service.saveCaloriePlan(user.id, body); }
   @Get("meal-plans") @Header("Cache-Control", "no-store") savedPlans(@CurrentUser() user: JwtUser) { return this.service.savedCaloriePlans(user.id); }

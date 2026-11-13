@@ -40,6 +40,11 @@ self.addEventListener("fetch", (event) => {
 
 async function networkFirstNavigation(request) {
   const url = new URL(request.url);
+    // Author withdrawal must also apply offline: never reuse a saved community page.
+    if (/^\/receitas(\/|$)/.test(url.pathname)) {
+      try { return await fetch(request); }
+      catch { return new Response('Sem conexão. Reconecte para consultar esta receita.', {status:503, headers:{"Content-Type":"text/plain; charset=utf-8", "Cache-Control":"no-store"}}); }
+    }
   const editorial = /^\/(blog|receitas|guias|sobre)(\/|$)/.test(url.pathname);
   try {
     const response = await fetch(request);

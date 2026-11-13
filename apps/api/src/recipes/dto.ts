@@ -1,4 +1,4 @@
-import { Type } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
 import { MealSlot } from "@prisma/client";
 export class RecipeIngredientDto {
@@ -7,6 +7,7 @@ export class RecipeIngredientDto {
   @IsNumber({ maxDecimalPlaces: 3 }) @Min(0.001) @Max(1000000) quantity!: number;
 }
 export class CreateRecipeDto {
+  @IsOptional() @Transform(({ obj }) => obj.publish) @IsBoolean() publish?: boolean;
   @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(1) @Max(10000) caloriesPerServing?: number;
   @IsOptional() @IsString() @MinLength(2) @MaxLength(1000) nutritionSource?: string;
   @IsOptional() @IsArray() @ArrayUnique() @ArrayMaxSize(4) @IsIn(["breakfast", "lunch", "dinner", "snack"], { each: true }) mealTypes?: MealSlot[];
@@ -17,6 +18,9 @@ export class CreateRecipeDto {
   @IsInt() @Min(0) @Max(1440) cookMinutes!: number;
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(50) @ValidateNested({ each: true }) @Type(() => RecipeIngredientDto) ingredients!: RecipeIngredientDto[];
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(50) @IsString({ each: true }) @MinLength(2, { each: true }) @MaxLength(3000, { each: true }) steps!: string[];
+}
+export class RecipePublicationDto {
+  @Transform(({ obj }) => obj.publish) @IsBoolean() publish!: boolean;
 }
 export class RecipePlanDto {
   @IsNumber({ maxDecimalPlaces: 3 }) @Min(0.001) @Max(100) servings!: number;

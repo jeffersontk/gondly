@@ -106,7 +106,7 @@ ${structured}`;
   );
   await writeFile(
     path.join(dist, "robots.txt"),
-    `User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`,
+    `User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\nSitemap: ${origin}/sitemap-recipes.xml\n`,
   );
   const ads = await readFile(path.join(dist, "ads.txt"), "utf8");
   if (!/^google\.com, pub-\d+, DIRECT, f08c47fec0942fa0\s*$/.test(ads.trim()))

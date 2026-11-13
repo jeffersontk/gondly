@@ -14,6 +14,11 @@ const slugify = (name: string) => normalizeRecipeIngredient(name).replace(/[^a-z
 @Injectable()
 export class RecipesService {
   constructor(private readonly prisma: PrismaService) {}
+  async publication(userId: string, id: string, publish: boolean) {
+    const recipe = await this.prisma.recipe.findFirst({ where: { id, authorId: userId, origin: "user_created" } });
+    if (!recipe) throw new NotFoundException("Receita própria não encontrada.");
+    return this.prisma.recipe.update({ where: { id: recipe.id }, data: { visibility: publish ? "public" : "private", status: publish ? "published" : "draft", publishedAt: publish ? recipe.publishedAt ?? new Date() : null }, select: { id: true, slug: true, visibility: true, status: true } });
+  }
   ingredients(userId: string, q = "") {
     return this.prisma.ingredient.findMany({ where: { AND: [accessibleIngredient(userId), { name: { contains: q.slice(0, 120), mode: "insensitive" } }] }, select: { id: true, name: true, baseUnit: true }, take: 200, orderBy: { name: "asc" } });
   }
@@ -30,7 +35,7 @@ export class RecipesService {
         await tx.ingredientAlias.upsert({ where: { normalizedName: normalizeRecipeIngredient(item.name) }, update: {}, create: { normalizedName: normalizeRecipeIngredient(item.name), ingredientId: ingredient.id } });
         lines.push({ ingredientId: ingredient.id, position: lines.length + 1, quantity: item.quantity, baseQuantity: item.quantity, unit: item.unit });
       }
-      return tx.recipe.create({ data: { authorId: userId, title: dto.title.trim(), slug: `${slugify(dto.title).slice(0, 70)}-${randomUUID()}`, description: dto.description.trim(), servings: dto.servings, prepMinutes: dto.prepMinutes, cookMinutes: dto.cookMinutes, caloriesPerServing: dto.caloriesPerServing, nutritionSource: dto.caloriesPerServing != null ? dto.nutritionSource!.trim() : null, tags: { connectOrCreate: (dto.mealTypes ?? []).map(meal => ({ where: { slug: `meal-${meal}` }, create: { slug: `meal-${meal}`, kind: "meal", name: meal } })) }, origin: "user_created", ingredients: { create: lines }, steps: { create: dto.steps.map((instruction, index) => ({ instruction: instruction.trim(), position: index + 1 })) } }, select: { id: true, title: true } });
+      return tx.recipe.create({ data: { status: dto.publish === true ? "published" : "draft", visibility: dto.publish === true ? "public" : "private", publishedAt: dto.publish === true ? new Date() : null, authorId: userId, title: dto.title.trim(), slug: `${slugify(dto.title).slice(0, 70)}-${randomUUID()}`, description: dto.description.trim(), servings: dto.servings, prepMinutes: dto.prepMinutes, cookMinutes: dto.cookMinutes, caloriesPerServing: dto.caloriesPerServing, nutritionSource: dto.caloriesPerServing != null ? dto.nutritionSource!.trim() : null, tags: { connectOrCreate: (dto.mealTypes ?? []).map(meal => ({ where: { slug: `meal-${meal}` }, create: { slug: `meal-${meal}`, kind: "meal", name: meal } })) }, origin: "user_created", ingredients: { create: lines }, steps: { create: dto.steps.map((instruction, index) => ({ instruction: instruction.trim(), position: index + 1 })) } }, select: { id: true, title: true } });
     });
   }
   async list(userId: string, q = "") {
@@ -51,7 +56,7 @@ export class RecipesService {
   }
   async detail(userId: string, id: string) {
     const recipe = await this.recipe(userId, id);
-    return { id: recipe.id, title: recipe.title, description: recipe.description, servings: Number(recipe.servings), prepMinutes: recipe.prepMinutes, cookMinutes: recipe.cookMinutes, own: recipe.authorId === userId, origin: recipe.origin, sourceUrl: recipe.sourceUrl, attribution: recipe.attribution, reviewedBy: recipe.reviewedBy, caloriesPerServing: recipe.caloriesPerServing == null ? null : Number(recipe.caloriesPerServing), nutritionSource: recipe.nutritionSource, ingredients: recipe.ingredients.map(item => ({ name: item.ingredient.name, quantity: item.quantity === null ? null : Number(item.quantity), unit: item.unit, optional: item.optional, note: item.note })), steps: recipe.steps.map(step => step.instruction) };
+    return { id: recipe.id, slug: recipe.slug, visibility: recipe.visibility, status: recipe.status, title: recipe.title, description: recipe.description, servings: Number(recipe.servings), prepMinutes: recipe.prepMinutes, cookMinutes: recipe.cookMinutes, own: recipe.authorId === userId, origin: recipe.origin, sourceUrl: recipe.sourceUrl, attribution: recipe.attribution, reviewedBy: recipe.reviewedBy, caloriesPerServing: recipe.caloriesPerServing == null ? null : Number(recipe.caloriesPerServing), nutritionSource: recipe.nutritionSource, ingredients: recipe.ingredients.map(item => ({ name: item.ingredient.name, quantity: item.quantity === null ? null : Number(item.quantity), unit: item.unit, optional: item.optional, note: item.note })), steps: recipe.steps.map(step => step.instruction) };
   }
   async preview(userId: string, id: string, dto: RecipePlanDto) {
     const recipe = await this.recipe(userId, id);

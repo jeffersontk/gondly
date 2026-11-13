@@ -39,5 +39,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    proxy: {
+      "/receitas": { target: "http://127.0.0.1:3333", rewrite: path => path.replace(/^\/receitas/, "/public-recipe-pages") },
+      "/sitemap-recipes.xml": { target: "http://127.0.0.1:3333", rewrite: () => "/public-recipe-pages/sitemap.xml" },
+    },
   },
 });

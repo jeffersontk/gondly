@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowLeft, FileText, Mail, MessageCircle, ShieldCheck } from "lucide-react";
 
 const CONTACT_EMAIL = "contato@gondly.com.br";
-const UPDATED_AT = "27 de outubro de 2026";
+const UPDATED_AT = "13 de novembro de 2026";
 
 export function PrivacyPage() {
   return (
@@ -24,6 +24,10 @@ export function PrivacyPage() {
         </p>
       </InfoSection>
 
+      <InfoSection title="Receitas publicadas por você">
+        <p>Receitas são privadas por padrão. Se você escolher publicar, o conteúdo da receita e seu nome de exibição ficam acessíveis sem login no site e podem aparecer em mecanismos de busca. Seu e-mail, despensa e compras não são incluídos na página pública.</p>
+        <p>Você pode retirar a publicação no detalhe da receita. A página deixa de estar disponível no Gondly; mecanismos de busca e outros serviços podem levar tempo para atualizar seus registros.</p>
+      </InfoSection>
       <InfoSection title="Finalidade">
         <p>
           Usamos esses dados para autenticar sua conta, sincronizar informações
@@ -100,6 +104,9 @@ export function TermsPage() {
         </p>
       </InfoSection>
 
+      <InfoSection title="Compartilhamento de receitas">
+        <p>Ao publicar, compartilhe apenas conteúdo que você tem direito de disponibilizar. A publicação é imediata e identifica você pelo nome de exibição, sem representar revisão editorial ou nutricional do Gondly. Você pode retirar a receita do site pelo aplicativo.</p>
+      </InfoSection>
       <InfoSection title="Conta e acesso">
         <p>
           O acesso pode depender de autenticação por Google. Você deve manter sua

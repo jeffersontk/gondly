@@ -2,7 +2,19 @@
 
 ## Entregue nesta etapa
 
-Schema Prisma, importador administrativo e fluxos autenticados em `/app/recipes`: cadastro de receita privada, consulta de catálogo publicado, despensa, confirmação de compras recentes, sugestão por disponibilidade, lista por receita e cardápio por meta diária informada pelo usuário. Publicação comunitária, compartilhamento por token e avaliações ainda não têm telas/endpoints nesta entrega.
+### Publicação comunitária imediata — 13/11/2026
+
+O autor agora escolhe publicar no cadastro ou no detalhe, e pode retirar a publicação. Receitas existentes não são publicadas automaticamente. `publish` exige booleano explícito; somente o dono de uma receita `user_created` pode alterar sua visibilidade. A publicação comunitária não registra revisão editorial fictícia. As migrations de 13/11 permitem esse fluxo, preservando a revisão exigida para importações editoriais e o bloqueio de receitas não publicadas visíveis por link.
+
+Na VPS, `/receitas` e `/receitas/:slug` são páginas HTML dinâmicas da API, sem login ou rebuild por publicação. Só retornam `published + public`; receitas privadas, retiradas ou de usuários sem autoria remanescente não são expostas. O nome de exibição do autor aparece, mas e-mail, tokens, despensa e compras não. Existe paginação de 20 fichas e sitemap de até 10.000 receitas em `/sitemap-recipes.xml`, anunciado no robots.txt. Acima desse volume, será necessário dividir os sitemaps.
+
+As páginas usam canonical e JSON-LD Recipe/ItemList com informações existentes, sem avaliações, fotos ou calorias inventadas. Sem foto apropriada não se promete elegibilidade para resultados enriquecidos. Conteúdo é escapado; não é aceito HTML executável de usuários. A página não carrega anúncios nesta entrega, e publicação não implica aprovação pelo AdSense.
+
+A retirada retorna 404 no site e remove a entrada do sitemap; caches e índices externos do Google têm seus próprios prazos de atualização. As páginas comunitárias não são armazenadas nem recuperadas pelo cache offline do service worker.
+
+Deploy exige `bash scripts/update-vps.sh all` para aplicar migrations e atualizar API, web e Nginx. O proxy usa o alias `gondly-prod-api:3333`, confirmado no Compose de produção enviado pelo usuário, na rede compartilhada `proxy`. O proxy real da VPS ainda precisa ser conferido após o deploy. Em desenvolvimento, o Vite encaminha `/receitas` para a API em 3333.
+
+Schema Prisma, importador administrativo e fluxos autenticados em `/app/recipes`: cadastro privado ou publicação escolhida pelo autor, consulta de catálogo publicado, despensa, confirmação de compras recentes, sugestão por disponibilidade, lista por receita e cardápio por meta diária informada pelo usuário. Compartilhamento restrito por token e avaliações ainda não têm telas/endpoints.
 
 | Entidade | Finalidade |
 | --- | --- |
@@ -76,7 +88,7 @@ O schema usa associação composta entre movimento e despensa para impedir que u
 ## Próximos módulos
 
 1. Completar edição e exclusão de receitas próprias; o cadastro privado e consulta já existem. Ingredientes do catálogo são associados por identidade normalizada e unidade compatível, sem densidade/peso inferidos.
-2. Publicação/moderação e consulta pública, retornando apenas receitas publicadas e visíveis. Receita privada nunca é consultável por conhecer seu slug. Compartilhamento por link usa token aleatório, revogável, consultado somente pelo servidor; não expor tokens em listagens públicas.
+2. Ampliar ferramentas de denúncia/moderação e compartilhamento restrito por token. Publicação imediata pelo dono e consulta anônima de receitas públicas já existem. Receita privada nunca é consultável por conhecer seu slug. Futuro compartilhamento restrito deve usar token aleatório, revogável e consultado somente pelo servidor, sem expor tokens em listagens públicas.
 3. Avaliações autenticadas: verificar acesso à receita, impedir autoavaliação e moderar comentários. Exibir apenas avaliações aprovadas na média pública. Unicidade e faixa da nota já são garantidas no banco; permissões e autoavaliação dependem do serviço futuro.
 4. Ampliar a despensa com baixa por preparo e lembretes de revisão. Já é possível ajustar saldo manual e confirmar compras acessíveis, sem compartilhar estoque particular por participar de uma lista.
 5. Ampliar sugestões e catalogação. Receitas→compras já ajusta porções, soma ingredientes repetidos e desconta estoque confirmado; Despensa→receitas destaca cobertura parcial/completa e ingredientes faltantes. Quantidade desconhecida bloqueia a geração da lista, sem virar zero.
@@ -89,7 +101,7 @@ Em `/app/recipes/calorie-plan`, a pessoa informa a própria meta (por exemplo, 1
 
 O cardápio exibe porções, calorias calculadas e diferença para a meta. Uma diferença precisa ser aceita antes de salvar. A geração conserva as listas existentes e salva cardápio e nova lista atomicamente. Ingredientes de todos os dias são somados antes de descontar a despensa; porções e energia planejadas ficam registradas para consulta posterior. Não há reserva/baixa automática do estoque, nem cotação inventada para ingredientes sem histórico.
 
-Endpoints autenticados em `/recipes`: catálogo, cadastro privado, detalhe, preview/lista de uma receita, ingredients, pantry (GET/PUT), purchases/recent e purchases/:id/confirm, meal-plan/preview e meal-plan (POST), meal-plans e meal-plans/:id (GET). O perfil e estoques são sempre do usuário autenticado. Não existem endpoints anônimos de publicação nesta etapa.
+Endpoints autenticados em `/recipes`: catálogo, cadastro, detalhe, publicação/retirada por dono (`:id/publication`), preview/lista de uma receita, ingredients, pantry (GET/PUT), purchases/recent e purchases/:id/confirm, meal-plan/preview e meal-plan (POST), meal-plans e meal-plans/:id (GET). O perfil e estoques são sempre do usuário autenticado. Os endpoints anônimos são apenas de leitura das páginas públicas e sitemap; publicação exige autenticação.
 
 ## Verificação
 
