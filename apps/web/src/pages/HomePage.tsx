@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, BarChart3, ChevronRight, CircleDollarSign, History, Loader2, Package, Plus, RefreshCcw, ShoppingCart, Sparkles, Store, TrendingUp } from "lucide-react";
+import { ArrowRight, ChefHat, ChevronRight, CircleDollarSign, Loader2, Package, Plus, RefreshCcw, ShoppingCart, Sparkles, Store, TrendingUp } from "lucide-react";
 import { AppButton, EmptyState, ErrorState, LoadingState, ScreenContainer } from "../components";
 import { AdSlot } from "../ads/AdSlot";
 import { trackEvent } from "../lib/analytics";
@@ -187,14 +187,12 @@ export function HomePage() {
             onClick={() => trackEvent("click_create_list_shortcut", { source: "home" })}
           />
           <HomeShortcut
-            to="/app/compare"
-            icon={<BarChart3 className="h-5 w-5" />}
-            label="Comparar preços"
-            onClick={() => trackEvent("click_compare_shortcut", { source: "home" })}
+            to="/app/lists/diet-plan"
+            icon={<Sparkles className="h-5 w-5" />}
+            label="Gerar lista"
           />
+          <HomeShortcut to="/app/recipes" icon={<ChefHat className="h-5 w-5" />} label="Receitas e despensa" />
           <HomeShortcut to="/app/markets" icon={<Store className="h-5 w-5" />} label="Mercados" />
-          <HomeShortcut to="/app/history" icon={<History className="h-5 w-5" />} label="Histórico" />
-          <HomeShortcut to="/app/recipes" icon={<Sparkles className="h-5 w-5" />} label="Receitas e despensa" />
         </div>
       </section>
 
@@ -297,7 +295,7 @@ function HomeShortcut({ to, icon, label, onClick }: { to: string; icon: ReactNod
   return (
     <Link to={to} onClick={onClick} className="flex min-h-20 items-center gap-3 border-b border-r border-line p-4 text-ink transition hover:bg-paper active:bg-paper even:border-r-0 [&:nth-last-child(-n+2)]:border-b-0">
       <span className="grid h-11 w-11 flex-none place-items-center rounded-2xl bg-mint/10 text-mint">{icon}</span>
-      <span className="min-w-0 truncate text-sm font-black tracking-[-0.015em]">{label}</span>
+      <span className="min-w-0 break-words text-sm font-black leading-5 tracking-[-0.015em]">{label}</span>
     </Link>
   );
 }
