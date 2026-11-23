@@ -149,4 +149,6 @@ export * from "./diet-planner";
 export * from "./household-profile";
 export * from "./reference-portions";
 export * from "./step-counter";
+export * from "./imported-food-plan";
+export * from "./food-plan-preparation";
 

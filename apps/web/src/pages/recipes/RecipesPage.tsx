@@ -27,6 +27,7 @@ export function RecipesPage() {
   const field = "min-h-12 w-full min-w-0 rounded-xl border border-line bg-white px-3 text-base text-ink";
   const data = (recipes.data ?? []).filter(recipe => !onlyAvailable || recipe.availableIngredients > 0);
   return <ScreenContainer title="Receitas e despensa" subtitle="Planeje uma receita ou aproveite o que já tem">
+    <Link className="mb-4 block rounded-xl border border-mint/25 bg-white px-4 py-3 text-center font-bold text-mint" to="/app/my-plan">Meu plano · Calendário e receitas do dia →</Link>
     <div className="mb-4 grid grid-cols-3 gap-1 rounded-xl border border-line bg-white p-1">{[["recipes", "Receitas"], ["pantry", "Despensa"], ["purchases", "Compras"]].map(([value, label]) => <button key={value} type="button" aria-pressed={tab === value} className={`min-h-11 rounded-lg text-sm font-bold ${tab === value ? "bg-mint/10 text-mint" : "text-muted"}`} onClick={() => setTab(value)}>{label}</button>)}</div>
     {tab === "recipes" ? <div className="space-y-4">
       <Link className="block rounded-xl bg-mint px-4 py-3 text-center font-bold text-white" to="/app/recipes/new">Cadastrar minha receita</Link>

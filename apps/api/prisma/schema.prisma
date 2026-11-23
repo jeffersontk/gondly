@@ -780,6 +780,8 @@ model PantryMovement {
 }
 
 model MealPlan {
+  importedPlan Json?
+  revision Int @default(0)
   dailyCalorieTarget Decimal? @db.Decimal(10, 2)
   shoppingListId String? @unique
   shoppingList MarketList? @relation(fields: [shoppingListId], references: [id], onDelete: SetNull)

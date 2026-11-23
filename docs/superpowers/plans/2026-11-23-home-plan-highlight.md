@@ -1,0 +1,5 @@
+# Refeição do plano em destaque na Home
+
+Usuário quer que um plano existente ganhe destaque ao abrir o app, com a refeição correspondente ao horário. Inserir cartão acima de Nova compra, sem remover compras. Selecionar plano vigente na data local (mais recente quando houver vários); não apresentar plano encerrado/futuro como refeição de hoje. Horários explícitos do documento prevalecem; usar horários padrão somente para categorias reconhecidas quando não houver horário. Antes da primeira refeição, mostrar próxima; após início, mostrar refeição mais recente. Atualizar por minuto e ao retornar ao app.
+
+Consultar resumos/receitas com chaves por usuário, sem cache persistente. Reutilizar escolhas automáticas/manuais e preparação culinária do plano; mostrar nome e resumo das porções. Plano por calorias também tem destaque. Link abre plano e data certos e focaliza a refeição. Falhas do plano não bloqueiam a Home. Testar escolha temporal, meia-noite/datas locais, validade do plano, horários personalizados e links.

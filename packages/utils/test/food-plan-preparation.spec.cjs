@@ -1,0 +1,34 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { structureFoodMeal, arrangeFoodPlan, foodChoiceKey, buildFoodPreparation } = require('../dist/index.js');
+const meal = { id: 'lunch', name: 'Almoço', time: '13:00', notes: '', options: [{ id: 'plate', title: 'Prato', text: 'VEGETAIS (pelo menos 150g: pepino, tomate, abobrinha, brócolis, cenoura. Folhas à vontade)\nTemperar com 1 fio de azeite, limão, sal, mostarda ou vinagre.\n1 porção de carboidrato: arroz branco (120g) + feijão (150g)\nou batata inglesa (550g)\n1 porção de proteína: frango grelhado (100g)\nou tilápia grelhada (170g)' }] };
+test('creates a culinary preparation from exactly the selected options and original portions', () => {
+  const content = arrangeFoodPlan({ meals: [meal], choices: {} }, '2026-11-23', '2026-11-25');
+  const recipe = buildFoodPreparation(content.meals[0], content.choices['2026-11-23'], 0);
+  assert.match(recipe.title, /arroz.*feijão.*frango/i);
+  assert.equal(recipe.ingredients.find(item => item.name === 'Arroz branco').portion, '120g');
+  assert.equal(recipe.ingredients.find(item => item.name === 'Feijão').portion, '150g');
+  assert.equal(recipe.ingredients.find(item => item.name === 'Frango').portion, '100g');
+  assert.equal(recipe.ingredients.find(item => item.kind === 'vegetable').portion, '150g no total');
+  assert.ok(!recipe.ingredients.some(item => /batata|tilápia|manteiga|alho/i.test(item.name)));
+  assert.equal(recipe.ingredients.filter(item => /mostarda|vinagre/i.test(item.name)).length, 1);
+  assert.ok(recipe.steps.length >= 3);
+  assert.match(recipe.notice, /Gondly/);
+  const second = buildFoodPreparation(content.meals[0], content.choices['2026-11-24'], 1);
+  assert.match(second.title, /batata.*tilápia/i);
+  assert.equal(second.ingredients.find(item => item.name === 'Batata inglesa').portion, '550g');
+  assert.notEqual(recipe.ingredients.find(item => item.kind === 'vegetable').name, second.ingredients.find(item => item.kind === 'vegetable').name);
+});
+test('does not invent quantities or preparations when a component is unknown', () => {
+  assert.equal(buildFoodPreparation({ ...meal, options: [{ id: 'plain', title: 'Texto', text: 'Conferir documento' }] }, { lunch: 'plain' }, 0), null);
+  const structured = structureFoodMeal(meal);
+  const unknown = { ...structured, options: [{ ...structured.options[0], groups: [{ id: 'unknown', name: 'Proteína', options: [{ id: 'x', title: 'Outro', text: 'alimento desconhecido (100g)' }] }] }] };
+  assert.equal(buildFoodPreparation(unknown, { lunch: 'plate' }, 0), null);
+  const composed = { ...structured, options: [{ ...structured.options[0], groups: [{ id: 'protein', name: 'Proteína', options: [{ id: 'dish', title: 'Frango com quiabo', text: 'frango com quiabo (100g)' }] }] }] };
+  assert.equal(buildFoodPreparation(composed, { lunch: 'plate', [foodChoiceKey('lunch', 'plate', 'protein')]: 'dish' }, 0), null);
+  const curry = { ...structured, options: [{ ...structured.options[0], groups: [{ id: 'protein', name: 'Proteína', options: [{ id: 'dish', title: 'Frango ao curry', text: 'frango ao curry (100g)' }] }] }] };
+  assert.equal(buildFoodPreparation(curry, { lunch: 'plate', [foodChoiceKey('lunch', 'plate', 'protein')]: 'dish' }, 0), null);
+  const egg = { ...structured, options: [{ ...structured.options[0], text: structured.options[0].text + '\nAcompanhamento: 1 ovo cozido' }] };
+  const full = arrangeFoodPlan({ meals: [egg], choices: {} }, '2026-11-23', '2026-11-23');
+  assert.equal(buildFoodPreparation(full.meals[0], full.choices['2026-11-23'], 0), null);
+});

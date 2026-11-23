@@ -12,6 +12,7 @@ import { formatBRL, addListCache, setActivePurchaseCache } from "./shared";
 import { PurchaseTitleDialog } from "./purchase/PurchaseTitleDialog";
 import { GondlyTutorialGuide } from "./TutorialPage";
 import { FirstListWelcome } from "./lists/FirstListWelcome";
+import { HomeMealPlanCard } from "./recipes/HomeMealPlanCard";
 
 export function HomePage() {
   const { user } = useAuth();
@@ -99,6 +100,8 @@ export function HomePage() {
           </div>
         </div>
       </header>
+
+      <HomeMealPlanCard key={user?.id} />
 
       {user?.id && lists.isSuccess && active.isSuccess && !hasLists && !activePurchase && !data?.lastPurchase ? <FirstListWelcome key={user.id} userId={user.id} /> : null}
       <section className="rounded-[24px] bg-mint p-4 text-white shadow-[0_18px_44px_rgba(79,70,229,0.24)]">
@@ -194,6 +197,7 @@ export function HomePage() {
           <HomeShortcut to="/app/recipes" icon={<ChefHat className="h-5 w-5" />} label="Receitas e despensa" />
           <HomeShortcut to="/app/markets" icon={<Store className="h-5 w-5" />} label="Mercados" />
         </div>
+        <Link to="/app/my-plan" className="mt-3 flex min-h-14 items-center gap-3 rounded-xl border border-mint/25 bg-mint/5 px-4 font-bold text-mint"><ChefHat className="h-5 w-5" />Meu plano · Receitas do dia<ChevronRight className="ml-auto h-5 w-5" /></Link>
       </section>
 
       <section className="mt-5">

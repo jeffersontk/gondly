@@ -1,0 +1,5 @@
+# Cardápio importado automático
+
+Usuário quer calendário já preenchido, sem escolher todas as refeições, e almoço estruturado. Reutilizar apenas alternativas existentes no documento: rotação determinística diária das opções, separação de grupos explicitamente identificados como carboidrato e proteína, manutenção dos vegetais/temperos e quantidades. Não estimar nutrição ou combinar opções de refeições completas entre si.
+
+Implementar tipos e transformação compartilhada em utils; parser remove cabeçalhos NOME/DATA e estrutura grupos. Salvar escolhas automáticas nos novos planos. Planos anteriores recebem a mesma interpretação derivada sem perder escolhas manuais; mudanças posteriores persistem a versão estruturada. UI apresenta prato do dia com grupos e quantidades, botão opcional Trocar, documento original apenas em detalhes. Revisão de importação mostra grupos editáveis sem despejar alternativas na refeição do dia. Testes cobrem arroz+feijão como uma única opção, alternativas não somadas, continuação de página, rotação e preservação das escolhas.

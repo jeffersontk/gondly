@@ -4,6 +4,7 @@ import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { CaloriePlanDto, ConfirmPurchaseIngredientDto, CreateRecipeDto, PantryQuantityDto, RecipePlanDto, RecipePublicationDto } from "./dto";
 import { RecipesService } from "./recipes.service";
+import { FoodPlanChoiceDto, ImportFoodPlanDto } from "./imported-plan.dto";
 @Controller("recipes")
 @UseGuards(JwtAuthGuard)
 export class RecipesController {
@@ -15,6 +16,9 @@ export class RecipesController {
   @Post("meal-plan") saveCaloriePlan(@CurrentUser() user: JwtUser, @Body() body: CaloriePlanDto) { return this.service.saveCaloriePlan(user.id, body); }
   @Get("meal-plans") @Header("Cache-Control", "no-store") savedPlans(@CurrentUser() user: JwtUser) { return this.service.savedCaloriePlans(user.id); }
   @Get("meal-plans/:id") @Header("Cache-Control", "no-store") savedPlan(@CurrentUser() user: JwtUser, @Param("id") id: string) { return this.service.savedCaloriePlan(user.id, id); }
+  @Get("plans") @Header("Cache-Control", "no-store") calendarPlans(@CurrentUser() user: JwtUser) { return this.service.calendarPlans(user.id); }
+  @Post("plans/import") importPlan(@CurrentUser() user: JwtUser, @Body() body: ImportFoodPlanDto) { return this.service.importFoodPlan(user.id, body); }
+  @Put("plans/:id/day") choosePlanOption(@CurrentUser() user: JwtUser, @Param("id") id: string, @Body() body: FoodPlanChoiceDto) { return this.service.chooseFoodPlanOption(user.id, id, body); }
   @Get("ingredients") @Header("Cache-Control", "no-store") ingredients(@CurrentUser() user: JwtUser, @Query("q") q?: string) { return this.service.ingredients(user.id, typeof q === "string" ? q : ""); }
   @Get("pantry") @Header("Cache-Control", "no-store") pantry(@CurrentUser() user: JwtUser) { return this.service.pantry(user.id); }
   @Put("pantry/:id") setPantry(@CurrentUser() user: JwtUser, @Param("id") id: string, @Body() body: PantryQuantityDto) { return this.service.setPantry(user.id, id, body.quantity); }

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { PrismaService } from "../prisma/prisma.service";
@@ -6,6 +6,8 @@ import { purchaseAccessWhere } from "../purchases/purchase-access";
 import { calculateRecipePlan, knownBaseAmount, normalizeRecipeIngredient } from "./recipe-calculation";
 import { CaloriePlanDto, ConfirmPurchaseIngredientDto, CreateRecipeDto, RecipePlanDto } from "./dto";
 import { buildCalorieMenu } from "./calorie-planning";
+import { FoodPlanChoiceDto, ImportFoodPlanDto } from "./imported-plan.dto";
+import { arrangeFoodPlan, foodChoiceKey, type ImportedFoodPlan } from "@gondly/utils";
 
 const recipeInclude = { tags: true, ingredients: { include: { ingredient: true }, orderBy: { position: "asc" as const } }, steps: { orderBy: { position: "asc" as const } } };
 const accessible = (userId: string): Prisma.RecipeWhereInput => ({ OR: [{ authorId: userId, status: { not: "archived" } }, { status: "published", visibility: "public" }] });
@@ -14,6 +16,39 @@ const slugify = (name: string) => normalizeRecipeIngredient(name).replace(/[^a-z
 @Injectable()
 export class RecipesService {
   constructor(private readonly prisma: PrismaService) {}
+  calendarPlans(userId: string) {
+    return this.prisma.mealPlan.findMany({ where: { userId }, select: { id: true, name: true, startDate: true, endDate: true }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 100 });
+  }
+  async importFoodPlan(userId: string, dto: ImportFoodPlanDto) {
+    if (dto.reviewed !== true) throw new BadRequestException("Revise e confirme as refeições antes de salvar.");
+    if (!dto.name.trim() || new Set(dto.meals.map(meal => meal.id)).size !== dto.meals.length || dto.meals.some(meal => !meal.name.trim() || new Set(meal.options.map(option => option.id)).size !== meal.options.length || meal.options.some(option => !option.title.trim() || (!option.text.trim() && !option.groups?.length) || (option.groups && (new Set(option.groups.map(group => group.id)).size !== option.groups.length || option.groups.some(group => !group.name.trim() || new Set(group.options.map(item => item.id)).size !== group.options.length || group.options.some(item => !item.title.trim() || !item.text.trim()))))))) throw new BadRequestException("Preencha as refeições e opções com identificadores únicos.");
+    if (JSON.stringify(dto.meals).length > 80000) throw new BadRequestException("O conteúdo das refeições deve ter até 80 mil caracteres.");
+    const startDate = new Date(`${dto.startDate}T00:00:00Z`);
+    if (!Number.isFinite(startDate.getTime()) || startDate.toISOString().slice(0, 10) !== dto.startDate) throw new BadRequestException("Data inicial inválida.");
+    const endDate = new Date(startDate); endDate.setUTCDate(endDate.getUTCDate() + dto.days - 1);
+    const content = arrangeFoodPlan({ meals: dto.meals, choices: {} }, dto.startDate, endDate.toISOString().slice(0, 10));
+    return this.prisma.mealPlan.create({ data: { userId, name: dto.name.trim(), startDate, endDate, importedPlan: JSON.parse(JSON.stringify(content)) }, select: { id: true } });
+  }
+  async chooseFoodPlanOption(userId: string, id: string, dto: FoodPlanChoiceDto) {
+    const plan = await this.prisma.mealPlan.findFirst({ where: { id, userId } });
+    if (!plan || !plan.importedPlan) throw new NotFoundException("Plano importado não encontrado.");
+    let content = arrangeFoodPlan(plan.importedPlan as unknown as ImportedFoodPlan, plan.startDate.toISOString(), plan.endDate.toISOString());
+    const meal = content.meals.find(item => item.id === dto.mealId);
+    if (dto.date < plan.startDate.toISOString().slice(0, 10) || dto.date > plan.endDate.toISOString().slice(0, 10)) throw new BadRequestException("Escolha uma data dentro do período do plano.");
+    if (!meal) throw new BadRequestException("Refeição inválida.");
+    let key = meal.id;
+    if (dto.groupId) {
+      const parent = meal.options.find(option => option.id === content.choices[dto.date]?.[meal.id]);
+      const group = parent?.groups?.find(item => item.id === dto.groupId);
+      if (!parent || !group || !group.options.some(option => option.id === dto.optionId)) throw new BadRequestException("Alternativa do grupo inválida.");
+      key = foodChoiceKey(meal.id, parent.id, group.id);
+    } else if (dto.optionId && !meal.options.some(option => option.id === dto.optionId)) throw new BadRequestException("Opção de refeição inválida.");
+    content.choices[dto.date] = { ...content.choices[dto.date], [key]: dto.optionId };
+    content = arrangeFoodPlan(content, plan.startDate.toISOString(), plan.endDate.toISOString());
+    const result = await this.prisma.mealPlan.updateMany({ where: { id, userId, revision: dto.revision }, data: { importedPlan: JSON.parse(JSON.stringify(content)), revision: { increment: 1 } } });
+    if (!result.count) throw new ConflictException("O plano foi alterado em outro dispositivo. Recarregue e escolha novamente.");
+    return { revision: dto.revision + 1, importedPlan: content };
+  }
   async publication(userId: string, id: string, publish: boolean) {
     const recipe = await this.prisma.recipe.findFirst({ where: { id, authorId: userId, origin: "user_created" } });
     if (!recipe) throw new NotFoundException("Receita própria não encontrada.");
@@ -104,7 +139,7 @@ export class RecipesService {
   async savedCaloriePlan(userId: string, id: string) {
     const plan = await this.prisma.mealPlan.findFirst({ where: { id, userId }, include: { recipes: { orderBy: [{ date: "asc" }, { meal: "asc" }], select: { recipeId: true, date: true, meal: true, servings: true, plannedCalories: true, titleSnapshot: true } } } });
     if (!plan) throw new NotFoundException("Cardápio não encontrado.");
-    return plan;
+    return plan.importedPlan ? { ...plan, importedPlan: arrangeFoodPlan(plan.importedPlan as unknown as ImportedFoodPlan, plan.startDate.toISOString(), plan.endDate.toISOString()) } : plan;
   }
   pantry(userId: string) {
     return this.prisma.pantryItem.findMany({ where: { userId }, include: { ingredient: { select: { name: true, baseUnit: true } } }, orderBy: { updatedAt: "desc" } });

@@ -1,8 +1,18 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 export default defineConfig({
   plugins: [react()],
+  // SSR test servers must never evict the dependency files used by a running browser.
+  cacheDir: process.env.NODE_TEST_CONTEXT ? join(tmpdir(), "gondly-vite-tests", String(process.pid)) : "node_modules/.vite",
+  optimizeDeps: {
+    noDiscovery: Boolean(process.env.NODE_TEST_CONTEXT),
+    // PDF.js already ships browser ESM. Serving it directly avoids stale lazy-import URLs.
+    exclude: ["pdfjs-dist"],
+    include: process.env.NODE_TEST_CONTEXT ? [] : ["mammoth"],
+  },
   build: {
     manifest: true,
     rollupOptions: {

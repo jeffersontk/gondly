@@ -6,5 +6,6 @@ dist
 .env.local
 .env.*.local
 coverage
+/tmp/
 *.log
 apps/api/prisma/migrations/*/migration_lock.toml

@@ -1,14 +1,16 @@
 // End-to-end: two real users (owner and guest) shop together on a shared list against a real Postgres and the realtime
-// gateway. Requires DATABASE_URL pointing to a disposable database with migrations applied and ALLOW_DEV_LOGIN=true.
+// gateway. Requires a local Postgres database with migrations applied; fixture JWTs leave development login disabled.
 // Run with: npm run test:e2e --workspace @gondly/api
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import type { INestApplication } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
+import { JwtService } from "@nestjs/jwt";
 import { io, type Socket } from "socket.io-client";
 import { AppModule } from "../src/app.module";
 import { configureApp } from "../src/app.setup";
+import { PrismaService } from "../src/prisma/prisma.service";
 
 type Session = { token: string; userId: string; name: string };
 type Item = { id: string; productId?: string | null; productName: string; pricePaid: number | string; claimedByUserId?: string | null };
@@ -18,6 +20,7 @@ const runId = Date.now().toString(36);
 let app: INestApplication;
 let baseUrl = "";
 const sockets: Socket[] = [];
+const fixtureUserIds: string[] = [];
 
 async function request<T>(session: Session | null, method: string, path: string, body?: unknown, expectedStatus = 0): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -36,10 +39,11 @@ async function request<T>(session: Session | null, method: string, path: string,
 }
 
 async function login(name: string): Promise<Session> {
-  const email = `${name.toLowerCase()}-${runId}@e2e.gondly.test`;
-  const idToken = `dev:${Buffer.from(JSON.stringify({ email, name })).toString("base64")}`;
-  const response = await request<{ accessToken: string; user: { id: string } }>(null, "POST", "/auth/google", { idToken });
-  return { token: response.accessToken, userId: response.user.id, name };
+  const email = `${name.toLowerCase()}-${runId}@example.invalid`;
+  const user = await app.get(PrismaService).user.create({ data: { email, name } });
+  fixtureUserIds.push(user.id);
+  const token = app.get(JwtService).sign({ sub: user.id, email, name });
+  return { token, userId: user.id, name };
 }
 
 function connect(session: Session) {
@@ -67,6 +71,7 @@ function nextEvent<T extends Record<string, unknown>>(socket: Socket, event: str
 
 describe("shared list purchase (e2e)", () => {
   before(async () => {
+    assert.ok(["127.0.0.1", "localhost"].includes(new URL(process.env.DATABASE_URL ?? "http://missing").hostname), "A local database is required");
     app = await NestFactory.create(AppModule, { logger: false });
     configureApp(app);
     await app.listen(0, "127.0.0.1");
@@ -75,7 +80,8 @@ describe("shared list purchase (e2e)", () => {
 
   after(async () => {
     sockets.forEach((socket) => socket.disconnect());
-    await app?.close();
+    try { if (app && fixtureUserIds.length) await app.get(PrismaService).user.deleteMany({ where: { id: { in: fixtureUserIds } } }); }
+    finally { await app?.close(); }
   });
 
   it("owner and guest share one cart, see each other's changes and the guest can finish", async () => {

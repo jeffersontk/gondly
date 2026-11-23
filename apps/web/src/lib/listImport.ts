@@ -197,23 +197,27 @@ async function extractDocxText(buffer: ArrayBuffer) {
   return result.value;
 }
 
-async function extractPdfText(buffer: ArrayBuffer) {
+export async function extractPdfText(buffer: ArrayBuffer, maxPages = 100) {
   const [pdfjs, workerModule] = await Promise.all([
     import("pdfjs-dist"),
     import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
   ]);
   pdfjs.GlobalWorkerOptions.workerSrc = workerModule.default;
 
-  const document = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
+  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer) });
+  const document = await loadingTask.promise;
   const pages: string[] = [];
-
-  for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
-    const page = await document.getPage(pageNumber);
-    const content = await page.getTextContent();
-    pages.push(pdfItemsToLines(content.items as unknown[]).join("\n"));
+  try {
+    if (document.numPages > maxPages) throw new Error(`O PDF deve ter até ${maxPages} páginas.`);
+    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+      const page = await document.getPage(pageNumber);
+      const content = await page.getTextContent();
+      pages.push(pdfItemsToLines(content.items as unknown[]).join("\n"));
+    }
+    return pages.join("\n");
+  } finally {
+    await loadingTask.destroy();
   }
-
-  return pages.join("\n");
 }
 
 function pdfItemsToLines(items: unknown[]) {
