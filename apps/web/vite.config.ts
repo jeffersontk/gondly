@@ -17,6 +17,12 @@ export default defineConfig({
     manifest: true,
     rollupOptions: {
       output: {
+        // Use the widely supported .js MIME mapping and a new URL for cached PDF workers.
+        assetFileNames(asset) {
+          return asset.names.some(name => name.endsWith("pdf.worker.min.mjs"))
+            ? "assets/[name]-[hash].js"
+            : "assets/[name]-[hash][extname]";
+        },
         manualChunks(id) {
           const normalizedId = id.replaceAll("\\", "/");
           const isPackage = (dependency: string) => normalizedId.includes(`/node_modules/${dependency}/`);
